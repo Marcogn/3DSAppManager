@@ -11,6 +11,8 @@
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
 #define LANGUAGE_ENGLISH 1
 #define SMDH_ICON_PATH 0x6E6F6369  // "icon" in little-endian
+#define MAX_FILE_SIZE (100 * 1024 * 1024)  // 100MB per file
+#define MAX_VISIBLE_TITLES 18  // Maximum titles visible in list at once
 
 typedef struct {
     u64 titleID;
@@ -248,7 +250,7 @@ void drawUI() {
     printf("────────────────────────────────────────────────\n");
     
     // Calculate visible range
-    int maxVisible = 18;  // Reduced to accommodate longer lines
+    int maxVisible = MAX_VISIBLE_TITLES;
     int startIdx = scrollOffset;
     int endIdx = scrollOffset + maxVisible;
     if (endIdx > titleCount)
@@ -330,7 +332,7 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
                     u64 fileSize = 0;
                     FSFILE_GetSize(fileHandle, &fileSize);
                     
-                    if (fileSize > 0 && fileSize < 100 * 1024 * 1024) { // Max 100MB per file
+                    if (fileSize > 0 && fileSize < MAX_FILE_SIZE) {
                         void *buffer = malloc(fileSize);
                         if (buffer) {
                             u32 bytesRead = 0;
@@ -442,10 +444,12 @@ void deleteTitle(TitleInfo *title) {
     // Perform complete deletion
     deleteTitleCompletely(title);
     
-    // Always attempt to verify deletion
-    Result res = AM_DeleteTitle(title->mediaType, title->titleID);
+    // Verify deletion by checking if title still exists
+    AM_TitleEntry titleEntry;
+    Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &titleEntry);
     
-    if (R_SUCCEEDED(res) || res == 0xC8A04478) { // Success or "title not found" (already deleted)
+    // If title not found, deletion was successful
+    if (R_FAILED(res) || res == 0xC8A04478) {
         title->isValid = false;
         consoleClear();
         printf("\n\nSuccessfully deleted:\n%s\n", title->name);
@@ -456,7 +460,8 @@ void deleteTitle(TitleInfo *title) {
         printf("  - Boss ExtData (if present)\n\n");
     } else {
         consoleClear();
-        printf("\n\nFailed to delete:\n%s\nError: 0x%08lX\n\n", title->name, res);
+        printf("\n\nFailed to delete:\n%s\n", title->name);
+        printf("Title may still be present on system.\n\n");
     }
     
     printf("Press A to continue...\n");
