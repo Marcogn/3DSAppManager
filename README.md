@@ -15,7 +15,8 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
   - Save data
   - ExtData
   - Boss ExtData
-- ⚙️ **Configurable** - Customize backup location via config file
+- ⚙️ **Configurable** - Customize backup location via config file or choose at runtime
+- 📁 **Flexible backup paths** - Choose from predefined paths or use config default during uninstallation
 - 🎮 **Easy to use** - Simple interface with D-pad and button controls
 - 🛡️ **Safe** - Only uninstalls selected titles, system titles are protected
 - 🔍 **Title ID display** - Each title shows its 16-digit hexadecimal ID for easy identification
@@ -44,7 +45,12 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
    - Press **A** to backup all save data types (User Save, ExtData, Boss ExtData)
    - Press **B** to skip backup
    - Press **START** to cancel
-5. Press **A** to confirm the final deletion
+5. If you chose to backup, select the backup location:
+   - Press **A** to use the default path from config
+   - Press **Y** to choose from alternative paths
+   - Use **D-Pad** to navigate alternative paths, **A** to confirm
+6. Review the final confirmation showing titles, backup option, and backup path
+7. Press **A** to confirm the deletion
 
 The application will completely remove all data associated with selected titles, including the title itself, save data, ExtData, and Boss ExtData.
 
@@ -55,14 +61,14 @@ The application creates a configuration file at:
 sdmc:/3ds/fast-uninstall/config.ini
 ```
 
-You can edit this file to customize settings:
+You can edit this file to customize the default backup path:
 
 ```ini
-# Path where save backups will be stored
+# Path where save backups will be stored by default
 backup_path=sdmc:/3ds/fast-uninstall/backups
 ```
 
-Change the `backup_path` to any location on your SD card where you want save backups to be stored.
+**Note**: You can also choose the backup path at runtime when performing an uninstallation. The config file sets the default that is shown first, but you can select from alternative paths during the backup process.
 
 ## Building from Source
 

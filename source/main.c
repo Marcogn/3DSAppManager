@@ -40,6 +40,7 @@ void loadTitles();
 void drawUI();
 void handleInput();
 void backupSaveData(TitleInfo *title);
+void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
 void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName);
 void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath);
 void deleteTitle(TitleInfo *title);
@@ -363,12 +364,12 @@ void backupArchive(FS_Archive archive, const char *basePath, const char *archive
     copyDirectory(archive, "/", archivePath);
 }
 
-void backupSaveData(TitleInfo *title) {
+void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     // Create backup directory structure
-    createDirectory(config.backupPath);
+    createDirectory(backupPath);
     
     char backupDir[512];
-    snprintf(backupDir, sizeof(backupDir), "%s/%016llX", config.backupPath, title->titleID);
+    snprintf(backupDir, sizeof(backupDir), "%s/%016llX", backupPath, title->titleID);
     createDirectory(backupDir);
     
     // Create info file
@@ -379,6 +380,7 @@ void backupSaveData(TitleInfo *title) {
         fprintf(info, "Title ID: %016llX\n", title->titleID);
         fprintf(info, "Title Name: %s\n", title->name);
         fprintf(info, "Media Type: %s\n", title->mediaType == MEDIATYPE_SD ? "SD" : "NAND");
+        fprintf(info, "Backup Path: %s\n", backupPath);
         fprintf(info, "\nBackup includes all available save types:\n");
         fprintf(info, "- User Save Data (if present)\n");
         fprintf(info, "- ExtData (if present)\n");
@@ -416,6 +418,10 @@ void backupSaveData(TitleInfo *title) {
         backupArchive(extArchive, backupDir, "boss_extdata");
         FSUSER_CloseArchive(extArchive);
     }
+}
+
+void backupSaveData(TitleInfo *title) {
+    backupSaveDataToPath(title, config.backupPath);
 }
 
 void deleteTitleCompletely(TitleInfo *title) {
@@ -585,12 +591,125 @@ void handleInput() {
         if (cancelled)
             return;
         
+        // Ask about backup path if backing up
+        char selectedBackupPath[256];
+        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", config.backupPath);
+        
+        if (backupSaves) {
+            consoleClear();
+            printf("\n\nBackup Path Selection\n\n");
+            printf("Current path: %s\n\n", config.backupPath);
+            printf("Do you want to change the backup path?\n\n");
+            printf("  A: Use current path\n");
+            printf("  Y: Choose alternative path\n");
+            printf("  START: Cancel\n");
+            
+            bool useDefault = true;
+            
+            while (aptMainLoop()) {
+                hidScanInput();
+                u32 kDown2b = hidKeysDown();
+                
+                if (kDown2b & KEY_A) {
+                    useDefault = true;
+                    break;
+                }
+                if (kDown2b & KEY_Y) {
+                    useDefault = false;
+                    break;
+                }
+                if (kDown2b & KEY_START) {
+                    cancelled = true;
+                    break;
+                }
+                
+                gfxFlushBuffers();
+                gfxSwapBuffers();
+                gspWaitForVBlank();
+            }
+            
+            if (cancelled)
+                return;
+            
+            if (!useDefault) {
+                // Show alternative backup paths
+                const char *altPaths[] = {
+                    "sdmc:/3ds/fast-uninstall/backups",
+                    "sdmc:/backups/3ds-titles",
+                    "sdmc:/save-backups",
+                    "sdmc:/3ds-backups",
+                    "sdmc:/backups"
+                };
+                int numPaths = 5;
+                int pathCursor = 0;
+                
+                // Find current path in list or default to 0
+                for (int i = 0; i < numPaths; i++) {
+                    if (strcmp(config.backupPath, altPaths[i]) == 0) {
+                        pathCursor = i;
+                        break;
+                    }
+                }
+                
+                bool pathSelected = false;
+                
+                while (aptMainLoop()) {
+                    consoleClear();
+                    printf("\n\nSelect Backup Path\n\n");
+                    printf("Use D-Pad to select, A to confirm\n\n");
+                    
+                    for (int i = 0; i < numPaths; i++) {
+                        if (i == pathCursor) {
+                            printf("\x1b[47;30m"); // Highlighted
+                        }
+                        printf("  %s\n", altPaths[i]);
+                        if (i == pathCursor) {
+                            printf("\x1b[0m"); // Reset
+                        }
+                    }
+                    
+                    printf("\n  B: Cancel\n");
+                    
+                    gfxFlushBuffers();
+                    gfxSwapBuffers();
+                    gspWaitForVBlank();
+                    
+                    hidScanInput();
+                    u32 kDown2c = hidKeysDown();
+                    
+                    if (kDown2c & KEY_DUP) {
+                        if (pathCursor > 0)
+                            pathCursor--;
+                    }
+                    if (kDown2c & KEY_DDOWN) {
+                        if (pathCursor < numPaths - 1)
+                            pathCursor++;
+                    }
+                    if (kDown2c & KEY_A) {
+                        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", altPaths[pathCursor]);
+                        pathSelected = true;
+                        break;
+                    }
+                    if (kDown2c & KEY_B) {
+                        cancelled = true;
+                        break;
+                    }
+                }
+                
+                if (cancelled)
+                    return;
+            }
+        }
+        
         // Final confirmation
         consoleClear();
         printf("\n\nFinal confirmation:\n\n");
         printf("Uninstall %d title(s)?\n", selectedCount);
-        printf("Backup saves: %s\n\n", backupSaves ? "YES" : "NO");
-        printf("  A: Confirm\n");
+        printf("Backup saves: %s\n", backupSaves ? "YES" : "NO");
+        if (backupSaves) {
+            printf("Backup path: %s\n", selectedBackupPath);
+        }
+        printf("\n  A: Confirm\n");
         printf("  B: Cancel\n");
         
         bool confirmed = false;
@@ -624,8 +743,8 @@ void handleInput() {
                 printf("Processing: %s\n", titles[i].name);
                 
                 if (backupSaves) {
-                    printf("  Backing up save data...\n");
-                    backupSaveData(&titles[i]);
+                    printf("  Backing up save data to:\n  %s\n", selectedBackupPath);
+                    backupSaveDataToPath(&titles[i], selectedBackupPath);
                 }
                 
                 printf("  Deleting title...\n");
