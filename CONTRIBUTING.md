@@ -25,11 +25,12 @@ Thank you for your interest in contributing!
 
 ## Areas for Improvement
 
-- Full save data backup implementation (currently creates placeholder)
-- Better error messages
-- Support for more title types
+- Better error messages and detailed error handling
+- Support for additional archive types
+- Progress bars during backup/deletion
 - Icon customization
 - Multiple language support
+- Restore functionality from backups
 
 ## Testing
 

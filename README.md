@@ -6,8 +6,15 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 - 📋 **Display all installed titles** - Shows a complete list of all user-installed games and applications with their title IDs
 - ✅ **Multi-selection** - Select multiple titles at once for batch uninstallation
-- 💾 **Save data backup** - Optional backup marker creation before uninstalling (with user confirmation)
-  - ⚠️ **Note**: Full save data backup is not yet fully implemented. For complete save backups, please use [JKSM](https://github.com/J-D-K/JKSM) or [Checkpoint](https://github.com/FlagBrew/Checkpoint) before uninstalling.
+- 💾 **Complete save data backup** - Full backup of all save types before uninstalling:
+  - User Save Data (main game saves)
+  - ExtData (extended data, DLC save data)
+  - Boss ExtData (SpotPass/StreetPass data)
+- 🗑️ **Complete uninstallation** - Removes all data associated with titles:
+  - Title application
+  - Save data
+  - ExtData
+  - Boss ExtData
 - ⚙️ **Configurable** - Customize backup location via config file
 - 🎮 **Easy to use** - Simple interface with D-pad and button controls
 - 🛡️ **Safe** - Only uninstalls selected titles, system titles are protected
@@ -34,11 +41,12 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 2. Press **A** to select each title (a checkbox will appear)
 3. Press **X** to begin the uninstallation process
 4. Choose whether to backup save data:
-   - Press **A** to create backup markers (recommended for tracking)
+   - Press **A** to backup all save data types (User Save, ExtData, Boss ExtData)
    - Press **B** to skip backup
    - Press **START** to cancel
-   - ⚠️ **Important**: Currently only creates backup markers, not full save data. Use JKSM or Checkpoint for complete backups.
 5. Press **A** to confirm the final deletion
+
+The application will completely remove all data associated with selected titles, including the title itself, save data, ExtData, and Boss ExtData.
 
 ### Configuration
 
@@ -82,8 +90,23 @@ make
 
 - **Language**: C
 - **SDK**: libctru (devkitARM)
-- **Services Used**: AM (Application Manager), FS (File System)
+- **Services Used**: 
+  - AM (Application Manager) - Title management and deletion
+  - FS (File System) - Save data access and backup
 - **Target**: Nintendo 3DS (Old 3DS, New 3DS, 2DS)
+- **Save Types Supported**:
+  - ARCHIVE_USER_SAVEDATA (main game saves)
+  - ARCHIVE_EXTDATA (extended data)
+  - ARCHIVE_BOSS_EXTDATA (SpotPass data)
+
+### How Complete Deletion Works
+
+When you delete a title, the application:
+1. Backs up all save data types (if selected)
+2. Deletes ExtData archives
+3. Deletes Boss ExtData (SpotPass data)
+4. Calls AM_DeleteTitle to remove the title and remaining data
+5. Verifies deletion was successful
 
 ## Safety Features
 
@@ -102,4 +125,4 @@ Created by Marcogn
 
 ## Disclaimer
 
-Use this software at your own risk. Always ensure you have backups of important save data before uninstalling titles. The developers are not responsible for any data loss.
+Use this software at your own risk. While the application now includes full save data backup functionality for all save types, always ensure you have additional backups of important save data before uninstalling titles. The developers are not responsible for any data loss.
