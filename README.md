@@ -6,7 +6,8 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 - 📋 **Display all installed titles** - Shows a complete list of all user-installed games and applications
 - ✅ **Multi-selection** - Select multiple titles at once for batch uninstallation
-- 💾 **Save data backup** - Optional backup of save data before uninstalling (with user confirmation)
+- 💾 **Save data backup** - Optional backup marker creation before uninstalling (with user confirmation)
+  - ⚠️ **Note**: Full save data backup is not yet fully implemented. For complete save backups, please use [JKSM](https://github.com/J-D-K/JKSM) or [Checkpoint](https://github.com/FlagBrew/Checkpoint) before uninstalling.
 - ⚙️ **Configurable** - Customize backup location via config file
 - 🎮 **Easy to use** - Simple interface with D-pad and button controls
 - 🛡️ **Safe** - Only uninstalls selected titles, system titles are protected
@@ -32,9 +33,10 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 2. Press **A** to select each title (a checkbox will appear)
 3. Press **X** to begin the uninstallation process
 4. Choose whether to backup save data:
-   - Press **A** to backup saves before uninstalling
+   - Press **A** to create backup markers (recommended for tracking)
    - Press **B** to skip backup
    - Press **START** to cancel
+   - ⚠️ **Important**: Currently only creates backup markers, not full save data. Use JKSM or Checkpoint for complete backups.
 5. Press **A** to confirm the final deletion
 
 ### Configuration

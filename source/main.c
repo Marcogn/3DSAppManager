@@ -9,6 +9,8 @@
 #define MAX_TITLES 300
 #define CONFIG_PATH "sdmc:/3ds/fast-uninstall/config.ini"
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
+#define LANGUAGE_ENGLISH 1
+#define SMDH_ICON_PATH 0x6E6F6369  // "icon" in little-endian
 
 typedef struct {
     u64 titleID;
@@ -125,10 +127,10 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
         return;
     }
     
-    // Try to load SMDH
+    // Try to load SMDH (icon file from title archive)
     Handle fileHandle;
     u32 archivePath[] = {titleID & 0xFFFFFFFF, (titleID >> 32) & 0xFFFFFFFF, mediaType, 0};
-    static const u32 filePath[] = {0, 0, 2, 0x6E6F6369, 0};
+    static const u32 filePath[] = {0, 0, 2, SMDH_ICON_PATH, 0};
     
     FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
     FS_Path binFilePath = {PATH_BINARY, 20, filePath};
@@ -141,8 +143,8 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
         
         if (bytesRead == sizeof(SMDH) && smdh.magic[0] == 'S' && smdh.magic[1] == 'M' && 
             smdh.magic[2] == 'D' && smdh.magic[3] == 'H') {
-            // Convert UTF-16 to UTF-8
-            ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.applicationTitles[1].shortDescription, outSize - 1);
+            // Convert UTF-16 to UTF-8 (using English title)
+            ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.applicationTitles[LANGUAGE_ENGLISH].shortDescription, outSize - 1);
             if (units < 0)
                 units = 0;
             outName[units] = '\0';
@@ -302,8 +304,11 @@ void backupSaveData(TitleInfo *title) {
         return; // No save data or error
     }
     
-    // Try to backup the save data file (commonly "data.sav" or root directory)
-    // For simplicity, we'll create a marker file indicating backup was attempted
+    // NOTE: Full save data backup implementation requires recursive directory traversal
+    // and copying of all files within the save archive. This is a simplified version
+    // that creates a marker file to indicate a backup was attempted.
+    // For a complete implementation, see JKSM or Checkpoint homebrew applications.
+    
     char markerPath[512];
     snprintf(markerPath, sizeof(markerPath), "%s/backup_info.txt", backupDir);
     
@@ -312,9 +317,9 @@ void backupSaveData(TitleInfo *title) {
         fprintf(marker, "Title ID: %016llX\n", title->titleID);
         fprintf(marker, "Title Name: %s\n", title->name);
         fprintf(marker, "Media Type: %s\n", title->mediaType == MEDIATYPE_SD ? "SD" : "NAND");
-        fprintf(marker, "Backup Date: (Backup system not fully implemented)\n");
-        fprintf(marker, "\nNote: Full save data backup requires additional implementation.\n");
-        fprintf(marker, "This is a placeholder for save backup functionality.\n");
+        fprintf(marker, "\nIMPORTANT: This is a backup marker only.\n");
+        fprintf(marker, "Full save data backup functionality is not yet implemented.\n");
+        fprintf(marker, "For complete save backups, please use JKSM or Checkpoint.\n");
         fclose(marker);
     }
     
@@ -354,11 +359,6 @@ void handleInput() {
     u32 kHeld = hidKeysHeld();
     
     static u32 repeatTimer = 0;
-    
-    if (kDown & KEY_START) {
-        // Exit
-        exit(0);
-    }
     
     if (titleCount == 0)
         return;
@@ -544,7 +544,17 @@ int main(int argc, char **argv) {
     loadTitles();
     
     // Main loop
-    while (aptMainLoop()) {
+    bool running = true;
+    while (aptMainLoop() && running) {
+        hidScanInput();
+        u32 kDown = hidKeysDown();
+        
+        // Check for exit before drawing/handling
+        if (kDown & KEY_START) {
+            running = false;
+            break;
+        }
+        
         drawUI();
         handleInput();
         
