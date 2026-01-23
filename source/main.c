@@ -245,7 +245,7 @@ void drawUI() {
     printf("────────────────────────────────────────────────\n");
     
     // Calculate visible range
-    int maxVisible = 20;
+    int maxVisible = 18;  // Reduced to accommodate longer lines
     int startIdx = scrollOffset;
     int endIdx = scrollOffset + maxVisible;
     if (endIdx > titleCount)
@@ -268,7 +268,8 @@ void drawUI() {
         }
         
         printf("%s ", titles[i].selected ? "[X]" : "[ ]");
-        printf("%.40s", titles[i].name);
+        // Display title name (truncated if needed) and title ID
+        printf("%.23s [%016llX]", titles[i].name, titles[i].titleID);
         
         if (i == cursor) {
             printf("\x1b[0m"); // Reset
