@@ -14,6 +14,16 @@
 #define MAX_FILE_SIZE (100 * 1024 * 1024)  // 100MB per file
 #define MAX_VISIBLE_TITLES 18  // Maximum titles visible in list at once
 
+// Alternative backup paths for user selection
+static const char *BACKUP_PATH_OPTIONS[] = {
+    "sdmc:/3ds/fast-uninstall/backups",
+    "sdmc:/backups/3ds-titles",
+    "sdmc:/save-backups",
+    "sdmc:/3ds-backups",
+    "sdmc:/backups"
+};
+#define NUM_BACKUP_PATHS (sizeof(BACKUP_PATH_OPTIONS) / sizeof(BACKUP_PATH_OPTIONS[0]))
+
 typedef struct {
     u64 titleID;
     char name[256];
@@ -633,19 +643,11 @@ void handleInput() {
             
             if (!useDefault) {
                 // Show alternative backup paths
-                const char *altPaths[] = {
-                    "sdmc:/3ds/fast-uninstall/backups",
-                    "sdmc:/backups/3ds-titles",
-                    "sdmc:/save-backups",
-                    "sdmc:/3ds-backups",
-                    "sdmc:/backups"
-                };
-                int numPaths = 5;
                 int pathCursor = 0;
                 
                 // Find current path in list or default to 0
-                for (int i = 0; i < numPaths; i++) {
-                    if (strcmp(config.backupPath, altPaths[i]) == 0) {
+                for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
+                    if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) {
                         pathCursor = i;
                         break;
                     }
@@ -658,11 +660,11 @@ void handleInput() {
                     printf("\n\nSelect Backup Path\n\n");
                     printf("Use D-Pad to select, A to confirm\n\n");
                     
-                    for (int i = 0; i < numPaths; i++) {
+                    for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
                         if (i == pathCursor) {
                             printf("\x1b[47;30m"); // Highlighted
                         }
-                        printf("  %s\n", altPaths[i]);
+                        printf("  %s\n", BACKUP_PATH_OPTIONS[i]);
                         if (i == pathCursor) {
                             printf("\x1b[0m"); // Reset
                         }
@@ -682,11 +684,11 @@ void handleInput() {
                             pathCursor--;
                     }
                     if (kDown2c & KEY_DDOWN) {
-                        if (pathCursor < numPaths - 1)
+                        if (pathCursor < NUM_BACKUP_PATHS - 1)
                             pathCursor++;
                     }
                     if (kDown2c & KEY_A) {
-                        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", altPaths[pathCursor]);
+                        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", BACKUP_PATH_OPTIONS[pathCursor]);
                         pathSelected = true;
                         break;
                     }
