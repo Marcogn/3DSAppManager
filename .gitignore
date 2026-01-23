@@ -1,0 +1,23 @@
+# Build artifacts
+build/
+*.3dsx
+*.elf
+*.smdh
+*.cia
+
+# Object files
+*.o
+*.d
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+
+# Dependency files
+*.a
