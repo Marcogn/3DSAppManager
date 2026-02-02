@@ -6,6 +6,32 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
+// SMDH structure definition (from old libctru)
+typedef struct {
+    u16 shortDescription[0x40];
+    u16 longDescription[0x80];
+    u16 publisher[0x40];
+} SMDH_title;
+
+typedef struct {
+    u32 magic;
+    u16 version;
+    u16 reserved;
+    SMDH_title titles[16];
+    u8 ratings[16];
+    u32 region;
+    u32 matchMakerId;
+    u64 matchMakerBitId;
+    u32 flags;
+    u16 eulaVersion;
+    u16 reserved2;
+    u32 optimalBannerFrame;
+    u32 streetpassId;
+    u64 reserved3;
+    u8 smallIcon[0x480];
+    u8 largeIcon[0x1200];
+} SMDH;
+
 #define MAX_TITLES 300
 #define CONFIG_PATH "sdmc:/3ds/fast-uninstall/config.ini"
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
@@ -157,10 +183,9 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
         FSFILE_Read(fileHandle, &bytesRead, 0, &smdh, sizeof(SMDH));
         FSFILE_Close(fileHandle);
         
-        if (bytesRead == sizeof(SMDH) && smdh.magic[0] == 'S' && smdh.magic[1] == 'M' && 
-            smdh.magic[2] == 'D' && smdh.magic[3] == 'H') {
+        if (bytesRead >= sizeof(u32) && smdh.magic == 0x48444D53) {  // 'SMDH' in little-endian
             // Convert UTF-16 to UTF-8 (using English title)
-            ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.applicationTitles[LANGUAGE_ENGLISH].shortDescription, outSize - 1);
+            ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, outSize - 1);
             if (units < 0)
                 units = 0;
             outName[units] = '\0';
@@ -436,14 +461,22 @@ void backupSaveData(TitleInfo *title) {
 
 void deleteTitleCompletely(TitleInfo *title) {
     // Delete ExtData first (if exists)
-    u32 extdataID = (u32)((title->titleID >> 32) & 0xFFFFFFFF);
-    u32 extdataPath[] = {title->mediaType, extdataID, 0, 0};
+    u64 extdataID = 0;
+    Result res = AM_GetTitleExtDataId(&extdataID, title->mediaType, title->titleID);
+
+    if (R_SUCCEEDED(res) && extdataID != 0) {
+        FS_ExtSaveDataInfo extInfo = {
+            .mediaType = title->mediaType,
+            .saveId = extdataID
+        };
+
+        // Try to delete regular ExtData
+        FSUSER_DeleteExtSaveData(extInfo);
+    }
+
+    // Try to delete Boss ExtData (SpotPass) using the old method
+    u32 extdataPath[] = {title->mediaType, (u32)extdataID, 0, 0};
     FS_Path extPath = {PATH_BINARY, 12, extdataPath};
-    
-    // Try to delete regular ExtData
-    FSUSER_DeleteExtSaveData(extPath);
-    
-    // Try to delete Boss ExtData (SpotPass)
     FS_Archive bossArchive;
     if (R_SUCCEEDED(FSUSER_OpenArchive(&bossArchive, ARCHIVE_BOSS_EXTDATA, extPath))) {
         FSUSER_CloseArchive(bossArchive);
@@ -451,8 +484,8 @@ void deleteTitleCompletely(TitleInfo *title) {
     }
     
     // Delete the main title (this removes the title, save data, and most content)
-    Result res = AM_DeleteTitle(title->mediaType, title->titleID);
-    
+    AM_DeleteTitle(title->mediaType, title->titleID);
+
     return;
 }
 

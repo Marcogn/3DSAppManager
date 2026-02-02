@@ -2,6 +2,16 @@
 
 A Nintendo 3DS homebrew application for quickly uninstalling multiple titles with optional save data backup.
 
+**🎯 Perfect for managing your 3DS storage!** Easily remove multiple games and apps at once while safely backing up your save data. Ideal for freeing up space on your SD card or NAND.
+
+## Screenshots
+
+![Screenshot placeholder - Main interface showing title list]
+*Coming soon: Screenshots of the main interface*
+
+![Screenshot placeholder - Backup confirmation]
+*Coming soon: Screenshots of the backup and deletion process*
+
 ## Features
 
 - 📋 **Display all installed titles** - Shows a complete list of all user-installed games and applications with their title IDs
@@ -74,16 +84,51 @@ backup_path=sdmc:/3ds/fast-uninstall/backups
 
 ### Prerequisites
 
-- [devkitARM](https://devkitpro.org/wiki/Getting_Started)
-- libctru
+You need to have devkitPro and the 3DS development tools installed on your system.
+
+#### Install devkitPro (All Platforms)
+
+Follow the official guide at: https://devkitpro.org/wiki/Getting_Started
+
+#### Install 3DS Development Tools
+
+After installing devkitPro, install the required libraries:
+
+```bash
+# On Linux/macOS:
+sudo dkp-pacman -S 3ds-dev
+
+# This installs:
+# - devkitARM compiler
+# - libctru (3DS system library)
+# - citro3d/citro2d (graphics libraries)
+# - 3dstools (3dsxtool, smdhtool, etc.)
+# - All other required dependencies
+```
+
+#### Environment Variables
+
+Make sure these environment variables are set:
+
+```bash
+export DEVKITPRO=/opt/devkitpro
+export DEVKITARM=$DEVKITPRO/devkitARM
+```
+
+Add these to your `~/.bashrc` or `~/.zshrc` to make them permanent.
 
 ### Build Steps
 
 ```bash
+# Clone the repository (if not already done)
+git clone https://github.com/yourusername/3ds-fast-uninstall.git
+cd 3ds-fast-uninstall
+
+# Build the project
 make
 ```
 
-The compiled `.3dsx` file will be created in the project root directory.
+The compiled `.3dsx` and `.smdh` files will be created in the project root directory.
 
 ### Clean Build
 
@@ -91,6 +136,20 @@ The compiled `.3dsx` file will be created in the project root directory.
 make clean
 make
 ```
+
+### Troubleshooting Build Issues
+
+**Error: "3ds.h: No such file or directory"**
+- Make sure libctru is installed: `sudo dkp-pacman -S libctru`
+- Verify DEVKITPRO and DEVKITARM environment variables are set
+
+**Error: "Please set DEVKITARM in your environment"**
+- Set the environment variables as shown above
+- Restart your terminal after setting them
+
+**Linker errors**
+- Run `make clean` and try again
+- Ensure all dependencies are installed: `sudo dkp-pacman -S 3ds-dev`
 
 ## Technical Details
 
@@ -120,6 +179,50 @@ When you delete a title, the application:
 - Only user-installed applications and updates are shown
 - Requires explicit confirmation before deletion
 - Protected title ranges (0x00040010, 0x00040030, 0x00040138) are excluded
+
+## FAQ / Troubleshooting
+
+### Q: The application doesn't show any titles
+**A**: Make sure you have titles installed on your 3DS. The application only shows user-installed titles (games, apps). System titles are filtered out for safety.
+
+### Q: Can I recover a title after deleting it?
+**A**: Once deleted, the title cannot be recovered unless you:
+- Have a backup of the save data (created by this app)
+- Re-download/reinstall the title from the eShop or reinstall from the original source
+
+### Q: Where are the backups stored?
+**A**: By default, backups are stored in `sdmc:/3ds/fast-uninstall/backups/[TitleID]/`
+Each backup includes:
+- `backup_info.txt` - Information about the backup
+- `savedata/` - User save data (if present)
+- `extdata/` - Extended data (if present)
+- `boss_extdata/` - SpotPass data (if present)
+
+### Q: How do I restore a backup?
+**A**: Currently, you need to:
+1. Reinstall the title
+2. Manually copy the backup files back to the appropriate location
+Note: A future version may include automatic restore functionality.
+
+### Q: Can I change the backup location?
+**A**: Yes, in two ways:
+1. Edit the config file at `sdmc:/3ds/fast-uninstall/config.ini`
+2. Choose a different path at runtime when performing an uninstallation
+
+### Q: Is it safe to delete DLC or updates?
+**A**: Yes, but be aware:
+- Deleting DLC will remove the DLC content
+- Deleting updates will revert the game to its base version
+- Base games and DLC are separate titles
+
+### Q: The app seems slow when loading titles
+**A**: This is normal if you have many titles installed. The app needs to read information for each title to display its name.
+
+### Q: Can I use this on a stock 3DS (no CFW)?
+**A**: No, you need a 3DS with access to the Homebrew Launcher. This typically requires either:
+- Custom Firmware (CFW) like Luma3DS
+- Or a homebrew entrypoint (limited access)
+Note: Some features may require CFW for full functionality.
 
 ## License
 
