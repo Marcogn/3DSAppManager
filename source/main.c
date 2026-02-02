@@ -375,9 +375,11 @@ void drawUI() {
     // Ensure we're drawing on the top screen
     consoleSelect(&topScreen);
 
-    // Use only cursor positioning to reduce flicker
+    // Clear screen completely and move to home
+    printf("\x1b[2J");   // Clear entire screen
     printf("\x1b[H");    // Move cursor to home position (0,0)
 
+    // Header with inverted colors
     printf("\x1b[30;47m"); // Black text on white background
     printf("%-50s", " 3DS Fast Uninstall");
     printf("\x1b[0m\n"); // Reset colors
@@ -411,27 +413,32 @@ void drawUI() {
     if (endIdx > titleCount)
         endIdx = titleCount;
     
+    // Draw each title
     for (int i = startIdx; i < endIdx; i++) {
+        // Apply highlight if cursor is here
         if (i == cursor) {
-            printf("\x1b[47;30m"); // Highlighted (white bg, black text)
+            printf("\x1b[47;30m"); // White bg, black text
         }
         
+        // Print checkbox
         printf("%s ", titles[i].selected ? "[X]" : "[ ]");
-        // Display title name (truncated if needed) and title ID
+
+        // Print title name and ID
         printf("%.23s [%016llX]", titles[i].name, titles[i].titleID);
         
-        printf("\x1b[K");  // Clear to end of line (avoid overlapping text)
-
+        // Reset colors immediately after content
         if (i == cursor) {
-            printf("\x1b[0m"); // Reset BEFORE any newlines
+            printf("\x1b[0m");
         }
 
-        printf("\n\n");  // Double newline for spacing
+        // Now add the newlines
+        printf("\n\n");
     }
     
-    // No more controls here - moved to bottom screen
-    // Clear any remaining lines (in case list got shorter)
-    printf("\x1b[J");  // Clear from cursor to end of screen
+    // Fill remaining lines with blank space to clear old content
+    for (int i = endIdx - startIdx; i < maxVisible; i++) {
+        printf("\n\n");
+    }
 }
 
 void drawTouchControls() {
