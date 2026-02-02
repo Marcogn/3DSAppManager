@@ -24,3 +24,11 @@
 - **Schermo inferiore** con reminder
 ---
 **Version**: v3.2 | **Status**: ✅ STABILE
+## 🔄 Update v3.2.1
+**Fix Title ID Overlapping:**
+- Fixed title IDs overlapping when scrolling
+- Now uses full screen clear for clean display
+**DLC/Update Indicators:**
+- Games show as normal: `Pokemon X`
+- Updates show as: `Pokemon X [UPD]`
+- DLC shows as: `Pokemon X [DLC]`

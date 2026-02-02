@@ -271,12 +271,28 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
 
             // Sanitize the name to remove problematic characters
             sanitizeName(outName);
+
+            // Add type indicator based on titleID
+            u32 highID = (u32)(titleID >> 32);
+            if (highID == 0x0004000E) {
+                // Update/Patch
+                strncat(outName, " [UPD]", outSize - strlen(outName) - 1);
+            } else if (highID == 0x0004008C) {
+                // DLC
+                strncat(outName, " [DLC]", outSize - strlen(outName) - 1);
+            }
+
             return;
         }
     }
     
-    // Fallback to title ID
-    snprintf(outName, outSize, "Title [%016llX]", titleID);
+    // Fallback to title ID with type indicator
+    u32 highID = (u32)(titleID >> 32);
+    const char *typeStr = "";
+    if (highID == 0x0004000E) typeStr = " [UPD]";
+    else if (highID == 0x0004008C) typeStr = " [DLC]";
+
+    snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
 
 void loadTitles() {
@@ -359,7 +375,8 @@ void drawUI() {
     // Ensure we're drawing on the top screen
     consoleSelect(&topScreen);
 
-    // Move cursor to home instead of clearing (smoother update)
+    // Clear screen completely to avoid overlapping text
+    printf("\x1b[2J");   // Clear entire screen
     printf("\x1b[H");    // Move cursor to home position (0,0)
 
     printf("\x1b[30;47m"); // Black text on white background
@@ -407,6 +424,8 @@ void drawUI() {
         if (i == cursor) {
             printf("\x1b[0m"); // Reset
         }
+
+        printf("\x1b[K");  // Clear to end of line (avoid overlapping text)
         printf("\n");
     }
     

@@ -98,3 +98,22 @@ printf("\x1b[J");    // Clear only from cursor to end
 - MAX_VISIBLE_TITLES: 18 → 26 (+44%)
 - Riempie completamente lo schermo superiore
 - Più titoli visibili senza scroll
+## 🔧 v3.2.1 - Bug Fixes
+### Problema 1: Title ID Sovrapposti
+**Causa**: Clear screen incompleto durante scroll
+**Soluzione**: 
+- Ripristinato `\x1b[2J` per clear completo
+- Aggiunto `\x1b[K` per clear end-of-line su ogni riga
+- Ora i Title ID non si sovrappongono più
+### Problema 2: Distinzione DLC/Update
+**Richiesta**: Distinguere DLC e Update dai giochi base
+**Soluzione**:
+- Aggiunto tag `[UPD]` per update (0x0004000E)
+- Aggiunto tag `[DLC]` per DLC (0x0004008C)
+- Giochi base senza tag (0x00040000)
+**Esempi**:
+```
+[ ] Pokemon X                [0004000000055D00]
+[ ] Pokemon X [UPD]          [000400000055D00]
+[ ] Pokemon X [DLC]          [0004008C00055D00]
+```
