@@ -32,3 +32,9 @@
 - Games show as normal: `Pokemon X`
 - Updates show as: `Pokemon X [UPD]`
 - DLC shows as: `Pokemon X [DLC]`
+## 📐 v3.2.2 - Better Readability
+**Double-Spacing:**
+- Added blank line between titles
+- Easier on the eyes
+- 13 titles visible (was 26)
+- Fast scroll now jumps 13 titles

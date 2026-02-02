@@ -117,3 +117,21 @@ printf("\x1b[J");    // Clear only from cursor to end
 [ ] Pokemon X [UPD]          [000400000055D00]
 [ ] Pokemon X [DLC]          [0004008C00055D00]
 ```
+## 📐 v3.2.2 - Miglioramento Leggibilità
+### Problema: Titoli troppo ravvicinati
+**Richiesta**: Più spazio tra i titoli per non affaticare gli occhi
+**Soluzione**: Interlinea doppia (double-spacing)
+- Aggiunta riga vuota dopo ogni titolo
+- MAX_VISIBLE_TITLES: 26 → 13
+- Scorrimento veloce: ora salta 13 titoli invece di 26
+- Molto più leggibile e riposante per gli occhi
+**Codice**:
+```c
+// Dopo ogni titolo:
+printf("\n");  // Titolo
+printf("\n");  // Riga vuota (interlinea)
+```
+**Trade-off**:
+- Pro: Molto più leggibile, meno affaticamento
+- Contro: Meno titoli visibili (13 vs 26)
+- Bilanciamento: Scorrimento veloce compensa
