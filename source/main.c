@@ -420,13 +420,13 @@ void drawUI() {
         // Display title name (truncated if needed) and title ID
         printf("%.23s [%016llX]", titles[i].name, titles[i].titleID);
         
+        printf("\x1b[K");  // Clear to end of line (avoid overlapping text)
+
         if (i == cursor) {
-            printf("\x1b[0m"); // Reset
+            printf("\x1b[0m"); // Reset BEFORE any newlines
         }
 
-        printf("\x1b[K");  // Clear to end of line (avoid overlapping text)
-        printf("\n");
-        printf("\n");  // Add blank line for double-spacing
+        printf("\n\n");  // Double newline for spacing
     }
     
     // No more controls here - moved to bottom screen
