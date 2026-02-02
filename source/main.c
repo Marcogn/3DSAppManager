@@ -413,31 +413,33 @@ void drawUI() {
     if (endIdx > titleCount)
         endIdx = titleCount;
     
-    // Draw each title
+    // Draw each title with explicit spacing
     for (int i = startIdx; i < endIdx; i++) {
-        // Apply highlight if cursor is here
+        // Apply highlight if cursor is here, reset immediately after
         if (i == cursor) {
             printf("\x1b[47;30m"); // White bg, black text
+        } else {
+            printf("\x1b[0m"); // Ensure clean state
         }
         
-        // Print checkbox
-        printf("%s ", titles[i].selected ? "[X]" : "[ ]");
+        // Print checkbox and title on one line
+        printf("%s %.23s [%016llX]",
+               titles[i].selected ? "[X]" : "[ ]",
+               titles[i].name,
+               titles[i].titleID);
 
-        // Print title name and ID
-        printf("%.23s [%016llX]", titles[i].name, titles[i].titleID);
-        
-        // Reset colors immediately after content
-        if (i == cursor) {
-            printf("\x1b[0m");
-        }
+        // Always reset colors before newline
+        printf("\x1b[0m\n");
 
-        // Now add the newlines
-        printf("\n\n");
+        // Explicit blank line for spacing (no color codes)
+        printf("\n");
     }
     
-    // Fill remaining lines with blank space to clear old content
-    for (int i = endIdx - startIdx; i < maxVisible; i++) {
-        printf("\n\n");
+    // Fill remaining lines to clear old content
+    int drawn = endIdx - startIdx;
+    for (int i = drawn; i < maxVisible; i++) {
+        printf("\n");
+        printf("\n");
     }
 }
 
