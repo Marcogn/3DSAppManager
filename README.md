@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="3DS Fast Uninstall Icon" width="200"/>
+</p>
+
 # 3DS Fast Uninstall
 
 A Nintendo 3DS homebrew application for quickly uninstalling multiple titles with optional save data backup.
