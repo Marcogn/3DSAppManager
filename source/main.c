@@ -67,10 +67,13 @@ static int titleCount = 0;
 static int cursor = 0;
 static int scrollOffset = 0;
 static Config config;
+static PrintConsole topScreen, bottomScreen;
+static bool needsRedraw = true;  // Flag to track if UI needs redrawing
 
 // Function prototypes
 void loadConfig();
 void saveDefaultConfig();
+void sanitizeName(char *name);
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize);
 void loadTitles();
 void drawUI();
@@ -158,6 +161,43 @@ void saveDefaultConfig() {
     fclose(f);
 }
 
+void sanitizeName(char *name) {
+    if (!name) return;
+
+    char *src = name;
+    char *dst = name;
+
+    while (*src) {
+        // Keep only printable ASCII characters (32-126)
+        // Replace others with spaces or skip them
+        if (*src >= 32 && *src <= 126) {
+            // Skip some problematic characters that might cause issues
+            if (*src != '|' && *src != '<' && *src != '>' &&
+                *src != '"' && *src != '\\' && *src != '/' &&
+                *src != ':' && *src != '*' && *src != '?') {
+                *dst++ = *src;
+            } else {
+                *dst++ = ' ';
+            }
+        } else if ((unsigned char)*src >= 128) {
+            // Non-ASCII character, skip it
+            // Could be part of UTF-8 sequence causing corruption
+        }
+        src++;
+    }
+    *dst = '\0';
+
+    // Trim trailing spaces
+    while (dst > name && *(dst-1) == ' ') {
+        *(--dst) = '\0';
+    }
+
+    // If name is empty after sanitization, set a default
+    if (name[0] == '\0') {
+        strcpy(name, "Unknown Title");
+    }
+}
+
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
     SMDH smdh;
     AM_TitleEntry titleEntry;
@@ -189,6 +229,9 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             if (units < 0)
                 units = 0;
             outName[units] = '\0';
+
+            // Sanitize the name to remove problematic characters
+            sanitizeName(outName);
             return;
         }
     }
@@ -266,12 +309,17 @@ void loadTitles() {
     }
     
     free(titleIDs);
+    needsRedraw = true;  // Trigger redraw after loading titles
 }
 
 void drawUI() {
-    consoleClear();
-    
-    printf("\x1b[0;0H");
+    // Ensure we're drawing on the top screen
+    consoleSelect(&topScreen);
+
+    // Clear the console properly using escape codes
+    printf("\x1b[2J");  // Clear entire screen
+    printf("\x1b[H");    // Move cursor to home position (0,0)
+
     printf("\x1b[30;47m"); // Black text on white background
     printf("%-50s", " 3DS Fast Uninstall");
     printf("\x1b[0m\n"); // Reset colors
@@ -283,8 +331,8 @@ void drawUI() {
     }
     
     printf("\nInstalled Titles (%d) - Selected: %d\n", titleCount, selectedCount);
-    printf("────────────────────────────────────────────────\n");
-    
+    printf("------------------------------------------------\n");
+
     // Calculate visible range
     int maxVisible = MAX_VISIBLE_TITLES;
     int startIdx = scrollOffset;
@@ -318,13 +366,13 @@ void drawUI() {
         printf("\n");
     }
     
-    printf("\n────────────────────────────────────────────────\n");
+    printf("\n------------------------------------------------\n");
     printf("Controls:\n");
     printf("  D-Pad Up/Down: Navigate\n");
     printf("  A: Toggle selection\n");
     printf("  X: Uninstall selected\n");
     printf("  START: Exit\n");
-    printf("────────────────────────────────────────────────\n");
+    printf("------------------------------------------------\n");
     printf("Backup path: %s\n", config.backupPath);
 }
 
@@ -544,7 +592,7 @@ void deleteTitle(TitleInfo *title) {
 }
 
 void handleInput() {
-    hidScanInput();
+    // Input già scannerizzato nel main loop
     u32 kDown = hidKeysDown();
     u32 kHeld = hidKeysHeld();
     
@@ -558,12 +606,15 @@ void handleInput() {
         if (cursor > 0) {
             cursor--;
             repeatTimer = 0;
+            needsRedraw = true;
         }
     } else if (kHeld & KEY_DUP) {
         repeatTimer++;
         if (repeatTimer > 20 && repeatTimer % 5 == 0) {
-            if (cursor > 0)
+            if (cursor > 0) {
                 cursor--;
+                needsRedraw = true;
+            }
         }
     }
     
@@ -571,12 +622,15 @@ void handleInput() {
         if (cursor < titleCount - 1) {
             cursor++;
             repeatTimer = 0;
+            needsRedraw = true;
         }
     } else if (kHeld & KEY_DDOWN) {
         repeatTimer++;
         if (repeatTimer > 20 && repeatTimer % 5 == 0) {
-            if (cursor < titleCount - 1)
+            if (cursor < titleCount - 1) {
                 cursor++;
+                needsRedraw = true;
+            }
         }
     }
     
@@ -587,6 +641,7 @@ void handleInput() {
     // Toggle selection
     if (kDown & KEY_A) {
         titles[cursor].selected = !titles[cursor].selected;
+        needsRedraw = true;
     }
     
     // Uninstall selected
@@ -600,15 +655,15 @@ void handleInput() {
         if (selectedCount == 0) {
             consoleClear();
             printf("\n\nNo titles selected!\n\nPress A to continue...");
-            
+            gfxFlushBuffers();
+            gfxSwapBuffers();
+
             while (aptMainLoop()) {
+                gspWaitForVBlank();
                 hidScanInput();
                 u32 kDown2 = hidKeysDown();
                 if (kDown2 & KEY_A)
                     break;
-                gfxFlushBuffers();
-                gfxSwapBuffers();
-                gspWaitForVBlank();
             }
             return;
         }
@@ -620,11 +675,14 @@ void handleInput() {
         printf("  A: Yes, backup saves\n");
         printf("  B: No, skip backup\n");
         printf("  START: Cancel\n");
-        
+        gfxFlushBuffers();
+        gfxSwapBuffers();
+
         bool backupSaves = false;
         bool cancelled = false;
         
         while (aptMainLoop()) {
+            gspWaitForVBlank();
             hidScanInput();
             u32 kDown2 = hidKeysDown();
             
@@ -640,10 +698,6 @@ void handleInput() {
                 cancelled = true;
                 break;
             }
-            
-            gfxFlushBuffers();
-            gfxSwapBuffers();
-            gspWaitForVBlank();
         }
         
         if (cancelled)
@@ -661,10 +715,13 @@ void handleInput() {
             printf("  A: Use current path\n");
             printf("  Y: Choose alternative path\n");
             printf("  START: Cancel\n");
-            
+            gfxFlushBuffers();
+            gfxSwapBuffers();
+
             bool useDefault = true;
             
             while (aptMainLoop()) {
+                gspWaitForVBlank();
                 hidScanInput();
                 u32 kDown2b = hidKeysDown();
                 
@@ -680,10 +737,6 @@ void handleInput() {
                     cancelled = true;
                     break;
                 }
-                
-                gfxFlushBuffers();
-                gfxSwapBuffers();
-                gspWaitForVBlank();
             }
             
             if (cancelled)
@@ -704,26 +757,7 @@ void handleInput() {
                 bool pathSelected = false;
                 
                 while (aptMainLoop()) {
-                    consoleClear();
-                    printf("\n\nSelect Backup Path\n\n");
-                    printf("Use D-Pad to select, A to confirm\n\n");
-                    
-                    for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
-                        if (i == pathCursor) {
-                            printf("\x1b[47;30m"); // Highlighted
-                        }
-                        printf("  %s\n", BACKUP_PATH_OPTIONS[i]);
-                        if (i == pathCursor) {
-                            printf("\x1b[0m"); // Reset
-                        }
-                    }
-                    
-                    printf("\n  B: Cancel\n");
-                    
-                    gfxFlushBuffers();
-                    gfxSwapBuffers();
                     gspWaitForVBlank();
-                    
                     hidScanInput();
                     u32 kDown2c = hidKeysDown();
                     
@@ -744,6 +778,25 @@ void handleInput() {
                         cancelled = true;
                         break;
                     }
+
+                    consoleClear();
+                    printf("\n\nSelect Backup Path\n\n");
+                    printf("Use D-Pad to select, A to confirm\n\n");
+
+                    for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
+                        if (i == pathCursor) {
+                            printf("\x1b[47;30m"); // Highlighted
+                        }
+                        printf("  %s\n", BACKUP_PATH_OPTIONS[i]);
+                        if (i == pathCursor) {
+                            printf("\x1b[0m"); // Reset
+                        }
+                    }
+
+                    printf("\n  B: Cancel\n");
+
+                    gfxFlushBuffers();
+                    gfxSwapBuffers();
                 }
                 
                 if (cancelled)
@@ -761,10 +814,13 @@ void handleInput() {
         }
         printf("\n  A: Confirm\n");
         printf("  B: Cancel\n");
-        
+        gfxFlushBuffers();
+        gfxSwapBuffers();
+
         bool confirmed = false;
         
         while (aptMainLoop()) {
+            gspWaitForVBlank();
             hidScanInput();
             u32 kDown3 = hidKeysDown();
             
@@ -775,10 +831,6 @@ void handleInput() {
             if (kDown3 & KEY_B) {
                 break;
             }
-            
-            gfxFlushBuffers();
-            gfxSwapBuffers();
-            gspWaitForVBlank();
         }
         
         if (!confirmed)
@@ -819,8 +871,17 @@ void handleInput() {
 
 int main(int argc, char **argv) {
     gfxInitDefault();
-    consoleInit(GFX_TOP, NULL);
-    
+
+    // Double buffering is fine when we don't redraw every frame
+    // The issue was redrawing 60 times per second, not the buffering itself
+
+    // Initialize both screens properly
+    consoleInit(GFX_TOP, &topScreen);
+    consoleInit(GFX_BOTTOM, &bottomScreen);
+
+    // Set top screen as default
+    consoleSelect(&topScreen);
+
     // Initialize services
     amInit();
     fsInit();
@@ -838,9 +899,16 @@ int main(int argc, char **argv) {
     
     loadTitles();
     
+    // Initial draw
+    drawUI();
+    gfxFlushBuffers();
+    gfxSwapBuffers();
+    needsRedraw = false;
+
     // Main loop
     bool running = true;
     while (aptMainLoop() && running) {
+        gspWaitForVBlank();
         hidScanInput();
         u32 kDown = hidKeysDown();
         
@@ -850,12 +918,15 @@ int main(int argc, char **argv) {
             break;
         }
         
-        drawUI();
         handleInput();
         
-        gfxFlushBuffers();
-        gfxSwapBuffers();
-        gspWaitForVBlank();
+        // Only redraw if something changed
+        if (needsRedraw) {
+            drawUI();
+            gfxFlushBuffers();
+            gfxSwapBuffers();
+            needsRedraw = false;
+        }
     }
     
     // Cleanup
