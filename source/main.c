@@ -435,23 +435,36 @@ void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     }
     
     // 2. Backup ExtData
-    // ExtData uses different path format: high ID from title
-    u32 extdataID = (u32)((title->titleID >> 32) & 0xFFFFFFFF);
-    u32 extdataPath[] = {title->mediaType, extdataID, 0, 0};
-    FS_Path extPath = {PATH_BINARY, 12, extdataPath};
-    
-    FS_Archive extArchive;
-    res = FSUSER_OpenArchive(&extArchive, ARCHIVE_EXTDATA, extPath);
-    if (R_SUCCEEDED(res)) {
-        backupArchive(extArchive, backupDir, "extdata");
-        FSUSER_CloseArchive(extArchive);
-    }
-    
-    // 3. Backup Boss ExtData (for SpotPass data)
-    res = FSUSER_OpenArchive(&extArchive, ARCHIVE_BOSS_EXTDATA, extPath);
-    if (R_SUCCEEDED(res)) {
-        backupArchive(extArchive, backupDir, "boss_extdata");
-        FSUSER_CloseArchive(extArchive);
+    // Get the correct ExtData ID from the system
+    u64 extdataID = 0;
+    res = AM_GetTitleExtDataId(&extdataID, title->mediaType, title->titleID);
+
+    if (R_SUCCEEDED(res) && extdataID != 0) {
+        // Create binary path for ExtData archive
+        // Format: {u8 mediatype, u8 unknown, u16 reserved, u64 saveid}
+        FS_ExtSaveDataInfo extInfo = {
+            .mediaType = title->mediaType,
+            .unknown = 0,
+            .reserved1 = 0,
+            .saveId = extdataID,
+            .reserved2 = 0
+        };
+
+        FS_Path extPath = {PATH_BINARY, sizeof(FS_ExtSaveDataInfo), &extInfo};
+
+        FS_Archive extArchive;
+        res = FSUSER_OpenArchive(&extArchive, ARCHIVE_EXTDATA, extPath);
+        if (R_SUCCEEDED(res)) {
+            backupArchive(extArchive, backupDir, "extdata");
+            FSUSER_CloseArchive(extArchive);
+        }
+
+        // 3. Backup Boss ExtData (for SpotPass data)
+        res = FSUSER_OpenArchive(&extArchive, ARCHIVE_BOSS_EXTDATA, extPath);
+        if (R_SUCCEEDED(res)) {
+            backupArchive(extArchive, backupDir, "boss_extdata");
+            FSUSER_CloseArchive(extArchive);
+        }
     }
 }
 
@@ -467,20 +480,22 @@ void deleteTitleCompletely(TitleInfo *title) {
     if (R_SUCCEEDED(res) && extdataID != 0) {
         FS_ExtSaveDataInfo extInfo = {
             .mediaType = title->mediaType,
-            .saveId = extdataID
+            .unknown = 0,
+            .reserved1 = 0,
+            .saveId = extdataID,
+            .reserved2 = 0
         };
 
         // Try to delete regular ExtData
         FSUSER_DeleteExtSaveData(extInfo);
-    }
 
-    // Try to delete Boss ExtData (SpotPass) using the old method
-    u32 extdataPath[] = {title->mediaType, (u32)extdataID, 0, 0};
-    FS_Path extPath = {PATH_BINARY, 12, extdataPath};
-    FS_Archive bossArchive;
-    if (R_SUCCEEDED(FSUSER_OpenArchive(&bossArchive, ARCHIVE_BOSS_EXTDATA, extPath))) {
-        FSUSER_CloseArchive(bossArchive);
-        // Boss extdata is deleted automatically with title or can be cleaned separately
+        // Try to delete Boss ExtData (SpotPass)
+        FS_Archive bossArchive;
+        FS_Path extPath = {PATH_BINARY, sizeof(FS_ExtSaveDataInfo), &extInfo};
+        if (R_SUCCEEDED(FSUSER_OpenArchive(&bossArchive, ARCHIVE_BOSS_EXTDATA, extPath))) {
+            FSUSER_CloseArchive(bossArchive);
+            // Boss extdata is deleted automatically with title or can be cleaned separately
+        }
     }
     
     // Delete the main title (this removes the title, save data, and most content)
