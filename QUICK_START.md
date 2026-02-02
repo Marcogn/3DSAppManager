@@ -1,26 +1,26 @@
 # ⚡ QUICK START - v3.2
-## 🎯 Cosa è Stato Risolto
-✅ Flickering massiccio → ELIMINATO  
+## 🎯 Migliorie Implementate
+✅ Flickering → ELIMINATO  
 ✅ Caratteri corrotti → RISOLTI  
-✅ Update con flash → CORRETTO  
-## ✨ Novità v3.2
-- **Ordinamento**: L (Nome) / R (Title ID)
-- **Schermo inferiore**: Reminder comandi
-- **UI ottimizzata**: Massimo spazio per lista
+✅ Scorrimento veloce → AGGIUNTO  
+✅ Lista estesa → 26 titoli visibili  
 ## 🎮 Controlli
-- **D-Pad ↑/↓**: Naviga
-- **A**: Seleziona
-- **X**: Uninstall
+**Navigazione:**
+- **D-Pad ↑/↓**: Scorrimento normale (1 titolo)
+- **D-Pad ←→**: Scorrimento veloce (1 pagina = 26 titoli)
+**Azioni:**
+- **A**: Toggle selezione
+- **X**: Uninstall selezionati
 - **L**: Ordina per Nome
 - **R**: Ordina per ID
 - **START**: Esci
 ## 📦 Installazione
 1. Copia `3ds-fast-uninstall.3dsx` in `/3ds/`
 2. Avvia dal Homebrew Launcher
-3. Usa i controlli sopra
-## 📚 Documentazione
-- `MANUALE_UTENTE.md` - Guida completa
-- `CORREZIONI_APPLICATE.md` - Changelog
-- `README.md` - Panoramica
+## ✨ Features
+- **26 titoli visibili** (prima 18)
+- **Scorrimento veloce** con ←→
+- **Ordinamento** con L/R
+- **Schermo inferiore** con reminder
 ---
 **Version**: v3.2 | **Status**: ✅ STABILE

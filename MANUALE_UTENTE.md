@@ -61,17 +61,21 @@ backup_path=sdmc:/3ds/fast-uninstall/backups
 ### 1. Avvio
 Apri l'app dal Homebrew Launcher. Verrà caricata la lista dei titoli installati.
 
-### 2. Selezione
-- Usa **D-Pad** per navigare
+### 2. Navigazione
+- Usa **D-Pad ↑/↓** per navigare un titolo per volta
+- Usa **D-Pad ←→** per scorrimento veloce (26 titoli per volta)
+- La lista mostra 26 titoli contemporaneamente
+
+### 3. Selezione
 - Premi **A** per selezionare/deselezionare i titoli
 - I titoli selezionati mostrano `[X]` invece di `[ ]`
 
-### 3. Ordinamento
+### 4. Ordinamento
 - Premi **L** per ordinare alfabeticamente per nome
 - Premi **R** per ordinare per Title ID
 - L'header mostra la modalità corrente: `Sort: Name` o `Sort: Title ID`
 
-### 4. Uninstall
+### 5. Uninstall
 - Premi **X** per avviare l'uninstall
 - Scegli se fare backup dei salvataggi
 - Conferma l'operazione

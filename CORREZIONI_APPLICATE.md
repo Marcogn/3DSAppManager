@@ -10,6 +10,8 @@
 - ✅ Schermo inferiore con reminder comandi
 - ✅ Rimosso flash durante aggiornamenti
 - ✅ UI più compatta e spaziosa
+- ✅ Scorrimento veloce con ←→ (pagina su/giù)
+- ✅ Lista estesa a 26 titoli visibili (era 18)
 ## 🛠️ Dettagli Tecnici v3.1
 ### Problema 1: Flickering Massiccio
 **Causa**: Ridisegno a 60 FPS anche quando idle
@@ -88,3 +90,11 @@ printf("\x1b[J");    // Clear only from cursor to end
 - `docs/` - Documentazione tecnica
 ---
 **Ultimo aggiornamento**: Febbraio 2026
+### Feature 4: Scorrimento Veloce (NEW!)
+- D-Pad ← →: Salta 26 titoli (1 pagina)
+- Utile per liste lunghe (100+ titoli)
+- Combina con ↑↓ per navigazione precisa
+### Feature 5: Lista Estesa (NEW!)
+- MAX_VISIBLE_TITLES: 18 → 26 (+44%)
+- Riempie completamente lo schermo superiore
+- Più titoli visibili senza scroll

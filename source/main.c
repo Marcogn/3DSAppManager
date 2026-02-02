@@ -38,7 +38,7 @@ typedef struct {
 #define LANGUAGE_ENGLISH 1
 #define SMDH_ICON_PATH 0x6E6F6369  // "icon" in little-endian
 #define MAX_FILE_SIZE (100 * 1024 * 1024)  // 100MB per file
-#define MAX_VISIBLE_TITLES 18  // Maximum titles visible in list at once
+#define MAX_VISIBLE_TITLES 26  // Maximum titles visible (fill entire top screen)
 
 // Alternative backup paths for user selection
 static const char *BACKUP_PATH_OPTIONS[] = {
@@ -424,7 +424,9 @@ void drawTouchControls() {
     printf("      CONTROLS REMINDER\n");
     printf("================================\n\n");
 
-    printf("  D-Pad Up/Down : Navigate list\n");
+    printf("  D-Pad Up/Down : Navigate\n");
+    printf("  D-Pad L/R     : Fast scroll\n");
+    printf("                  (page up/down)\n");
     printf("  A Button      : Toggle select\n");
     printf("  X Button      : Uninstall\n\n");
 
@@ -724,6 +726,21 @@ void handleInput() {
     if (kDown & KEY_R) {
         currentSortMode = SORT_BY_TITLEID;
         sortTitles();
+        needsRedraw = true;
+    }
+
+    // Fast scroll with LEFT/RIGHT (page up/down)
+    if (kDown & KEY_DLEFT) {
+        // Scroll up one page
+        cursor -= MAX_VISIBLE_TITLES;
+        if (cursor < 0) cursor = 0;
+        needsRedraw = true;
+    }
+
+    if (kDown & KEY_DRIGHT) {
+        // Scroll down one page
+        cursor += MAX_VISIBLE_TITLES;
+        if (cursor >= titleCount) cursor = titleCount - 1;
         needsRedraw = true;
     }
 

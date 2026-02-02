@@ -28,7 +28,8 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 ## Controls
 
 **Main Screen:**
-- **D-Pad ↑/↓**: Navigate list
+- **D-Pad ↑/↓**: Navigate list (one by one)
+- **D-Pad ←→**: Fast scroll (page up/down - 26 titles)
 - **A**: Toggle selection
 - **X**: Uninstall selected
 - **L**: Sort by Name
