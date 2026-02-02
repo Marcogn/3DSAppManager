@@ -1,0 +1,50 @@
+main.c
+/home/marco/Projects/3ds-fast-uninstall/source/main.c: In function 'handleInput':
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:704:22: warning: variable 'pathSelected' set but not used [-Wunused-but-set-variable]
+  704 |                 bool pathSelected = false;
+      |                      ^~~~~~~~~~~~
+/home/marco/Projects/3ds-fast-uninstall/source/main.c: In function 'backupSaveDataToPath':
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:412:45: warning: '/backup_info.txt' directive output may be truncated writing 16 bytes into a region of size between 1 and 512 [-Wformat-truncation=]
+  412 |     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
+      |                                             ^~~~~~~~~~~~~~~~
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:412:5: note: 'snprintf' output between 17 and 528 bytes into a destination of size 512
+  412 |     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:52: warning: '%s' directive output may be truncated writing 8 bytes into a region of size between 0 and 511 [-Wformat-truncation=]
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |                                                    ^~
+......
+  433 |         backupArchive(saveArchive, backupDir, "savedata");
+      |                                               ~~~~~~~~~~
+In function 'backupArchive',
+    inlined from 'backupSaveDataToPath' at /home/marco/Projects/3ds-fast-uninstall/source/main.c:433:9:
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:5: note: 'snprintf' output between 10 and 521 bytes into a destination of size 512
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/marco/Projects/3ds-fast-uninstall/source/main.c: In function 'backupSaveDataToPath':
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:52: warning: '%s' directive output may be truncated writing 7 bytes into a region of size between 0 and 511 [-Wformat-truncation=]
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |                                                    ^~
+......
+  458 |             backupArchive(extArchive, backupDir, "extdata");
+      |                                                  ~~~~~~~~~
+In function 'backupArchive',
+    inlined from 'backupSaveDataToPath' at /home/marco/Projects/3ds-fast-uninstall/source/main.c:458:13:
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:5: note: 'snprintf' output between 9 and 520 bytes into a destination of size 512
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/marco/Projects/3ds-fast-uninstall/source/main.c: In function 'backupSaveDataToPath':
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:52: warning: '%s' directive output may be truncated writing 12 bytes into a region of size between 0 and 511 [-Wformat-truncation=]
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |                                                    ^~
+......
+  465 |             backupArchive(extArchive, backupDir, "boss_extdata");
+      |                                                  ~~~~~~~~~~~~~~
+In function 'backupArchive',
+    inlined from 'backupSaveDataToPath' at /home/marco/Projects/3ds-fast-uninstall/source/main.c:465:13:
+/home/marco/Projects/3ds-fast-uninstall/source/main.c:397:5: note: 'snprintf' output between 14 and 525 bytes into a destination of size 512
+  397 |     snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+linking 3ds-fast-uninstall.elf
+built ... 3ds-fast-uninstall.smdh
+built ... 3ds-fast-uninstall.3dsx
