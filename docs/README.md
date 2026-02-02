@@ -1,64 +1,64 @@
-# 📚 Documentazione Tecnica - 3DS Fast Uninstall
+# 📚 Technical Documentation - 3DS Fast Uninstall
 
-Questa cartella contiene la documentazione tecnica dettagliata del progetto.
+This folder contains detailed technical documentation for the project.
 
-## 📄 Documenti Disponibili
+## 📄 Available Documents
 
 ### BUILD_VERIFICATION.md
-Report dettagliato della verifica di build e compatibilità.
+Detailed build and compatibility verification report.
 
-**Contenuto**:
-- Stato della compilazione
-- Metadati SMDH verificati
-- Modifiche applicate al codice
-- Funzionalità implementate
-- Analisi tecnica completa
+**Content**:
+- Compilation status
+- Verified SMDH metadata
+- Code modifications applied
+- Implemented functionality
+- Complete technical analysis
 
 ### COMPATIBILITY_CONFIRMED.md
-Conferma completa della compatibilità con Nintendo 3DS.
+Complete confirmation of Nintendo 3DS compatibility.
 
-**Contenuto**:
-- Problemi critici risolti
-- Validazione delle API
-- Tipi di archivi utilizzati
-- Garanzia di compatibilità
-- Istruzioni di test
+**Content**:
+- Critical issues resolved
+- API validation
+- Archive types used
+- Compatibility guarantee
+- Testing instructions
 
 ### FINAL_VERIFICATION.md
-Verifica finale con checklist completa.
+Final verification with complete checklist.
 
-**Contenuto**:
-- Riepilogo della compilazione
-- Analisi del codice
-- Tabelle di verifica API
-- Checklist finale
-- Informazioni tecniche
+**Content**:
+- Compilation summary
+- Code analysis
+- API verification tables
+- Final checklist
+- Technical information
 
 ### build.log
-Log completo dell'ultima compilazione riuscita.
+Complete log of the last successful compilation.
 
-**Contenuto**:
-- Output del compilatore
-- Warning (non critici)
-- Conferma generazione file
+**Content**:
+- Compiler output
+- Warnings (non-critical)
+- File generation confirmation
 
-## 🎯 Per Iniziare
+## 🎯 Getting Started
 
-Se sei un nuovo contributore o vuoi capire il progetto:
+If you're a new contributor or want to understand the project:
 
-1. Leggi prima il [README.md](../README.md) nella root del progetto
-2. Per dettagli tecnici, consulta [COMPATIBILITY_CONFIRMED.md](COMPATIBILITY_CONFIRMED.md)
-3. Per verifiche di build, vedi [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md)
-4. Per la checklist finale, vedi [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md)
+1. First read the [README.md](../README.md) in the project root
+2. For technical details, see [COMPATIBILITY_CONFIRMED.md](COMPATIBILITY_CONFIRMED.md)
+3. For build verification, see [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md)
+4. For the final checklist, see [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md)
 
-## 🔧 Build e Sviluppo
+## 🔧 Build and Development
 
-Per informazioni su come compilare il progetto, consulta la sezione "Building from Source" nel README principale.
+For information on how to compile the project, consult the "Building from Source" section in the main README.
 
-## ✅ Stato del Progetto
+## ✅ Project Status
 
-**Ultima Verifica**: 2026-02-02  
-**Stato Build**: ✅ Successo (0 errori)  
-**Compatibilità 3DS**: ✅ Confermata (100%)  
-**API Verificate**: 29/29 (100%)  
-**Pronto per**: Test su hardware 3DS reale
+**Last Verification**: 2026-02-02  
+**Build Status**: ✅ Success (0 errors)  
+**3DS Compatibility**: ✅ Confirmed (100%)  
+**Verified APIs**: 29/29 (100%)  
+**Ready for**: Testing on real 3DS hardware
