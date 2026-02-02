@@ -224,6 +224,15 @@ Note: A future version may include automatic restore functionality.
 - Or a homebrew entrypoint (limited access)
 Note: Some features may require CFW for full functionality.
 
+## Technical Documentation
+
+For detailed technical information, build verification, and compatibility analysis, see the [docs/](docs/) folder:
+
+- **[Build Verification](docs/BUILD_VERIFICATION.md)** - Detailed build and compatibility report
+- **[Compatibility Confirmation](docs/COMPATIBILITY_CONFIRMED.md)** - Complete 3DS compatibility analysis
+- **[Final Verification](docs/FINAL_VERIFICATION.md)** - Final checklist and verification
+- **[Build Log](docs/build.log)** - Latest successful compilation log
+
 ## License
 
 This project is open source. Feel free to use, modify, and distribute.
