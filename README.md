@@ -6,48 +6,37 @@
 
 A Nintendo 3DS homebrew application for quickly uninstalling multiple titles with optional save data backup.
 
-**🎯 Perfect for managing your 3DS storage!** Easily remove multiple games and apps at once while safely backing up your save data. Ideal for freeing up space on your SD card or NAND.
-
-## Screenshots
-
-![Screenshot placeholder - Main interface showing title list]
-*Coming soon: Screenshots of the main interface*
-
-![Screenshot placeholder - Backup confirmation]
-*Coming soon: Screenshots of the backup and deletion process*
+**🎯 Perfect for managing your 3DS storage!** Easily remove multiple games and apps at once while safely backing up your save data.
 
 ## Features
 
-- 📋 **Display all installed titles** - Shows a complete list of all user-installed games and applications with their title IDs
-- ✅ **Multi-selection** - Select multiple titles at once for batch uninstallation
-- 💾 **Complete save data backup** - Full backup of all save types before uninstalling:
-  - User Save Data (main game saves)
-  - ExtData (extended data, DLC save data)
-  - Boss ExtData (SpotPass/StreetPass data)
-- 🗑️ **Complete uninstallation** - Removes all data associated with titles:
-  - Title application
-  - Save data
-  - ExtData
-  - Boss ExtData
-- ⚙️ **Configurable** - Customize backup location via config file or choose at runtime
-- 📁 **Flexible backup paths** - Choose from predefined paths or use config default during uninstallation
-- 🎮 **Easy to use** - Simple interface with D-pad and button controls
-- 🛡️ **Safe** - Only uninstalls selected titles, system titles are protected
-- 🔍 **Title ID display** - Each title shows its 16-digit hexadecimal ID for easy identification
+- 📋 **Display all installed titles** - Complete list with title names and IDs
+- ✅ **Multi-selection** - Select multiple titles for batch uninstallation
+- 🔄 **Smart sorting** - Sort by Name (L button) or Title ID (R button)
+- 💾 **Complete save backup** - Backs up all save data before uninstalling
+- 🗑️ **Complete removal** - Removes title, saves, ExtData, and Boss ExtData
+- ⚙️ **Configurable** - Customize backup location
+- 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
+- 🛡️ **Safe** - System titles are protected
 
 ## Installation
 
-1. Download the latest release `.3dsx` file
-2. Copy `3ds-fast-uninstall.3dsx` to your SD card's `/3ds/` folder
-3. Launch from the Homebrew Launcher
+1. Download `3ds-fast-uninstall.3dsx`
+2. Copy to your SD card's `/3ds/` folder
+3. Launch from Homebrew Launcher
 
-## Usage
+## Controls
 
-### Controls
+**Main Screen:**
+- **D-Pad ↑/↓**: Navigate list
+- **A**: Toggle selection
+- **X**: Uninstall selected
+- **L**: Sort by Name
+- **R**: Sort by Title ID
+- **START**: Exit
 
-- **D-Pad Up/Down**: Navigate through the title list
-- **A Button**: Toggle selection (mark/unmark a title)
-- **X Button**: Uninstall selected titles
+**Bottom Screen:**
+- Shows controls reminder and backup path
 - **START**: Exit application
 
 ### Uninstalling Titles

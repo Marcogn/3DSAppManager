@@ -88,7 +88,6 @@ void loadTitles();
 void drawUI();
 void drawTouchControls();
 void handleInput();
-void handleTouchInput();
 void backupSaveData(TitleInfo *title);
 void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
 void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName);
@@ -411,12 +410,7 @@ void drawUI() {
         printf("\n");
     }
     
-    printf("\n------------------------------------------------\n");
-    printf("D-Pad:Navigate | A:Select | X:Uninstall\n");
-    printf("L/R:Sort | START:Exit | Touch:See bottom screen\n");
-    printf("------------------------------------------------\n");
-    printf("Backup path: %s\n", config.backupPath);
-
+    // No more controls here - moved to bottom screen
     // Clear any remaining lines (in case list got shorter)
     printf("\x1b[J");  // Clear from cursor to end of screen
 }
@@ -427,28 +421,26 @@ void drawTouchControls() {
     printf("\x1b[2J\x1b[H");  // Clear and home
 
     printf("\n");
-    printf("        TOUCH CONTROLS\n");
+    printf("      CONTROLS REMINDER\n");
     printf("================================\n\n");
 
-    // Draw touch buttons
-    printf(" [  SELECT  ]  [  DESELECT ALL  ]\n");
-    printf("   Toggle        Clear all\n");
-    printf(" selection      selections\n\n");
+    printf("  D-Pad Up/Down : Navigate list\n");
+    printf("  A Button      : Toggle select\n");
+    printf("  X Button      : Uninstall\n\n");
+
+    printf("--------------------------------\n\n");
+
+    printf("  L Button      : Sort by Name\n");
+    printf("  R Button      : Sort by ID\n\n");
+
+    printf("--------------------------------\n\n");
+
+    printf("  START Button  : Exit app\n\n");
 
     printf("================================\n\n");
 
-    printf(" [ UNINSTALL ]  [   CANCEL   ]\n");
-    printf("  Uninstall       Go back\n");
-    printf("  selected\n\n");
-
-    printf("================================\n\n");
-
-    printf(" [SORT:NAME]    [SORT:ID]\n");
-    printf("  Sort by        Sort by\n");
-    printf("  title name     title ID\n\n");
-
-    printf("================================\n");
-    printf("\nTip: You can also use buttons!\n");
+    printf("Backup Path:\n");
+    printf("%s\n", config.backupPath);
 
     // Switch back to top screen
     consoleSelect(&topScreen);
@@ -960,74 +952,6 @@ void handleInput() {
     }
 }
 
-void handleTouchInput() {
-    if (titleCount == 0) return;
-
-    touchPosition touch;
-    u32 kDown = hidKeysDown();
-
-    if (kDown & KEY_TOUCH) {
-        hidTouchRead(&touch);
-
-        // Define touch areas (approximate pixel positions)
-        // Screen is 320x240
-
-        // Row 1 (y: 60-90)
-        if (touch.py >= 60 && touch.py <= 90) {
-            // SELECT button (x: 20-140)
-            if (touch.px >= 20 && touch.px <= 140) {
-                if (cursor < titleCount) {
-                    titles[cursor].selected = !titles[cursor].selected;
-                    needsRedraw = true;
-                }
-            }
-            // DESELECT ALL button (x: 160-300)
-            else if (touch.px >= 160 && touch.px <= 300) {
-                for (int i = 0; i < titleCount; i++) {
-                    titles[i].selected = false;
-                }
-                needsRedraw = true;
-            }
-        }
-
-        // Row 2 (y: 135-165)
-        else if (touch.py >= 135 && touch.py <= 165) {
-            // UNINSTALL button (x: 20-140)
-            if (touch.px >= 20 && touch.px <= 140) {
-                // Trigger uninstall via X key simulation
-                // Count selected
-                int selectedCount = 0;
-                for (int i = 0; i < titleCount; i++) {
-                    if (titles[i].selected)
-                        selectedCount++;
-                }
-
-                if (selectedCount > 0) {
-                    // Simulate pressing X by calling the uninstall logic
-                    // For now, just set a flag or call directly
-                    // This will be handled in main loop
-                }
-            }
-            // CANCEL button (x: 160-300) - does nothing, just feedback
-        }
-
-        // Row 3 (y: 200-230)
-        else if (touch.py >= 200 && touch.py <= 230) {
-            // SORT:NAME button (x: 20-140)
-            if (touch.px >= 20 && touch.px <= 140) {
-                currentSortMode = SORT_BY_NAME;
-                sortTitles();
-                needsRedraw = true;
-            }
-            // SORT:ID button (x: 160-300)
-            else if (touch.px >= 160 && touch.px <= 300) {
-                currentSortMode = SORT_BY_TITLEID;
-                sortTitles();
-                needsRedraw = true;
-            }
-        }
-    }
-}
 
 int main(int argc, char **argv) {
     gfxInitDefault();
@@ -1082,7 +1006,6 @@ int main(int argc, char **argv) {
         }
         
         handleInput();
-        handleTouchInput();
 
         // Only redraw if something changed
         if (needsRedraw) {
