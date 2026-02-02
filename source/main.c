@@ -38,7 +38,7 @@ typedef struct {
 #define LANGUAGE_ENGLISH 1
 #define SMDH_ICON_PATH 0x6E6F6369  // "icon" in little-endian
 #define MAX_FILE_SIZE (100 * 1024 * 1024)  // 100MB per file
-#define MAX_VISIBLE_TITLES 26  // Maximum titles visible (fill entire top screen)
+#define MAX_VISIBLE_TITLES 13  // Reduced for double-spacing (better readability)
 
 // Alternative backup paths for user selection
 static const char *BACKUP_PATH_OPTIONS[] = {
@@ -375,8 +375,7 @@ void drawUI() {
     // Ensure we're drawing on the top screen
     consoleSelect(&topScreen);
 
-    // Clear screen completely to avoid overlapping text
-    printf("\x1b[2J");   // Clear entire screen
+    // Use only cursor positioning to reduce flicker
     printf("\x1b[H");    // Move cursor to home position (0,0)
 
     printf("\x1b[30;47m"); // Black text on white background
@@ -427,6 +426,7 @@ void drawUI() {
 
         printf("\x1b[K");  // Clear to end of line (avoid overlapping text)
         printf("\n");
+        printf("\n");  // Add blank line for double-spacing
     }
     
     // No more controls here - moved to bottom screen
@@ -439,29 +439,29 @@ void drawTouchControls() {
     consoleSelect(&bottomScreen);
     printf("\x1b[2J\x1b[H");  // Clear and home
 
-    printf("\n");
-    printf("      CONTROLS REMINDER\n");
-    printf("================================\n\n");
+    printf("\n\n");
+    printf("        CONTROLS REMINDER\n");
+    printf("  ================================\n\n");
 
-    printf("  D-Pad Up/Down : Navigate\n");
-    printf("  D-Pad L/R     : Fast scroll\n");
-    printf("                  (page up/down)\n");
-    printf("  A Button      : Toggle select\n");
-    printf("  X Button      : Uninstall\n\n");
+    printf("    D-Pad Up/Down : Navigate\n");
+    printf("    D-Pad L/R     : Fast scroll\n");
+    printf("                    (page up/down)\n");
+    printf("    A Button      : Toggle select\n");
+    printf("    X Button      : Uninstall\n\n");
 
-    printf("--------------------------------\n\n");
+    printf("  --------------------------------\n\n");
 
-    printf("  L Button      : Sort by Name\n");
-    printf("  R Button      : Sort by ID\n\n");
+    printf("    L Button      : Sort by Name\n");
+    printf("    R Button      : Sort by ID\n\n");
 
-    printf("--------------------------------\n\n");
+    printf("  --------------------------------\n\n");
 
-    printf("  START Button  : Exit app\n\n");
+    printf("    START Button  : Exit app\n\n");
 
-    printf("================================\n\n");
+    printf("  ================================\n\n");
 
-    printf("Backup Path:\n");
-    printf("%s\n", config.backupPath);
+    printf("  Backup Path:\n");
+    printf("  %s\n", config.backupPath);
 
     // Switch back to top screen
     consoleSelect(&topScreen);
