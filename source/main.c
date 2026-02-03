@@ -75,8 +75,7 @@ static int scrollOffset = 0;
 static Config config;
 static C3D_RenderTarget* top;
 static C3D_RenderTarget* bottom;
-static C2D_TextBuf staticBuf;
-static C2D_TextBuf dynamicBuf;
+static C2D_TextBuf dynamicBuf;  // Text buffer for dynamic text rendering
 static bool needsRedraw = true;  // Flag to track if UI needs redrawing
 static SortMode currentSortMode = SORT_BY_NAME;  // Default sort by name
 
@@ -377,8 +376,7 @@ void loadTitles() {
 }
 
 void drawUI() {
-    // Begin frame for top screen
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    // Render top screen - title list
     C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(top);
     
@@ -461,13 +459,10 @@ void drawUI() {
         
         y += 14;  // Line spacing
     }
-    
-    C3D_FrameEnd(0);
 }
 
 void drawTouchControls() {
-    // Begin frame for bottom screen
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    // Render bottom screen - controls
     C2D_TargetClear(bottom, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(bottom);
     
@@ -508,7 +503,8 @@ void drawTouchControls() {
         "  Backup Path:",
     };
     
-    for (int i = 0; i < 18; i++) {
+    int numControls = sizeof(controls) / sizeof(controls[0]);
+    for (int i = 0; i < numControls; i++) {
         C2D_TextParse(&text, dynamicBuf, controls[i]);
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(255, 255, 255, 255));
@@ -519,8 +515,6 @@ void drawTouchControls() {
     C2D_TextParse(&text, dynamicBuf, config.backupPath);
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.3f, 0.3f, C2D_Color32(200, 200, 200, 255));
-    
-    C3D_FrameEnd(0);
 }
 
 void drawDialog(const char **lines, int lineCount) {
@@ -1143,8 +1137,7 @@ int main(int argc, char **argv) {
     top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     
-    // Create text buffers
-    staticBuf = C2D_TextBufNew(4096);
+    // Create text buffer for dynamic text rendering
     dynamicBuf = C2D_TextBufNew(4096);
 
     // Initialize services
@@ -1172,11 +1165,11 @@ int main(int argc, char **argv) {
     
     loadTitles();
     
-    // Draw touch controls on bottom screen
-    drawTouchControls();
-
-    // Initial draw
+    // Initial draw - both screens in one frame
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     drawUI();
+    drawTouchControls();
+    C3D_FrameEnd(0);
     needsRedraw = false;
 
     // Main loop
@@ -1195,15 +1188,16 @@ int main(int argc, char **argv) {
 
         // Only redraw if something changed
         if (needsRedraw) {
+            C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
             drawUI();
             drawTouchControls();
+            C3D_FrameEnd(0);
             needsRedraw = false;
         }
     }
     
     // Cleanup
     C2D_TextBufDelete(dynamicBuf);
-    C2D_TextBufDelete(staticBuf);
     C2D_Fini();
     C3D_Fini();
     fsExit();
