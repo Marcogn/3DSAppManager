@@ -1,4 +1,5 @@
 #include <3ds.h>
+#include <citro2d.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,7 +73,10 @@ static int titleCount = 0;
 static int cursor = 0;
 static int scrollOffset = 0;
 static Config config;
-static PrintConsole topScreen, bottomScreen;
+static C3D_RenderTarget* top;
+static C3D_RenderTarget* bottom;
+static C2D_TextBuf staticBuf;
+static C2D_TextBuf dynamicBuf;
 static bool needsRedraw = true;  // Flag to track if UI needs redrawing
 static SortMode currentSortMode = SORT_BY_NAME;  // Default sort by name
 
@@ -87,6 +91,7 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
 void loadTitles();
 void drawUI();
 void drawTouchControls();
+void drawDialog(const char **lines, int lineCount);
 void handleInput();
 void backupSaveData(TitleInfo *title);
 void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
@@ -372,18 +377,29 @@ void loadTitles() {
 }
 
 void drawUI() {
-    // Ensure we're drawing on the top screen
-    consoleSelect(&topScreen);
-
-    // Clear screen completely and move to home
-    printf("\x1b[2J");   // Clear entire screen
-    printf("\x1b[H");    // Move cursor to home position (0,0)
-
-    // Header with inverted colors
-    printf("\x1b[30;47m"); // Black text on white background
-    printf("%-50s", " 3DS Fast Uninstall");
-    printf("\x1b[0m\n"); // Reset colors
+    // Begin frame for top screen
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(top);
     
+    // Clear dynamic text buffer and prepare for new text
+    C2D_TextBufClear(dynamicBuf);
+    
+    float y = 5.0f;
+    
+    // Draw header background (white bar)
+    C2D_DrawRectSolid(0, y, 0.5f, 400, 14, C2D_Color32(255, 255, 255, 255));
+    
+    // Draw header text
+    C2D_Text text;
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 5.0f, y + 2, 0.5f, 0.5f, 0.5f, C2D_Color32(0, 0, 0, 255));
+    
+    y += 20;
+    
+    // Count selected titles
     int selectedCount = 0;
     for (int i = 0; i < titleCount; i++) {
         if (titles[i].selected)
@@ -392,9 +408,20 @@ void drawUI() {
     
     // Display title count, selected count and sort mode
     const char *sortModeStr = (currentSortMode == SORT_BY_NAME) ? "Name" : "Title ID";
-    printf("\nTitles: %d | Selected: %d | Sort: %s\n", titleCount, selectedCount, sortModeStr);
-    printf("------------------------------------------------\n");
-
+    char infoText[128];
+    snprintf(infoText, sizeof(infoText), "Titles: %d | Selected: %d | Sort: %s", 
+             titleCount, selectedCount, sortModeStr);
+    C2D_TextParse(&text, dynamicBuf, infoText);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
+    
+    y += 15;
+    
+    // Draw separator line
+    C2D_DrawRectSolid(5, y, 0.5f, 390, 1, C2D_Color32(255, 255, 255, 255));
+    
+    y += 5;
+    
     // Calculate visible range
     int maxVisible = MAX_VISIBLE_TITLES;
     int startIdx = scrollOffset;
@@ -413,67 +440,109 @@ void drawUI() {
     if (endIdx > titleCount)
         endIdx = titleCount;
     
-    // Draw each title with explicit spacing
+    // Draw each title
     for (int i = startIdx; i < endIdx; i++) {
-        // Apply highlight if cursor is here, reset immediately after
+        // Draw selection highlight
         if (i == cursor) {
-            printf("\x1b[47;30m"); // White bg, black text
-        } else {
-            printf("\x1b[0m"); // Ensure clean state
+            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 14, C2D_Color32(255, 255, 255, 255));
         }
         
-        // Print checkbox and title on one line
-        printf("%s %.23s [%016llX]",
-               titles[i].selected ? "[X]" : "[ ]",
-               titles[i].name,
-               titles[i].titleID);
-
-        // Always reset colors before newline
-        printf("\x1b[0m\n");
-
-        // Explicit blank line for spacing (no color codes)
-        printf("\n");
+        // Format title text
+        char titleText[256];
+        snprintf(titleText, sizeof(titleText), "%s %.23s [%016llX]",
+                 titles[i].selected ? "[X]" : "[ ]",
+                 titles[i].name,
+                 titles[i].titleID);
+        
+        // Draw title text
+        C2D_TextParse(&text, dynamicBuf, titleText);
+        C2D_TextOptimize(&text);
+        u32 textColor = (i == cursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
+        C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.35f, 0.35f, textColor);
+        
+        y += 14;  // Line spacing
     }
     
-    // Fill remaining lines to clear old content
-    int drawn = endIdx - startIdx;
-    for (int i = drawn; i < maxVisible; i++) {
-        printf("\n");
-        printf("\n");
-    }
+    C3D_FrameEnd(0);
 }
 
 void drawTouchControls() {
-    // Draw on bottom screen
-    consoleSelect(&bottomScreen);
-    printf("\x1b[2J\x1b[H");  // Clear and home
+    // Begin frame for bottom screen
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(bottom, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(bottom);
+    
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+    float y = 10.0f;
+    
+    // Header
+    C2D_TextParse(&text, dynamicBuf, "        CONTROLS REMINDER");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
+    y += 15;
+    
+    C2D_TextParse(&text, dynamicBuf, "  ================================");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
+    y += 15;
+    
+    // Controls
+    const char* controls[] = {
+        "    D-Pad Up/Down : Navigate",
+        "    D-Pad L/R     : Fast scroll",
+        "                    (page up/down)",
+        "    A Button      : Toggle select",
+        "    X Button      : Uninstall",
+        "",
+        "  --------------------------------",
+        "",
+        "    L Button      : Sort by Name",
+        "    R Button      : Sort by ID",
+        "",
+        "  --------------------------------",
+        "",
+        "    START Button  : Exit app",
+        "",
+        "  ================================",
+        "",
+        "  Backup Path:",
+    };
+    
+    for (int i = 0; i < 18; i++) {
+        C2D_TextParse(&text, dynamicBuf, controls[i]);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(255, 255, 255, 255));
+        y += 10;
+    }
+    
+    // Draw backup path with word wrap if needed
+    C2D_TextParse(&text, dynamicBuf, config.backupPath);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.3f, 0.3f, C2D_Color32(200, 200, 200, 255));
+    
+    C3D_FrameEnd(0);
+}
 
-    printf("\n\n");
-    printf("        CONTROLS REMINDER\n");
-    printf("  ================================\n\n");
-
-    printf("    D-Pad Up/Down : Navigate\n");
-    printf("    D-Pad L/R     : Fast scroll\n");
-    printf("                    (page up/down)\n");
-    printf("    A Button      : Toggle select\n");
-    printf("    X Button      : Uninstall\n\n");
-
-    printf("  --------------------------------\n\n");
-
-    printf("    L Button      : Sort by Name\n");
-    printf("    R Button      : Sort by ID\n\n");
-
-    printf("  --------------------------------\n\n");
-
-    printf("    START Button  : Exit app\n\n");
-
-    printf("  ================================\n\n");
-
-    printf("  Backup Path:\n");
-    printf("  %s\n", config.backupPath);
-
-    // Switch back to top screen
-    consoleSelect(&topScreen);
+void drawDialog(const char **lines, int lineCount) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(top);
+    
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+    float y = 20.0f;
+    
+    for (int i = 0; i < lineCount; i++) {
+        if (lines[i] && strlen(lines[i]) > 0) {
+            C2D_TextParse(&text, dynamicBuf, lines[i]);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
+        }
+        y += 15;
+    }
+    
+    C3D_FrameEnd(0);
 }
 
 void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
@@ -663,20 +732,32 @@ void deleteTitle(TitleInfo *title) {
     // If title not found, deletion was successful
     if (R_FAILED(res) || res == 0xC8A04478) {
         title->isValid = false;
-        consoleClear();
-        printf("\n\nSuccessfully deleted:\n%s\n", title->name);
-        printf("\nAll associated data removed:\n");
-        printf("  - Title application\n");
-        printf("  - Save data\n");
-        printf("  - ExtData (if present)\n");
-        printf("  - Boss ExtData (if present)\n\n");
+        
+        const char *successLines[] = {
+            "",
+            "Successfully deleted:",
+            title->name,
+            "",
+            "All associated data removed:",
+            "  - Title application",
+            "  - Save data",
+            "  - ExtData (if present)",
+            "  - Boss ExtData (if present)",
+            "",
+            "Press A to continue..."
+        };
+        drawDialog(successLines, 11);
     } else {
-        consoleClear();
-        printf("\n\nFailed to delete:\n%s\n", title->name);
-        printf("Title may still be present on system.\n\n");
+        const char *failLines[] = {
+            "",
+            "Failed to delete:",
+            title->name,
+            "Title may still be present on system.",
+            "",
+            "Press A to continue..."
+        };
+        drawDialog(failLines, 6);
     }
-    
-    printf("Press A to continue...\n");
     
     while (aptMainLoop()) {
         hidScanInput();
@@ -684,10 +765,6 @@ void deleteTitle(TitleInfo *title) {
         
         if (kDown & KEY_A)
             break;
-        
-        gfxFlushBuffers();
-        gfxSwapBuffers();
-        gspWaitForVBlank();
     }
 }
 
@@ -781,13 +858,15 @@ void handleInput() {
         }
         
         if (selectedCount == 0) {
-            consoleClear();
-            printf("\n\nNo titles selected!\n\nPress A to continue...");
-            gfxFlushBuffers();
-            gfxSwapBuffers();
+            const char *noSelLines[] = {
+                "",
+                "No titles selected!",
+                "",
+                "Press A to continue..."
+            };
+            drawDialog(noSelLines, 4);
 
             while (aptMainLoop()) {
-                gspWaitForVBlank();
                 hidScanInput();
                 u32 kDown2 = hidKeysDown();
                 if (kDown2 & KEY_A)
@@ -797,20 +876,24 @@ void handleInput() {
         }
         
         // Ask for backup confirmation
-        consoleClear();
-        printf("\n\nYou are about to uninstall %d title(s).\n\n", selectedCount);
-        printf("Do you want to backup save data?\n\n");
-        printf("  A: Yes, backup saves\n");
-        printf("  B: No, skip backup\n");
-        printf("  START: Cancel\n");
-        gfxFlushBuffers();
-        gfxSwapBuffers();
+        char countMsg[64];
+        snprintf(countMsg, sizeof(countMsg), "You are about to uninstall %d title(s).", selectedCount);
+        const char *backupLines[] = {
+            "",
+            countMsg,
+            "",
+            "Do you want to backup save data?",
+            "",
+            "  A: Yes, backup saves",
+            "  B: No, skip backup",
+            "  START: Cancel"
+        };
+        drawDialog(backupLines, 8);
 
         bool backupSaves = false;
         bool cancelled = false;
         
         while (aptMainLoop()) {
-            gspWaitForVBlank();
             hidScanInput();
             u32 kDown2 = hidKeysDown();
             
@@ -836,20 +919,25 @@ void handleInput() {
         snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", config.backupPath);
         
         if (backupSaves) {
-            consoleClear();
-            printf("\n\nBackup Path Selection\n\n");
-            printf("Current path: %s\n\n", config.backupPath);
-            printf("Do you want to change the backup path?\n\n");
-            printf("  A: Use current path\n");
-            printf("  Y: Choose alternative path\n");
-            printf("  START: Cancel\n");
-            gfxFlushBuffers();
-            gfxSwapBuffers();
+            char pathMsg[300];
+            snprintf(pathMsg, sizeof(pathMsg), "Current path: %s", config.backupPath);
+            const char *pathLines[] = {
+                "",
+                "Backup Path Selection",
+                "",
+                pathMsg,
+                "",
+                "Do you want to change the backup path?",
+                "",
+                "  A: Use current path",
+                "  Y: Choose alternative path",
+                "  START: Cancel"
+            };
+            drawDialog(pathLines, 10);
 
             bool useDefault = true;
             
             while (aptMainLoop()) {
-                gspWaitForVBlank();
                 hidScanInput();
                 u32 kDown2b = hidKeysDown();
                 
@@ -885,7 +973,6 @@ void handleInput() {
                 bool pathSelected = false;
                 
                 while (aptMainLoop()) {
-                    gspWaitForVBlank();
                     hidScanInput();
                     u32 kDown2c = hidKeysDown();
                     
@@ -907,24 +994,42 @@ void handleInput() {
                         break;
                     }
 
-                    consoleClear();
-                    printf("\n\nSelect Backup Path\n\n");
-                    printf("Use D-Pad to select, A to confirm\n\n");
+                    // Draw path selection dialog
+                    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+                    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+                    C2D_SceneBegin(top);
+                    
+                    C2D_TextBufClear(dynamicBuf);
+                    C2D_Text text;
+                    float y = 20.0f;
+                    
+                    C2D_TextParse(&text, dynamicBuf, "Select Backup Path");
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
+                    y += 20;
+                    
+                    C2D_TextParse(&text, dynamicBuf, "Use D-Pad to select, A to confirm");
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
+                    y += 25;
 
                     for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
                         if (i == pathCursor) {
-                            printf("\x1b[47;30m"); // Highlighted
+                            C2D_DrawRectSolid(5, y - 2, 0.5f, 390, 14, C2D_Color32(255, 255, 255, 255));
                         }
-                        printf("  %s\n", BACKUP_PATH_OPTIONS[i]);
-                        if (i == pathCursor) {
-                            printf("\x1b[0m"); // Reset
-                        }
+                        C2D_TextParse(&text, dynamicBuf, BACKUP_PATH_OPTIONS[i]);
+                        C2D_TextOptimize(&text);
+                        u32 textColor = (i == pathCursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
+                        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, textColor);
+                        y += 16;
                     }
 
-                    printf("\n  B: Cancel\n");
+                    y += 10;
+                    C2D_TextParse(&text, dynamicBuf, "  B: Cancel");
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
 
-                    gfxFlushBuffers();
-                    gfxSwapBuffers();
+                    C3D_FrameEnd(0);
                 }
                 
                 if (cancelled)
@@ -933,22 +1038,32 @@ void handleInput() {
         }
         
         // Final confirmation
-        consoleClear();
-        printf("\n\nFinal confirmation:\n\n");
-        printf("Uninstall %d title(s)?\n", selectedCount);
-        printf("Backup saves: %s\n", backupSaves ? "YES" : "NO");
+        char uninstallMsg[64];
+        char backupMsg[64];
+        snprintf(uninstallMsg, sizeof(uninstallMsg), "Uninstall %d title(s)?", selectedCount);
+        snprintf(backupMsg, sizeof(backupMsg), "Backup saves: %s", backupSaves ? "YES" : "NO");
+        
+        char pathInfoMsg[300] = "";
         if (backupSaves) {
-            printf("Backup path: %s\n", selectedBackupPath);
+            snprintf(pathInfoMsg, sizeof(pathInfoMsg), "Backup path: %s", selectedBackupPath);
         }
-        printf("\n  A: Confirm\n");
-        printf("  B: Cancel\n");
-        gfxFlushBuffers();
-        gfxSwapBuffers();
+        
+        const char *confirmLines[9] = {
+            "",
+            "Final confirmation:",
+            "",
+            uninstallMsg,
+            backupMsg,
+            pathInfoMsg,
+            "",
+            "  A: Confirm",
+            "  B: Cancel"
+        };
+        drawDialog(confirmLines, 9);
 
         bool confirmed = false;
         
         while (aptMainLoop()) {
-            gspWaitForVBlank();
             hidScanInput();
             u32 kDown3 = hidKeysDown();
             
@@ -964,52 +1079,74 @@ void handleInput() {
         if (!confirmed)
             return;
         
-        // Process deletions
-        consoleClear();
-        printf("\n\nProcessing...\n\n");
+        // Process deletions - show processing screen
+        const char *processingLines[] = {
+            "",
+            "Processing...",
+            ""
+        };
+        drawDialog(processingLines, 3);
         
         for (int i = 0; i < titleCount; i++) {
             if (titles[i].selected && titles[i].isValid) {
-                printf("Processing: %s\n", titles[i].name);
+                char statusLines[5][256];
+                snprintf(statusLines[0], 256, "Processing: %s", titles[i].name);
+                
+                const char *statusPtrs[5] = {
+                    "",
+                    statusLines[0],
+                    "",
+                    "",
+                    ""
+                };
                 
                 if (backupSaves) {
-                    printf("  Backing up save data to:\n  %s\n", selectedBackupPath);
+                    snprintf(statusLines[2], 256, "  Backing up save data to:");
+                    snprintf(statusLines[3], 256, "  %s", selectedBackupPath);
+                    statusPtrs[2] = statusLines[2];
+                    statusPtrs[3] = statusLines[3];
+                    drawDialog(statusPtrs, 5);
                     backupSaveDataToPath(&titles[i], selectedBackupPath);
                 }
                 
-                printf("  Deleting title...\n");
-                gfxFlushBuffers();
-                gfxSwapBuffers();
+                snprintf(statusLines[4], 256, "  Deleting title...");
+                statusPtrs[4] = statusLines[4];
+                drawDialog(statusPtrs, 5);
                 
                 deleteTitle(&titles[i]);
             }
         }
         
         // Reload titles
-        consoleClear();
-        printf("\n\nReloading title list...\n");
-        gfxFlushBuffers();
-        gfxSwapBuffers();
+        const char *reloadLines[] = {
+            "",
+            "Reloading title list...",
+            ""
+        };
+        drawDialog(reloadLines, 3);
         
         loadTitles();
         cursor = 0;
         scrollOffset = 0;
+        needsRedraw = true;
     }
 }
 
 
 int main(int argc, char **argv) {
+    // Initialize graphics
     gfxInitDefault();
-
-    // Double buffering is fine when we don't redraw every frame
-    // The issue was redrawing 60 times per second, not the buffering itself
-
-    // Initialize both screens properly
-    consoleInit(GFX_TOP, &topScreen);
-    consoleInit(GFX_BOTTOM, &bottomScreen);
-
-    // Set top screen as default
-    consoleSelect(&topScreen);
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
+    C2D_Prepare();
+    
+    // Create render targets for top and bottom screens
+    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
+    
+    // Create text buffers
+    staticBuf = C2D_TextBufNew(4096);
+    dynamicBuf = C2D_TextBufNew(4096);
 
     // Initialize services
     amInit();
@@ -1018,13 +1155,21 @@ int main(int argc, char **argv) {
     // Load configuration
     loadConfig();
     
-    // Load titles
-    consoleClear();
-    printf("\n\nLoading installed titles...\n");
-    printf("Please wait...\n");
-    gfxFlushBuffers();
-    gfxSwapBuffers();
-    gspWaitForVBlank();
+    // Load titles - show loading message using citro2d
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(top);
+    
+    C2D_Text text;
+    C2D_TextParse(&text, dynamicBuf, "Loading installed titles...");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 50.0f, 100.0f, 0.5f, 0.6f, 0.6f, C2D_Color32(255, 255, 255, 255));
+    
+    C2D_TextParse(&text, dynamicBuf, "Please wait...");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 50.0f, 120.0f, 0.5f, 0.5f, 0.5f, C2D_Color32(200, 200, 200, 255));
+    
+    C3D_FrameEnd(0);
     
     loadTitles();
     
@@ -1033,14 +1178,11 @@ int main(int argc, char **argv) {
 
     // Initial draw
     drawUI();
-    gfxFlushBuffers();
-    gfxSwapBuffers();
     needsRedraw = false;
 
     // Main loop
     bool running = true;
     while (aptMainLoop() && running) {
-        gspWaitForVBlank();
         hidScanInput();
         u32 kDown = hidKeysDown();
         
@@ -1055,13 +1197,16 @@ int main(int argc, char **argv) {
         // Only redraw if something changed
         if (needsRedraw) {
             drawUI();
-            gfxFlushBuffers();
-            gfxSwapBuffers();
+            drawTouchControls();
             needsRedraw = false;
         }
     }
     
     // Cleanup
+    C2D_TextBufDelete(dynamicBuf);
+    C2D_TextBufDelete(staticBuf);
+    C2D_Fini();
+    C3D_Fini();
     fsExit();
     amExit();
     gfxExit();
