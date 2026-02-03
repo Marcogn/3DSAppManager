@@ -482,6 +482,7 @@ void drawTouchControls() {
     y += 15;
     
     // Controls
+    // Control instructions array
     const char* controls[] = {
         "    D-Pad Up/Down : Navigate",
         "    D-Pad L/R     : Fast scroll",
@@ -503,7 +504,8 @@ void drawTouchControls() {
         "  Backup Path:",
     };
     
-    int numControls = sizeof(controls) / sizeof(controls[0]);
+    // Calculate array size automatically (works because controls is a local array, not a pointer)
+    const int numControls = sizeof(controls) / sizeof(controls[0]);
     for (int i = 0; i < numControls; i++) {
         C2D_TextParse(&text, dynamicBuf, controls[i]);
         C2D_TextOptimize(&text);
@@ -518,6 +520,8 @@ void drawTouchControls() {
 }
 
 void drawDialog(const char **lines, int lineCount) {
+    // This function manages its own frame since it's used for modal dialogs
+    // that are displayed outside the main rendering loop during user interactions
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(top);
@@ -1138,6 +1142,8 @@ int main(int argc, char **argv) {
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     
     // Create text buffer for dynamic text rendering
+    // 4096 bytes is sufficient for ~100 text objects (average 40 bytes each)
+    // Increase if experiencing text rendering issues with long strings
     dynamicBuf = C2D_TextBufNew(4096);
 
     // Initialize services
