@@ -392,7 +392,6 @@ void drawUI() {
     
     // Draw header text
     C2D_Text text;
-    C2D_TextBufClear(dynamicBuf);
     C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, 5.0f, y + 2, 0.5f, 0.5f, 0.5f, C2D_Color32(0, 0, 0, 255));
