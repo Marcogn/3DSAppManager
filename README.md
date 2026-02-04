@@ -281,11 +281,8 @@ For detailed technical information about specific fixes and improvements, see th
 - **[Flickering Fix v3 Final](docs/FLICKERING_FIX_v3_FINAL.md)** - citro2d/citro3d migration details
 - **[Rendering Troubleshooting](docs/RENDERING_TROUBLESHOOTING.md)** - Graphics troubleshooting guide
 
-### UI Improvements (v2.x)
-- **[UI Improvements v2](docs/UI_IMPROVEMENTS_v2.md)** - Initial UI overhaul (progress bar, red counter, layout optimization)
-- **[UI Improvements v2.1](docs/UI_IMPROVEMENTS_v2.1_FIXES.md)** - Name length, scroll sensitivity, alignment fixes
-- **[UI Improvements v2.2](docs/UI_IMPROVEMENTS_v2.2_SCROLL_SLEEP.md)** - Precise scroll control and sleep mode support
-- **[UI Improvements v2.3](docs/UI_IMPROVEMENTS_v2.3_FINAL_POLISH.md)** - Size display, ASCII symbols, SELECT controls
+### Latest Updates
+- **[UI Improvements v2.4](docs/UI_IMPROVEMENTS_v2.4_FEATURE_COMPLETE.md)** - Complete feature set (sort by size, filters, overlay controls, 500 title support)
 
 ## License
 

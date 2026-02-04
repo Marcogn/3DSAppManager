@@ -1,5 +1,32 @@
 # Changelog
 
+## v2.4 - The Feature Complete Update (2026-02-04)
+
+This is the big one - everything you asked for and more.
+
+### What's New
+- **Sort by size**: Press L/R to cycle through Name/Size/TitleID sorting. Perfect for finding those space hogs.
+- **Filter mode**: Press Y to filter by All/Updates/DLC. Makes it easy to clean up specific types of content.
+- **Controls overlay**: Press SELECT for a proper overlay with all controls. No more squinting at tiny text or dealing with cut-off messages.
+- **500 title support**: Increased from 300 to 500. The HOME menu might cap at 300, but this app shows them all.
+- **Unicode symbols back**: Updates get ↑ and DLC gets ⊕ because they're way more recognizable than ^ and +.
+
+### How It Works
+The filter system is smart - it builds a filtered list on the fly, so cursor and selection work exactly as you'd expect. When you switch filters with Y, it automatically adjusts. Same with sorting by size - the smaller titles go first, making it easy to scroll down to the whales.
+
+### Why These Changes?
+- **Sort by size**: Most requested feature. You want to free up space, you need to see what's taking it.
+- **Filter mode**: When you have 200+ titles, finding all the updates or DLC manually is painful.
+- **Controls overlay**: The old dialog was getting text cut off at the bottom. The overlay looks better and fits everything.
+- **500 titles**: Some people actually hit the 300 limit. Now you won't.
+
+### Technical Stuff
+- New `FilterMode` enum with filtering logic
+- `filteredIndices[]` array maintains which titles are visible
+- L/R now cycle through 3 sort modes instead of toggle
+- SELECT opens a full-screen overlay with proper darkening on both screens
+- MAX_TITLES bumped to 500 (memory not an issue on 3DS for this)
+
 ## v2.3 - The Polish Update (2026-02-04)
 
 Big update focused on making everything smoother and more informative.
@@ -88,7 +115,7 @@ None currently! If you find something, open an issue on GitHub.
 Some ideas for future versions (no promises on timeline):
 - Automatic save restore functionality
 - Title icon loading (currently just shows "?")
-- Search/filter functionality
+- Search/filter by name
 - Export installed titles list to text file
 - Batch operations improvements
 

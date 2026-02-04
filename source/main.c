@@ -243,8 +243,9 @@ int compareTitlesByName(const void *a, const void *b) {
 int compareTitlesBySize(const void *a, const void *b) {
     const TitleInfo *ta = (const TitleInfo*)a;
     const TitleInfo *tb = (const TitleInfo*)b;
-    if (ta->size < tb->size) return -1;
-    if (ta->size > tb->size) return 1;
+    // Ordine decrescente: grandi prima
+    if (ta->size > tb->size) return -1;
+    if (ta->size < tb->size) return 1;
     return 0;
 }
 
@@ -267,7 +268,7 @@ void sortTitles() {
         qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesByID);
     }
 
-    // Reset cursor to top after sorting
+    // Reset cursor to top after sorting (but keep selections)
     cursor = 0;
     scrollOffset = 0;
     needsRedraw = true;
@@ -659,11 +660,11 @@ void drawUI() {
     else sortModeStr = "TID";
 
     const char *filterModeStr = "";
-    if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Updates]";
+    if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Upd]";
     else if (currentFilterMode == FILTER_DLC) filterModeStr = " [DLC]";
 
     char titleCountText[64];
-    snprintf(titleCountText, sizeof(titleCountText), "Titles: %d%s", titleCount, filterModeStr);
+    snprintf(titleCountText, sizeof(titleCountText), "T:%d%s", titleCount, filterModeStr);
 
     u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
 
@@ -673,17 +674,17 @@ void drawUI() {
 
     // Selected count
     char selectedText[64];
-    snprintf(selectedText, sizeof(selectedText), "Selected: %d", selectedCount);
+    snprintf(selectedText, sizeof(selectedText), "Sel:%d", selectedCount);
     C2D_TextParse(&text, dynamicBuf, selectedText);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 110.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, 95.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
 
     // Sort mode
     char sortText[64];
-    snprintf(sortText, sizeof(sortText), "Sort: %s", sortModeStr);
+    snprintf(sortText, sizeof(sortText), "Sort:%s", sortModeStr);
     C2D_TextParse(&text, dynamicBuf, sortText);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 250.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, 170.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
 
     y += 18;
 
@@ -782,8 +783,8 @@ void drawTouchControls() {
     C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
     C2D_TextParse(&text, dynamicBuf, "?");
     C2D_TextOptimize(&text);
-    // Centro il punto interrogativo nel quadrato 48x48px
-    C2D_DrawText(&text, C2D_WithColor, 26.0f, y + 10, 0.5f, 1.8f, 1.8f, C2D_Color32(150, 150, 180, 255));
+    // Centro il punto interrogativo nel quadrato 48x48px - calcolo preciso
+    C2D_DrawText(&text, C2D_WithColor, 24.0f, y + 8, 0.5f, 2.0f, 2.0f, C2D_Color32(150, 150, 180, 255));
 
     // Title name (next to icon placeholder)
     float textX = 65.0f;
@@ -935,10 +936,10 @@ void drawControlsOverlay() {
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
 
     // Draw controls box
-    float boxX = 20.0f;
-    float boxY = 20.0f;
-    float boxW = 360.0f;
-    float boxH = 200.0f;
+    float boxX = 15.0f;
+    float boxY = 15.0f;
+    float boxW = 370.0f;
+    float boxH = 210.0f;
 
     // Box background
     C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
@@ -950,41 +951,58 @@ void drawControlsOverlay() {
 
     C2D_TextBufClear(dynamicBuf);
     C2D_Text text;
-    float y = boxY + 10.0f;
+    float y = boxY + 8.0f;
 
     // Title
     C2D_TextParse(&text, dynamicBuf, "CONTROLS");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
-    y += 20;
+    C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
+    y += 18;
 
-    // Controls list
-    const char* controls[] = {
-        "A: Select/Deselect title",
-        "X: Uninstall selected",
-        "",
-        "D-Pad Up/Down: Navigate",
-        "D-Pad Left/Right: Page jump",
-        "",
-        "L/R: Change sort",
-        "  (Name/Size/TitleID)",
-        "Y: Filter (All/Updates/DLC)",
-        "",
-        "SELECT: Show this help",
-        "START: Exit app"
+    // Controls in table format (button - description)
+    const char* controls[][2] = {
+        {"A", "Select/Deselect"},
+        {"X", "Uninstall selected"},
+        {"", ""},
+        {"D-Pad Up/Down", "Navigate list"},
+        {"D-Pad Left/Right", "Page jump"},
+        {"", ""},
+        {"L", "Sort backward"},
+        {"R", "Sort forward"},
+        {"", "(Name/Size/TID)"},
+        {"", ""},
+        {"Y", "Filter mode"},
+        {"", "(All/Updates/DLC)"},
+        {"", ""},
+        {"SELECT", "Show this help"},
+        {"START", "Exit app"}
     };
 
-    for (int i = 0; i < 12; i++) {
-        C2D_TextParse(&text, dynamicBuf, controls[i]);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-        y += 13;
+    for (int i = 0; i < 15; i++) {
+        if (controls[i][0][0] != '\0') {
+            // Button name (left column)
+            C2D_TextParse(&text, dynamicBuf, controls[i][0]);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 200, 100, 255));
+
+            // Description (right column)
+            C2D_TextParse(&text, dynamicBuf, controls[i][1]);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+        } else if (controls[i][1][0] != '\0') {
+            // Indented continuation
+            C2D_TextParse(&text, dynamicBuf, controls[i][1]);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(180, 180, 180, 255));
+        }
+        y += 12;
     }
 
-    y += 5;
+    // "Press any button" message - posizionato dentro il box
+    y = boxY + boxH - 20.0f;
     C2D_TextParse(&text, dynamicBuf, "Press any button to close");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, boxX + 80.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(150, 200, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, boxX + 85.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(150, 200, 255, 255));
 
     // Bottom screen - just darken it
     C2D_SceneBegin(bottom);

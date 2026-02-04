@@ -103,10 +103,24 @@ When it's done, it refreshes the list automatically.
 
 ### Sorting Your List
 
-- Press **L** to sort by name (A to Z)
-- Press **R** to sort by Title ID (groups games/updates/DLC)
+The app has three sort modes that you cycle through with L and R:
+- Press **R** to go forward: Name → Size → Title ID → Name...
+- Press **L** to go backward: Name ← Size ← Title ID ← Name...
 
-Sorting resets your selection, so do it before you start selecting titles.
+**Sort by Name** (alphabetical A-Z) - Good for finding specific titles  
+**Sort by Size** (largest first) - Good for finding space hogs at the top  
+**Sort by Title ID** (numerical) - Groups games with their updates/DLC
+
+Your selections are preserved when sorting.
+
+### Filtering Content
+
+Press **Y** to cycle through filter modes:
+- **All** - Shows everything (default)
+- **Updates** - Shows only game updates (marked with ↑)
+- **DLC** - Shows only DLC content (marked with ⊕)
+
+The info bar at the top shows which filter is active: "[Updates]" or "[DLC]"
 
 ### Fast Navigation
 
@@ -118,13 +132,17 @@ The slow scroll is intentional - it's way better than accidentally flying past w
 
 ### Finding DLC and Updates
 
-Want to clean up just DLC or updates? Use **R** to sort by Title ID. This groups them together:
-- Updates (^) will be near their base games
-- DLC (+) will be grouped separately
+Want to clean up just DLC or updates?
+1. Press **Y** to filter (once for Updates, twice for DLC)
+2. You'll see only that type of content
+3. Select what you want to remove
+4. Press **X** to uninstall
 
 ### Checking Space
 
 The bottom screen shows how much space each title takes. Useful for finding the big ones to delete first.
+
+Use **R** twice to sort by size - the largest titles appear at the top.
 
 ### Backup Locations
 
@@ -138,27 +156,35 @@ Each backup gets its own folder named after the Title ID. Inside you'll find:
 
 ### If You Need Help
 
-Press **SELECT** any time to see all the controls.
+Press **SELECT** any time to see a full overlay with all the controls.
 
 ## Common Scenarios
 
 ### "I want to delete all my DLC"
 
-1. Press **R** to sort by Title ID
-2. Scroll through and select all titles with a `+`
+1. Press **Y** twice (filters to DLC only)
+2. Scroll through and select the DLC you want to remove (marked with ⊕)
+3. Press **X** and follow the prompts
+
+### "I want to delete all updates"
+
+1. Press **Y** once (filters to Updates only)
+2. Select the updates you want to remove (marked with ↑)
 3. Press **X** and follow the prompts
 
 ### "I'm running out of space"
 
-1. Look at the bottom screen while scrolling - it shows size for each title
-2. Select the big ones you don't play
-3. Delete and watch your free space go up
+1. Press **R** twice to sort by Size
+2. The biggest titles appear at the top
+3. Select the large ones you don't play
+4. Delete and watch your free space go up
 
 ### "I have too many titles and the HOME menu is weird"
 
 If your title counter is red (300+):
 1. Go through and delete stuff you don't use
 2. Get it under 300 for the HOME menu to work properly
+3. Use the filter to quickly find DLC or updates to remove
 
 ### "I deleted something by accident"
 
