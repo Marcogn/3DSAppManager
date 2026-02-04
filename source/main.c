@@ -818,6 +818,8 @@ void drawUI() {
         if (arrow) *arrow = '\0';
         char *plus = strstr(cleanName, " \xE2\x8A\x85");
         if (plus) *plus = '\0';
+        char *circledPlus = strstr(cleanName, " \xE2\x8A\x95");
+        if (circledPlus) *circledPlus = '\0';
 
         char truncName[40];
         int nameLen = strlen(cleanName);
@@ -1026,7 +1028,7 @@ void drawControlsOverlay() {
     float boxX = 15.0f;
     float boxY = 15.0f;
     float boxW = 370.0f;
-    float boxH = 195.0f;  // Ridotto perché non serve spazio per "press any button"
+    float boxH = 200.0f;  // Ridotto perché non serve spazio per "press any button"
 
     // Box background
     C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
@@ -1061,7 +1063,7 @@ void drawControlsOverlay() {
         {"Y", "Filter mode"},
         {"", "(All/Updates/DLC)"},
         {"", ""},
-        {"SELECT", "Hide this help"},
+        {"SELECT", "Release to hide"},
         {"START", "Exit app"}
     };
 

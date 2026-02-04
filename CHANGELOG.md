@@ -1,5 +1,47 @@
 # Changelog
 
+## v2.5 - The Production Release (2026-02-04)
+
+Final polish and bug fixes. This is the stable release.
+
+### What's New
+- **Hold SELECT to view controls**: No more flickering! Hold SELECT to see the controls overlay, release to go back. Way more intuitive.
+- **Type symbols in their own column**: Updates (↑) and DLC (⊕) now have a dedicated column between the title name and TitleID. Cleaner layout, easier to scan.
+- **No more "--" titles**: Fixed Japanese and multi-language title name loading. If a title has no valid name, it shows "Title [TitleID]" instead of weird dashes.
+- **Icon placeholder removed**: The "?" icon was never quite centered and didn't add value. More screen space for actual content now.
+- **Cleaner documentation**: Removed all the incremental fix docs. Just one technical README for developers.
+
+### Layout Changes
+The top screen now uses a proper table format:
+```
+[X] Animal Crossing New Leaf    ⊕  00040000000E6400
+[ ] Mario Kart 7                    0004000000030700
+[ ] Update                      ↑  0004000E00030700
+```
+
+- Checkbox at X=3
+- Title name at X=28 (clean, without symbols)
+- Type symbol at X=235 (↑ or ⊕ or space)
+- TitleID at X=255 (hex, 16 chars)
+
+### Bug Fixes
+- **SELECT flickering fixed**: Moved overlay rendering to main loop with proper frame management
+- **Empty title names fixed**: Multi-language fallback system (system lang → English → Japanese → all languages)
+- **Name validation**: Rejects names that are only dashes, spaces, or empty
+- **Symbol display**: Type indicators no longer part of title name string
+
+### Technical Improvements
+- Name validation with fallback to TitleID
+- Symbols removed from name string using strstr()
+- Clean UTF-8 handling without breaking multi-byte characters
+- Proper goto label for TitleID fallback
+- Main loop handles SELECT with continue statement (prevents double rendering)
+
+### Documentation
+- Removed: CHARACTER_CORRUPTION_FIX.md, FLICKERING_FIX.md, FLICKERING_FIX_v3_FINAL.md, RENDERING_TROUBLESHOOTING.md, and all UI_IMPROVEMENTS_*.md files
+- Added: Technical README.md in docs/ with architecture, data structures, rendering pipeline, etc.
+- Updated: Main README with new features and layout diagrams
+
 ## v2.4 - The Feature Complete Update (2026-02-04)
 
 This is the big one - everything you asked for and more.
@@ -12,7 +54,7 @@ This is the big one - everything you asked for and more.
 - **Unicode symbols back**: Updates get ↑ and DLC gets ⊕ because they're way more recognizable than ^ and +.
 
 ### How It Works
-The filter system is smart - it builds a filtered list on the fly, so cursor and selection work exactly as you'd expect. When you switch filters with Y, it automatically adjusts. Same with sorting by size - the smaller titles go first, making it easy to scroll down to the whales.
+The filter system is smart - it builds a filtered list on the fly, so cursor and selection work exactly as you'd expect. When you switch filters with Y, it automatically adjusts. Sort by size shows the largest titles first (descending order), making it easy to find space hogs.
 
 ### Why These Changes?
 - **Sort by size**: Most requested feature. You want to free up space, you need to see what's taking it.
