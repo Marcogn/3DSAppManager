@@ -53,9 +53,14 @@ static const char *BACKUP_PATH_OPTIONS[] = {
 typedef struct {
     u64 titleID;
     char name[256];
+    char fullName[256];  // Full name without truncation
     FS_MediaType mediaType;
     bool selected;
     bool isValid;
+    u16 version;
+    bool hasBackup;
+    C2D_Image icon;  // Icon texture for bottom screen
+    bool iconLoaded;
 } TitleInfo;
 
 typedef struct {
@@ -86,6 +91,10 @@ void sortTitles();
 int compareTitlesByName(const void *a, const void *b);
 int compareTitlesByID(const void *a, const void *b);
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize);
+void getTitleInfo(TitleInfo *title);
+bool checkBackupExists(u64 titleID);
+void loadTitleIcon(TitleInfo *title);
+void drawTitleDetails();
 void loadTitles();
 void drawUI();
 void drawTouchControls();
@@ -275,14 +284,14 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             // Sanitize the name to remove problematic characters
             sanitizeName(outName);
 
-            // Add type indicator based on titleID
+            // Add type indicator based on titleID with Unicode symbols
             u32 highID = (u32)(titleID >> 32);
             if (highID == 0x0004000E) {
-                // Update/Patch
-                strncat(outName, " [UPD]", outSize - strlen(outName) - 1);
+                // Update/Patch - use up arrow symbol
+                strncat(outName, " \xE2\x86\x91", outSize - strlen(outName) - 1);  // ↑
             } else if (highID == 0x0004008C) {
-                // DLC
-                strncat(outName, " [DLC]", outSize - strlen(outName) - 1);
+                // DLC - use plus symbol
+                strncat(outName, " \xE2\x8A\x95", outSize - strlen(outName) - 1);  // ⊕
             }
 
             return;
@@ -292,10 +301,76 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
     // Fallback to title ID with type indicator
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " [UPD]";
-    else if (highID == 0x0004008C) typeStr = " [DLC]";
+    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
+    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x95";  // ⊕ for DLC
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
+}
+
+bool checkBackupExists(u64 titleID) {
+    char backupDir[512];
+    snprintf(backupDir, sizeof(backupDir), "%s/%016llX", config.backupPath, titleID);
+
+    struct stat st;
+    return (stat(backupDir, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+void loadTitleIcon(TitleInfo *title) {
+    // Icon loading disabled for now due to complexity with citro2d structures
+    // TODO: Implement proper icon loading with correct memory management
+    title->iconLoaded = false;
+}
+
+void getTitleInfo(TitleInfo *title) {
+    // Get full title information
+    AM_TitleEntry titleEntry;
+    Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &titleEntry);
+
+    if (R_SUCCEEDED(res)) {
+        title->version = titleEntry.version;
+    } else {
+        title->version = 0;
+    }
+
+    // Get full name (without truncation)
+    SMDH smdh;
+    Handle fileHandle;
+    u32 archivePath[] = {title->titleID & 0xFFFFFFFF, (title->titleID >> 32) & 0xFFFFFFFF, title->mediaType, 0};
+    static const u32 filePath[] = {0, 0, 2, SMDH_ICON_PATH, 0};
+
+    FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
+    FS_Path binFilePath = {PATH_BINARY, 20, filePath};
+
+    res = FSUSER_OpenFileDirectly(&fileHandle, ARCHIVE_SAVEDATA_AND_CONTENT, binArchPath, binFilePath, FS_OPEN_READ, 0);
+    if (R_SUCCEEDED(res)) {
+        u32 bytesRead;
+        FSFILE_Read(fileHandle, &bytesRead, 0, &smdh, sizeof(SMDH));
+        FSFILE_Close(fileHandle);
+
+        if (bytesRead >= sizeof(u32) && smdh.magic == 0x48444D53) {
+            // Get full name from long description
+            ssize_t units = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].longDescription, sizeof(title->fullName) - 1);
+            if (units < 0) units = 0;
+            title->fullName[units] = '\0';
+            sanitizeName(title->fullName);
+
+            // If long description is empty, use short description
+            if (title->fullName[0] == '\0' || strcmp(title->fullName, "Unknown Title") == 0) {
+                units = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, sizeof(title->fullName) - 1);
+                if (units < 0) units = 0;
+                title->fullName[units] = '\0';
+                sanitizeName(title->fullName);
+            }
+        }
+    }
+
+    // Fallback to regular name if full name not loaded
+    if (title->fullName[0] == '\0') {
+        strncpy(title->fullName, title->name, sizeof(title->fullName) - 1);
+    }
+
+    // Check if backup exists
+    title->hasBackup = checkBackupExists(title->titleID);
 }
 
 void loadTitles() {
@@ -334,7 +409,12 @@ void loadTitles() {
                 titles[titleCount].mediaType = MEDIATYPE_SD;
                 titles[titleCount].selected = false;
                 titles[titleCount].isValid = true;
+                titles[titleCount].iconLoaded = false;
+                titles[titleCount].version = 0;
+                titles[titleCount].hasBackup = false;
+                titles[titleCount].fullName[0] = '\0';
                 getTitleName(tid, MEDIATYPE_SD, titles[titleCount].name, sizeof(titles[titleCount].name));
+                getTitleInfo(&titles[titleCount]);
                 titleCount++;
             }
         }
@@ -360,7 +440,12 @@ void loadTitles() {
                 titles[titleCount].mediaType = MEDIATYPE_NAND;
                 titles[titleCount].selected = false;
                 titles[titleCount].isValid = true;
+                titles[titleCount].iconLoaded = false;
+                titles[titleCount].version = 0;
+                titles[titleCount].hasBackup = false;
+                titles[titleCount].fullName[0] = '\0';
                 getTitleName(tid, MEDIATYPE_NAND, titles[titleCount].name, sizeof(titles[titleCount].name));
+                getTitleInfo(&titles[titleCount]);
                 titleCount++;
             }
         }
@@ -461,61 +546,135 @@ void drawUI() {
 }
 
 void drawTouchControls() {
-    // Render bottom screen - controls
-    C2D_TargetClear(bottom, C2D_Color32(0, 0, 0, 255));
+    // Render bottom screen - title details
+    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
     C2D_SceneBegin(bottom);
     
     C2D_TextBufClear(dynamicBuf);
     C2D_Text text;
-    float y = 10.0f;
-    
-    // Header
-    C2D_TextParse(&text, dynamicBuf, "        CONTROLS REMINDER");
+    float y = 8.0f;
+
+    // If no titles or invalid cursor, show basic info
+    if (titleCount == 0 || cursor < 0 || cursor >= titleCount) {
+        C2D_TextParse(&text, dynamicBuf, "No title selected");
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, 100.0f, 0.5f, 0.5f, 0.5f, C2D_Color32(200, 200, 200, 255));
+        return;
+    }
+
+    TitleInfo *currentTitle = &titles[cursor];
+
+    // Draw icon placeholder (icon loading disabled for now)
+    C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
+    C2D_TextParse(&text, dynamicBuf, "?");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, 25.0f, y + 12, 0.5f, 1.5f, 1.5f, C2D_Color32(150, 150, 180, 255));
+
+    // Title name (next to icon placeholder)
+    float textX = 65.0f;
+    C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, textX, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
     y += 15;
     
-    C2D_TextParse(&text, dynamicBuf, "  ================================");
+    // Separator
+    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
+    y += 8;
+
+    // Full title name (word wrap if needed)
+    C2D_TextParse(&text, dynamicBuf, "Name:");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
-    y += 15;
-    
-    // Controls
-    // Control instructions array
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(150, 150, 150, 255));
+    y += 12;
+
+    C2D_TextParse(&text, dynamicBuf, currentTitle->fullName);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 255, 255, 255));
+    y += 16;
+
+    // Title ID
+    char tidStr[64];
+    snprintf(tidStr, sizeof(tidStr), "Title ID: %016llX", currentTitle->titleID);
+    C2D_TextParse(&text, dynamicBuf, tidStr);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
+    y += 14;
+
+    // Version
+    char verStr[64];
+    snprintf(verStr, sizeof(verStr), "Version: v%d", currentTitle->version);
+    C2D_TextParse(&text, dynamicBuf, verStr);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
+    y += 14;
+
+    // Type
+    u32 highID = (u32)(currentTitle->titleID >> 32);
+    const char *typeStr = "Game/Application";
+    if (highID == 0x0004000E) typeStr = "Update \xE2\x86\x91";  // ↑
+    else if (highID == 0x0004008C) typeStr = "DLC \xE2\x8A\x95";  // ⊕
+
+    char typeFullStr[64];
+    snprintf(typeFullStr, sizeof(typeFullStr), "Type: %s", typeStr);
+    C2D_TextParse(&text, dynamicBuf, typeFullStr);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
+    y += 14;
+
+    // Media Type
+    const char *mediaStr = (currentTitle->mediaType == MEDIATYPE_SD) ? "SD Card" : "NAND";
+    char mediaFullStr[64];
+    snprintf(mediaFullStr, sizeof(mediaFullStr), "Location: %s", mediaStr);
+    C2D_TextParse(&text, dynamicBuf, mediaFullStr);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
+    y += 16;
+
+    // Separator
+    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
+    y += 8;
+
+    // Backup status
+    if (currentTitle->hasBackup) {
+        C2D_TextParse(&text, dynamicBuf, "Backup: YES \xE2\x9C\x93");  // ✓
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(100, 255, 100, 255));
+        y += 12;
+
+        // Show backup path
+        char backupPathStr[128];
+        snprintf(backupPathStr, sizeof(backupPathStr), "Path: %s/%016llX", config.backupPath, currentTitle->titleID);
+        C2D_TextParse(&text, dynamicBuf, backupPathStr);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.28f, 0.28f, C2D_Color32(150, 150, 150, 255));
+    } else {
+        C2D_TextParse(&text, dynamicBuf, "Backup: NO \xE2\x9C\x97");  // ✗
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(255, 100, 100, 255));
+    }
+    y += 16;
+
+    // Separator
+    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
+    y += 8;
+
+    // Controls hint (compact)
+    C2D_TextParse(&text, dynamicBuf, "Controls:");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(150, 150, 150, 255));
+    y += 12;
+
     const char* controls[] = {
-        "    D-Pad Up/Down : Navigate",
-        "    D-Pad L/R     : Fast scroll",
-        "                    (page up/down)",
-        "    A Button      : Toggle select",
-        "    X Button      : Uninstall",
-        "",
-        "  --------------------------------",
-        "",
-        "    L Button      : Sort by Name",
-        "    R Button      : Sort by ID",
-        "",
-        "  --------------------------------",
-        "",
-        "    START Button  : Exit app",
-        "",
-        "  ================================",
-        "",
-        "  Backup Path:",
+        "A:Select X:Uninstall L/R:Sort",
+        "START:Exit D-Pad:Navigate"
     };
     
-    // Calculate array size automatically (works because controls is a local array, not a pointer)
-    const int numControls = sizeof(controls) / sizeof(controls[0]);
-    for (int i = 0; i < numControls; i++) {
+    for (int i = 0; i < 2; i++) {
         C2D_TextParse(&text, dynamicBuf, controls[i]);
         C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(255, 255, 255, 255));
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.3f, 0.3f, C2D_Color32(180, 180, 180, 255));
         y += 10;
     }
-    
-    // Draw backup path with word wrap if needed
-    C2D_TextParse(&text, dynamicBuf, config.backupPath);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.3f, 0.3f, C2D_Color32(200, 200, 200, 255));
 }
 
 void drawDialog(const char **lines, int lineCount) {

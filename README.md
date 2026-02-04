@@ -18,6 +18,8 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - ⚙️ **Configurable** - Customize backup location
 - 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
 - 🛡️ **Safe** - System titles are protected
+- 🎨 **Enhanced visuals** - Unicode symbols for Updates (↑) and DLC (⊕)
+- 📊 **Detailed info panel** - Bottom screen shows selected title details, icon, version, and backup status
 
 ## Installation
 
@@ -27,9 +29,9 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 ## Controls
 
-**Main Screen:**
+**Top Screen:**
 - **D-Pad ↑/↓**: Navigate list (one by one)
-- **D-Pad ←→**: Fast scroll (page up/down - 26 titles)
+- **D-Pad ←→**: Fast scroll (page up/down)
 - **A**: Toggle selection
 - **X**: Uninstall selected
 - **L**: Sort by Name
@@ -37,8 +39,15 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - **START**: Exit
 
 **Bottom Screen:**
-- Shows controls reminder and backup path
-- **START**: Exit application
+Shows detailed information about the currently selected title:
+- Title icon (if available)
+- Full title name
+- Title ID (hexadecimal)
+- Version number
+- Type (Game/Application, Update ↑, or DLC ⊕)
+- Storage location (SD Card / NAND)
+- Backup status (✓ if backup exists, ✗ if not)
+- Backup path (if backup exists)
 
 ### Uninstalling Titles
 
@@ -235,7 +244,6 @@ For detailed technical information about specific fixes and troubleshooting, see
 - **[Flickering Fix](docs/FLICKERING_FIX.md)** - Initial console rendering fixes
 - **[Flickering Fix v3 Final](docs/FLICKERING_FIX_v3_FINAL.md)** - citro2d/citro3d migration details
 - **[Rendering Troubleshooting](docs/RENDERING_TROUBLESHOOTING.md)** - Graphics troubleshooting guide
-- **[Project Summary](docs/PROJECT_SUMMARY.md)** - Complete project overview
 
 ## License
 

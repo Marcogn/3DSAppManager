@@ -38,14 +38,6 @@ Comprehensive guide for graphics troubleshooting.
 - Debugging techniques
 - Performance optimization tips
 
-### PROJECT_SUMMARY.md
-Complete project overview and architecture.
-
-**Content**:
-- Project goals
-- Feature list
-- Technical architecture
-- Development history
 
 ## 🎯 Getting Started
 
