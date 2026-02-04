@@ -1,116 +1,70 @@
 # Changelog
 
-## v2.6 - Enhanced UX and Selected Titles List (2026-02-04)
+## v2.6 - Selected Titles List and UX Improvements (2026-02-04)
 
-Major UX improvements focused on better feedback during uninstall operations.
+Added visual feedback during uninstall operations.
 
-### What's New
-- **Selected titles list on bottom screen**: When you press X to uninstall, the bottom screen now shows a list of all selected titles instead of staying on the last viewed title. You can see exactly what you're about to delete.
-- **Evenly spaced info bar**: The T:XXX / Sel:XXX / Sort:XXX info is now properly distributed across the top screen (5px / 135px / 265px) for a cleaner look.
-- **Better visual feedback**: During all uninstall dialogs (backup confirmation, path selection, final confirmation), the bottom screen continuously shows your selected titles.
+### Changes
+- **Bottom screen shows selected titles during uninstall**: Press X and you'll see what you're about to delete on the bottom screen. Shows up to 10 titles, with "...and X more" if needed.
+- **Info bar spacing fixed**: T:XXX / Sel:XXX / Sort:XXX now properly spaced at 5px / 135px / 265px.
+- **Consistent feedback**: Selected titles list stays visible through all confirmation dialogs (backup, path selection, final confirm).
 
-### How It Works
-The new `drawSelectedTitlesList()` function shows up to 10 selected titles at once. If you have more than 10 selected, it shows "...and X more" at the bottom. Each title is displayed with its clean name and type symbol (↑ for updates, ⊕ for DLC).
+### Implementation
+- `drawSelectedTitlesList()` - renders selected titles on bottom screen
+- `drawDialogWithSelectedList()` - combines dialog with selected list
+- Modified uninstall flow to use new dialog function
 
-### Why This Matters
-Before this update, when you pressed X to uninstall, the bottom screen would just show details of whatever title you last had selected. This was confusing - you couldn't see what you were about to delete. Now you get a clear list during every step of the uninstall process.
+## v2.5.1 - SELECT Overlay and Symbol Fixes (2026-02-04)
 
-### Technical Details
-- New function: `drawSelectedTitlesList()` - renders bottom screen with selected titles
-- New function: `drawDialogWithSelectedList()` - combines top dialog with bottom list
-- Modified handleInput() to use new dialog function for uninstall confirmations
-- Info bar uses fixed X positions for consistent spacing
+Fixed flickering and duplicate symbols.
 
-## v2.5.1 - Flickering Fix and Polish (2026-02-04)
+### Fixes
+- **SELECT overlay flickering**: Was calling `C2D_SceneBegin(top)` twice per frame. Now uses simpler approach: always draw UI, then add overlay layer on top if SELECT held.
+- **DLC double symbols**: Removed all symbol variants (↑, ⊕) from title names. Symbols now only appear in dedicated column.
+- **Overlay sizing**: Box height 210px, spacing 13px for 8 control lines.
 
-Critical bug fixes for SELECT overlay rendering and symbol display.
+### Technical
+- Simplified rendering: UI draws once, overlay is additive layer
+- No text buffer conflicts
+- Separate SceneBegin for overlay (after UI completes)
 
-### Bug Fixes
-- **SELECT overlay flickering eliminated**: The overlay was flickering because `C2D_SceneBegin(top)` was being called twice in the same frame (once in drawUI, once for overlay). Fixed by using a single branch - if SELECT is held, render UI + overlay in one SceneBegin call, otherwise render normal UI.
-- **DLC double symbol fixed**: DLC titles were showing the ⊕ symbol both in the name AND in the symbol column. Now removes all three symbol variants (↑, ⊕ variant 1, ⊕ variant 2) from the title name.
-- **Box sizing corrected**: SELECT overlay box increased to 215px height with 11px line spacing to properly fit all 15 control lines without overlap.
+## v2.5 - Layout and Multi-language (2026-02-04)
 
-### Technical Improvements
-- Single frame rendering path for SELECT overlay
-- No more double SceneBegin calls
-- Proper symbol stripping with strstr() for all Unicode variants
-- Bottom screen properly cleared when showing overlay
+Table layout and better name handling.
 
-### Why The Flickering Happened
-The citro2d library doesn't handle multiple SceneBegin calls per target per frame well. The fix branches early in the main loop: if SELECT is held, it draws everything (UI + overlay) in one pass. If not, it draws the normal UI. Zero flickering now.
+### Changes
+- **Column-based layout**: Symbols moved to dedicated column (X=235), TitleID at X=255
+- **Multi-language support**: Tries system language → English → Japanese → all 12 languages. No more "--" names.
+- **Name validation**: Rejects empty/dash-only names, falls back to "Title [TitleID]"
+- **Hold SELECT for controls**: Overlay shows while button held, hides on release
 
-## v2.5 - The Production Release (2026-02-04)
-
-Final polish and bug fixes. This is the stable release.
-
-### What's New
-- **Hold SELECT to view controls**: No more flickering! Hold SELECT to see the controls overlay, release to go back. Way more intuitive.
-- **Type symbols in their own column**: Updates (↑) and DLC (⊕) now have a dedicated column between the title name and TitleID. Cleaner layout, easier to scan.
-- **No more "--" titles**: Fixed Japanese and multi-language title name loading. If a title has no valid name, it shows "Title [TitleID]" instead of weird dashes.
-- **Icon placeholder removed**: The "?" icon was never quite centered and didn't add value. More screen space for actual content now.
-- **Cleaner documentation**: Removed all the incremental fix docs. Just one technical README for developers.
-
-### Layout Changes
-The top screen now uses a proper table format:
+### Layout
 ```
-[X] Animal Crossing New Leaf    ⊕  00040000000E6400
-[ ] Mario Kart 7                    0004000000030700
-[ ] Update                      ↑  0004000E00030700
+[X] Title Name                  ⊕  TitleID
+ 3     28                      235   255
 ```
 
-- Checkbox at X=3
-- Title name at X=28 (clean, without symbols)
-- Type symbol at X=235 (↑ or ⊕ or space)
-- TitleID at X=255 (hex, 16 chars)
+### Technical
+- Symbol stripping with strstr() on all Unicode variants
+- UTF-8 multi-byte character handling
+- Sleep mode compatible rendering
 
-### Bug Fixes
-- **SELECT flickering fixed**: Moved overlay rendering to main loop with proper frame management
-- **Empty title names fixed**: Multi-language fallback system (system lang → English → Japanese → all languages)
-- **Name validation**: Rejects names that are only dashes, spaces, or empty
-- **Symbol display**: Type indicators no longer part of title name string
+## v2.4 - Feature Complete (2026-02-04)
 
-### Technical Improvements
-- Name validation with fallback to TitleID
-- Symbols removed from name string using strstr()
-- Clean UTF-8 handling without breaking multi-byte characters
-- Proper goto label for TitleID fallback
-- Main loop handles SELECT with continue statement (prevents double rendering)
+Sorting, filtering, and 500 title support.
 
-### Documentation
-- Removed: CHARACTER_CORRUPTION_FIX.md, FLICKERING_FIX.md, FLICKERING_FIX_v3_FINAL.md, RENDERING_TROUBLESHOOTING.md, and all UI_IMPROVEMENTS_*.md files
-- Added: Technical README.md in docs/ with architecture, data structures, rendering pipeline, etc.
-- Updated: Main README with new features and layout diagrams
+### Changes
+- **Sort by size**: L/R cycles through Name/Size/TitleID. Size shows largest first.
+- **Filter mode**: Y cycles through All/Updates/DLC
+- **500 title support**: Bumped from 300 (HOME menu still caps at 300)
+- **SELECT overlay**: Full-screen controls overlay
 
-## v2.4 - The Feature Complete Update (2026-02-04)
+### Technical
+- FilterMode enum with filteredIndices[] array
+- 3 sort modes with comparator functions
+- MAX_TITLES = 500
 
-This is the big one - everything you asked for and more.
-
-### What's New
-- **Sort by size**: Press L/R to cycle through Name/Size/TitleID sorting. Perfect for finding those space hogs.
-- **Filter mode**: Press Y to filter by All/Updates/DLC. Makes it easy to clean up specific types of content.
-- **Controls overlay**: Press SELECT for a proper overlay with all controls. No more squinting at tiny text or dealing with cut-off messages.
-- **500 title support**: Increased from 300 to 500. The HOME menu might cap at 300, but this app shows them all.
-- **Unicode symbols back**: Updates get ↑ and DLC gets ⊕ because they're way more recognizable than ^ and +.
-
-### How It Works
-The filter system is smart - it builds a filtered list on the fly, so cursor and selection work exactly as you'd expect. When you switch filters with Y, it automatically adjusts. Sort by size shows the largest titles first (descending order), making it easy to find space hogs.
-
-### Why These Changes?
-- **Sort by size**: Most requested feature. You want to free up space, you need to see what's taking it.
-- **Filter mode**: When you have 200+ titles, finding all the updates or DLC manually is painful.
-- **Controls overlay**: The old dialog was getting text cut off at the bottom. The overlay looks better and fits everything.
-- **500 titles**: Some people actually hit the 300 limit. Now you won't.
-
-### Technical Stuff
-- New `FilterMode` enum with filtering logic
-- `filteredIndices[]` array maintains which titles are visible
-- L/R now cycle through 3 sort modes instead of toggle
-- SELECT opens a full-screen overlay with proper darkening on both screens
-- MAX_TITLES bumped to 500 (memory not an issue on 3DS for this)
-
-## v2.3 - The Polish Update (2026-02-04)
-
-Big update focused on making everything smoother and more informative.
+## v2.3 - Polish (2026-02-04)
 
 ### What's New
 - **Title size display**: Now you can see how much space each title takes (in KB/MB/GB)

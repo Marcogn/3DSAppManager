@@ -10,25 +10,22 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 ## Features
 
-- 📋 **Display all installed titles** - Shows up to 500 titles (HOME menu limit is 300)
-- ✅ **Multi-selection** - Select multiple titles for batch uninstallation
-- 🔄 **Triple sort modes** - Sort by Name, Size (largest first), or Title ID (cycle with L/R)
-- 🎯 **Smart filtering** - Filter by All/Updates/DLC with Y button
-- 💾 **Complete save backup** - Backs up all save data before uninstalling
-- 🗑️ **Complete removal** - Removes title, saves, ExtData, and Boss ExtData
-- ⚙️ **Configurable** - Customize backup location
-- 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
-- 🛡️ **Safe** - System titles are protected
-- 🎨 **Clear indicators** - Unicode symbols (↑ for Updates, ⊕ for DLC) in separate column
-- 📊 **Selected titles list** - Bottom screen shows selected titles during uninstall dialogs (up to 10 visible)
-- 📏 **Evenly spaced info bar** - T:XXX / Sel:XXX / Sort:XXX properly distributed across screen
-- 🌙 **Sleep mode support** - No crashes when closing/opening the 3DS
-- ⏱️ **Loading progress** - Visual progress bar when loading titles
-- 🚨 **Smart warnings** - Red counter if you have over 300 titles (HOME menu limit)
-- 📐 **Table layout** - Clean columnar display: checkbox | title name | type symbol | TitleID
-- 🎯 **Precise scrolling** - Slow, controlled navigation without accidental jumps
-- 💡 **Hold SELECT** - Hold SELECT button to see controls, release to hide (zero flickering)
-- 🌐 **Multi-language** - Japanese, English, and all SMDH languages supported
+- Display all installed titles (up to 500, HOME menu shows 300)
+- Multi-selection for batch uninstall
+- Sort by Name, Size (largest first), or Title ID
+- Filter by All/Updates/DLC
+- Complete save backup (User Save, ExtData, Boss ExtData)
+- Complete removal of title and all associated data
+- Configurable backup location
+- Dual-screen layout with selected titles list during uninstall
+- Info bar with proper spacing (Titles / Selected / Sort mode)
+- Sleep mode support
+- Loading progress bar
+- Red warning when over 300 titles
+- Clean table layout: `[X] Name  ↑  TitleID`
+- Precise scrolling (slow, controlled)
+- Hold SELECT for controls overlay (flicker-free)
+- Multi-language support (Japanese, English, all SMDH languages)
 
 ## Installation
 

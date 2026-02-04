@@ -45,18 +45,17 @@ typedef struct {
 ### Rendering Pipeline
 
 1. **Frame Begin**: `C3D_FrameBegin(C3D_FRAME_SYNCDRAW)`
-2. **Branch on SELECT state**:
-   - If SELECT held: Draw UI + overlay in single SceneBegin (prevents flickering)
-   - If SELECT not held: Normal UI rendering
-3. **Top Screen**: Title list with filtering/sorting
-4. **Bottom Screen**: 
-   - Normal mode: Selected title details (`drawTouchControls()`)
-   - Dialog mode: Selected titles list (`drawSelectedTitlesList()`)
-5. **Frame End**: `C3D_FrameEnd(0)`
+2. **UI Rendering**: Always draw UI (drawUI + drawTouchControls)
+3. **Conditional Overlay**: If SELECT held, draw overlay layer on top
+4. **Frame End**: `C3D_FrameEnd(0)`
 
-**Important**: Always render every frame for sleep mode compatibility.
+**Approach**: UI renders normally every frame. If SELECT is held, an additional overlay layer is drawn on top using a second `C2D_SceneBegin()` call. This keeps the base UI stable and prevents flickering.
 
-**Flickering Prevention**: Never call `C2D_SceneBegin()` twice for the same target in one frame. The SELECT overlay is drawn in the same SceneBegin call as the UI to prevent double rendering.
+**Bottom Screen Modes**:
+- Normal: Title details (drawTouchControls)
+- Dialog: Selected titles list (drawSelectedTitlesList)
+
+**Important**: Render every frame for sleep mode compatibility.
 
 ### Input Handling
 
