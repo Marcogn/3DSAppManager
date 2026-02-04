@@ -1787,7 +1787,7 @@ int main(int argc, char **argv) {
             float boxX = 15.0f;
             float boxY = 15.0f;
             float boxW = 370.0f;
-            float boxH = 205.0f;  // Aumentato per contenere START
+            float boxH = 210.0f;  // Aumentato per evitare sovrapposizioni
 
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
