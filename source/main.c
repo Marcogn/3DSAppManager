@@ -329,22 +329,80 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
         FSFILE_Close(fileHandle);
         
         if (bytesRead >= sizeof(u32) && smdh.magic == 0x48444D53) {  // 'SMDH' in little-endian
-            // Convert UTF-16 to UTF-8 (using English title)
-            ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, outSize - 1);
-            if (units < 0)
-                units = 0;
-            outName[units] = '\0';
+            // Try to get system language first
+            u8 cfgLanguage = CFG_LANGUAGE_EN;
+            CFGU_GetSystemLanguage(&cfgLanguage);
 
-            // Sanitize the name to remove problematic characters
-            sanitizeName(outName);
+            // Try system language, then English, then Japanese, then any available
+            int tryOrder[3];
+            tryOrder[0] = (cfgLanguage < 12) ? cfgLanguage : 1;  // System language
+            tryOrder[1] = 1;  // English
+            tryOrder[2] = 0;  // Japanese
+
+            bool foundName = false;
+            for (int attempt = 0; attempt < 3 && !foundName; attempt++) {
+                int langIndex = tryOrder[attempt];
+                if (attempt > 0 && langIndex == tryOrder[0]) continue;  // Skip if same as already tried
+
+                ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[langIndex].shortDescription, outSize - 1);
+                if (units > 0) {
+                    outName[units] = '\0';
+
+                    // Check if we got actual text (not empty or just spaces)
+                    bool hasContent = false;
+                    for (int i = 0; i < units; i++) {
+                        if (outName[i] != ' ' && outName[i] != '\0') {
+                            hasContent = true;
+                            break;
+                        }
+                    }
+
+                    if (hasContent) {
+                        foundName = true;
+                        break;
+                    }
+                }
+            }
+
+            // If still no name, try all languages
+            if (!foundName) {
+                for (int i = 0; i < 12; i++) {
+                    ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[i].shortDescription, outSize - 1);
+                    if (units > 0) {
+                        outName[units] = '\0';
+                        bool hasContent = false;
+                        for (int j = 0; j < units; j++) {
+                            if (outName[j] != ' ' && outName[j] != '\0') {
+                                hasContent = true;
+                                break;
+                            }
+                        }
+                        if (hasContent) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Sanitize but keep Unicode characters (don't filter out high bytes)
+            // Only remove problematic filesystem characters
+            char *src = outName;
+            char *dst = outName;
+            while (*src) {
+                if (*src != '|' && *src != '<' && *src != '>' &&
+                    *src != '"' && *src != '\\' && *src != '/' &&
+                    *src != ':' && *src != '*' && *src != '?') {
+                    *dst++ = *src;
+                }
+                src++;
+            }
+            *dst = '\0';
 
             // Add type indicator based on titleID with Unicode symbols
             u32 highID = (u32)(titleID >> 32);
             if (highID == 0x0004000E) {
-                // Update/Patch - use up arrow symbol
                 strncat(outName, " \xE2\x86\x91", outSize - strlen(outName) - 1);  // ↑
             } else if (highID == 0x0004008C) {
-                // DLC - use circled plus symbol
                 strncat(outName, " \xE2\x8A\x95", outSize - strlen(outName) - 1);  // ⊕
             }
 
@@ -356,7 +414,7 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
     if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
-    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x95";  // ⊕ for DLC
+    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";  // ⊕ for DLC
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
@@ -779,19 +837,12 @@ void drawTouchControls() {
     int titleIdx = filteredIndices[cursor];
     TitleInfo *currentTitle = &titles[titleIdx];
 
-    // Draw icon placeholder (icon loading disabled for now)
-    C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
-    C2D_TextParse(&text, dynamicBuf, "?");
-    C2D_TextOptimize(&text);
-    // Centro il punto interrogativo nel quadrato 48x48px - calcolo preciso
-    C2D_DrawText(&text, C2D_WithColor, 24.0f, y + 8, 0.5f, 2.0f, 2.0f, C2D_Color32(150, 150, 180, 255));
-
-    // Title name (next to icon placeholder)
-    float textX = 65.0f;
+    // Title name (next to where icon would be)
+    float textX = 15.0f;  // Spostato più a sinistra senza l'icona
     C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, textX, y + 5, 0.5f, 0.55f, 0.55f, C2D_Color32(100, 180, 255, 255));
-    y += 58;
+    y += 20;
 
     // Separator
     C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
@@ -939,7 +990,7 @@ void drawControlsOverlay() {
     float boxX = 15.0f;
     float boxY = 15.0f;
     float boxW = 370.0f;
-    float boxH = 210.0f;
+    float boxH = 195.0f;  // Ridotto perché non serve spazio per "press any button"
 
     // Box background
     C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
@@ -974,7 +1025,7 @@ void drawControlsOverlay() {
         {"Y", "Filter mode"},
         {"", "(All/Updates/DLC)"},
         {"", ""},
-        {"SELECT", "Show this help"},
+        {"SELECT", "Hide this help"},
         {"START", "Exit app"}
     };
 
@@ -998,11 +1049,6 @@ void drawControlsOverlay() {
         y += 12;
     }
 
-    // "Press any button" message - posizionato dentro il box
-    y = boxY + boxH - 20.0f;
-    C2D_TextParse(&text, dynamicBuf, "Press any button to close");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, boxX + 85.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(150, 200, 255, 255));
 
     // Bottom screen - just darken it
     C2D_SceneBegin(bottom);
@@ -1305,17 +1351,10 @@ void handleInput() {
         }
     }
     
-    // Show controls overlay with SELECT
-    if (kDown & KEY_SELECT) {
+    // Show controls overlay while SELECT is held
+    if (kHeld & KEY_SELECT) {
         drawControlsOverlay();
-
-        // Wait for any button press to close
-        while (aptMainLoop()) {
-            hidScanInput();
-            u32 kDown2 = hidKeysDown();
-            if (kDown2) break;  // Any button closes
-        }
-        needsRedraw = true;
+        // No need to wait - overlay shows as long as button is held
     }
 
     // Cycle sort mode with L/R buttons
