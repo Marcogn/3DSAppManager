@@ -10,21 +10,23 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 ## Features
 
-- 📋 **Display all installed titles** - Complete list with title names and IDs
+- 📋 **Display all installed titles** - Shows up to 500 titles (HOME menu limit is 300)
 - ✅ **Multi-selection** - Select multiple titles for batch uninstallation
-- 🔄 **Smart sorting** - Sort by Name (L button) or Title ID (R button)
+- 🔄 **Triple sort modes** - Sort by Name, Size, or Title ID (cycle with L/R)
+- 🎯 **Smart filtering** - Filter by All/Updates/DLC with Y button
 - 💾 **Complete save backup** - Backs up all save data before uninstalling
 - 🗑️ **Complete removal** - Removes title, saves, ExtData, and Boss ExtData
 - ⚙️ **Configurable** - Customize backup location
 - 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
 - 🛡️ **Safe** - System titles are protected
-- 🎨 **Clear indicators** - ASCII symbols for Updates (^) and DLC (+)
+- 🎨 **Clear indicators** - Unicode symbols for Updates (↑) and DLC (⊕)
 - 📊 **Detailed info panel** - Bottom screen shows title details with size, version, and backup status
 - 🌙 **Sleep mode support** - No crashes when closing/opening the 3DS
 - ⏱️ **Loading progress** - Visual progress bar when loading titles
 - 🚨 **Smart warnings** - Red counter if you have over 300 titles (HOME menu limit)
 - 📏 **Better readability** - Optimized layout with aligned Title IDs and expanded names
 - 🎯 **Precise scrolling** - Slow, controlled navigation without accidental jumps
+- 💡 **Overlay controls** - Press SELECT for full control reference
 
 ## Installation
 
@@ -39,9 +41,9 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - **D-Pad ←→**: Fast scroll (page up/down)
 - **A**: Toggle selection
 - **X**: Uninstall selected
-- **L**: Sort by Name
-- **R**: Sort by Title ID
-- **SELECT**: Show full controls help
+- **L/R**: Cycle sort mode (Name ↔ Size ↔ Title ID)
+- **Y**: Cycle filter (All → Updates → DLC)
+- **SELECT**: Show full controls overlay
 - **START**: Exit
 
 **Bottom Screen:**
@@ -51,7 +53,7 @@ Shows detailed information about the currently selected title:
 - Title ID (hexadecimal)
 - Version number
 - **Size** (in KB/MB/GB)
-- Type (Game/Application, Update (^), or DLC (+))
+- Type (Game/Application, Update (↑), or DLC (⊕))
 - Storage location (SD Card / NAND)
 - Backup status (YES ✓ if backup exists, NO ✗ if not)
 - Backup path (if backup exists)
@@ -208,6 +210,18 @@ When you delete a title, the application:
 ### Q: The title counter is red - what does that mean?
 **A**: If you have over 300 titles installed, the counter turns red. This is a warning because the 3DS HOME menu can only display up to 300 titles properly. Consider deleting some unused titles.
 
+### Q: Can the app handle more than 300 titles?
+**A**: Yes! The app supports up to 500 titles. The 300 limit is only for the HOME menu display, not for this app. You'll see all your titles here.
+
+### Q: How do I find the largest titles to delete?
+**A**: Press **R** twice to sort by Size. The smallest titles appear first, scroll down to find the largest ones.
+
+### Q: How do I see only Updates or only DLC?
+**A**: Press **Y** to cycle through filters:
+- All (shows everything)
+- Updates (shows only updates - marked with ↑)
+- DLC (shows only DLC - marked with ⊕)
+
 ### Q: Why do I see "..." at the end of some title names?
 **A**: Long title names are truncated in the top screen list to fit the layout. You can see the full name in the bottom screen details panel.
 
@@ -243,7 +257,7 @@ Note: A future version may include automatic restore functionality.
 - Deleting DLC will remove the DLC content
 - Deleting updates will revert the game to its base version
 - Base games and DLC are separate titles
-- You'll see (^) for updates and (+) for DLC in the title list
+- You'll see (↑) for updates and (⊕) for DLC in the title list
 
 ### Q: The app freezes when I close the 3DS lid
 **A**: This has been fixed in v2.2+. The app now properly supports sleep mode - you can close and open the 3DS without issues.
