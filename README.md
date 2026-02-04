@@ -12,21 +12,22 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 
 - 📋 **Display all installed titles** - Shows up to 500 titles (HOME menu limit is 300)
 - ✅ **Multi-selection** - Select multiple titles for batch uninstallation
-- 🔄 **Triple sort modes** - Sort by Name, Size, or Title ID (cycle with L/R)
+- 🔄 **Triple sort modes** - Sort by Name, Size (largest first), or Title ID (cycle with L/R)
 - 🎯 **Smart filtering** - Filter by All/Updates/DLC with Y button
 - 💾 **Complete save backup** - Backs up all save data before uninstalling
 - 🗑️ **Complete removal** - Removes title, saves, ExtData, and Boss ExtData
 - ⚙️ **Configurable** - Customize backup location
 - 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
 - 🛡️ **Safe** - System titles are protected
-- 🎨 **Clear indicators** - Unicode symbols for Updates (↑) and DLC (⊕)
+- 🎨 **Clear indicators** - Unicode symbols (↑ for Updates, ⊕ for DLC) in separate column
 - 📊 **Detailed info panel** - Bottom screen shows title details with size, version, and backup status
 - 🌙 **Sleep mode support** - No crashes when closing/opening the 3DS
 - ⏱️ **Loading progress** - Visual progress bar when loading titles
 - 🚨 **Smart warnings** - Red counter if you have over 300 titles (HOME menu limit)
-- 📏 **Better readability** - Optimized layout with aligned Title IDs and expanded names
+- 📏 **Table layout** - Clean columnar display: checkbox | title name | type symbol | TitleID
 - 🎯 **Precise scrolling** - Slow, controlled navigation without accidental jumps
-- 💡 **Overlay controls** - Press SELECT for full control reference
+- 💡 **Hold SELECT** - Hold SELECT button to see controls, release to hide
+- 🌐 **Multi-language** - Japanese, English, and all SMDH languages supported
 
 ## Installation
 
@@ -42,22 +43,32 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - **A**: Toggle selection
 - **X**: Uninstall selected
 - **L/R**: Cycle sort mode (Name ↔ Size ↔ Title ID)
+  - Name: Alphabetical
+  - Size: Largest first
+  - TitleID: Numerical
 - **Y**: Cycle filter (All → Updates → DLC)
-- **SELECT**: Show full controls overlay
+- **SELECT (hold)**: Show controls overlay (release to hide)
 - **START**: Exit
+
+**Top Screen Layout:**
+```
+[ ] Title Name                      ↑  0004000000012345
+ ^      ^                           ^         ^
+checkbox|                         symbol   TitleID
+       name (no type indicator)
+```
 
 **Bottom Screen:**
 Shows detailed information about the currently selected title:
-- Title icon placeholder (? symbol)
-- Full title name
+- Full title name (no truncation)
 - Title ID (hexadecimal)
 - Version number
-- **Size** (in KB/MB/GB)
+- Size (in KB/MB/GB)
 - Type (Game/Application, Update (↑), or DLC (⊕))
 - Storage location (SD Card / NAND)
 - Backup status (YES ✓ if backup exists, NO ✗ if not)
 - Backup path (if backup exists)
-- Controls reminder (press SELECT for full list)
+- Reminder: "Press SELECT for controls"
 
 ### Uninstalling Titles
 
@@ -214,7 +225,7 @@ When you delete a title, the application:
 **A**: Yes! The app supports up to 500 titles. The 300 limit is only for the HOME menu display, not for this app. You'll see all your titles here.
 
 ### Q: How do I find the largest titles to delete?
-**A**: Press **R** twice to sort by Size. The smallest titles appear first, scroll down to find the largest ones.
+**A**: Press **R** twice to sort by Size. The largest titles appear at the top of the list.
 
 ### Q: How do I see only Updates or only DLC?
 **A**: Press **Y** to cycle through filters:
@@ -273,16 +284,17 @@ Note: Some features may require CFW for full functionality.
 
 ## Technical Documentation
 
-For detailed technical information about specific fixes and improvements, see the [docs/](docs/) folder:
+For technical details about the implementation, see [docs/README.md](docs/README.md).
 
-### Core Documentation
-- **[Character Corruption Fix](docs/CHARACTER_CORRUPTION_FIX.md)** - UTF-16 character handling and sanitization
-- **[Flickering Fix](docs/FLICKERING_FIX.md)** - Initial console rendering fixes
-- **[Flickering Fix v3 Final](docs/FLICKERING_FIX_v3_FINAL.md)** - citro2d/citro3d migration details
-- **[Rendering Troubleshooting](docs/RENDERING_TROUBLESHOOTING.md)** - Graphics troubleshooting guide
-
-### Latest Updates
-- **[UI Improvements v2.4](docs/UI_IMPROVEMENTS_v2.4_FEATURE_COMPLETE.md)** - Complete feature set (sort by size, filters, overlay controls, 500 title support)
+Topics covered:
+- Architecture and core components
+- Data structures
+- Rendering pipeline
+- UTF-16 to UTF-8 conversion
+- Save backup strategy
+- Sleep mode support
+- Memory management
+- Performance characteristics
 
 ## License
 
