@@ -4,52 +4,57 @@ This folder contains detailed technical documentation for the project.
 
 ## 📄 Available Documents
 
-### BUILD_VERIFICATION.md
-Detailed build and compatibility verification report.
+### CHARACTER_CORRUPTION_FIX.md
+Details about UTF-16 character handling and text sanitization.
 
 **Content**:
-- Compilation status
-- Verified SMDH metadata
-- Code modifications applied
-- Implemented functionality
-- Complete technical analysis
+- Character corruption issues
+- UTF-16 to UTF-8 conversion
+- Sanitization implementation
+- Testing results
 
-### COMPATIBILITY_CONFIRMED.md
-Complete confirmation of Nintendo 3DS compatibility.
-
-**Content**:
-- Critical issues resolved
-- API validation
-- Archive types used
-- Compatibility guarantee
-- Testing instructions
-
-### FINAL_VERIFICATION.md
-Final verification with complete checklist.
+### FLICKERING_FIX.md
+Initial console-based rendering fixes.
 
 **Content**:
-- Compilation summary
-- Code analysis
-- API verification tables
-- Final checklist
-- Technical information
+- Console buffer flickering issues
+- Screen clear strategies
+- Early solutions attempted
 
-### build.log
-Complete log of the last successful compilation.
+### FLICKERING_FIX_v3_FINAL.md
+Complete migration to citro2d/citro3d hardware rendering.
 
 **Content**:
-- Compiler output
-- Warnings (non-critical)
-- File generation confirmation
+- Why citro2d/citro3d was necessary
+- Migration process details
+- Implementation specifics
+- Performance improvements
+
+### RENDERING_TROUBLESHOOTING.md
+Comprehensive guide for graphics troubleshooting.
+
+**Content**:
+- Common rendering issues
+- Debugging techniques
+- Performance optimization tips
+
+### PROJECT_SUMMARY.md
+Complete project overview and architecture.
+
+**Content**:
+- Project goals
+- Feature list
+- Technical architecture
+- Development history
 
 ## 🎯 Getting Started
 
 If you're a new contributor or want to understand the project:
 
 1. First read the [README.md](../README.md) in the project root
-2. For technical details, see [COMPATIBILITY_CONFIRMED.md](COMPATIBILITY_CONFIRMED.md)
-3. For build verification, see [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md)
-4. For the final checklist, see [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md)
+2. For graphics system, see [FLICKERING_FIX_v3_FINAL.md](FLICKERING_FIX_v3_FINAL.md)
+3. For character handling, see [CHARACTER_CORRUPTION_FIX.md](CHARACTER_CORRUPTION_FIX.md)
+4. For troubleshooting, see [RENDERING_TROUBLESHOOTING.md](RENDERING_TROUBLESHOOTING.md)
 
 ## 🔧 Build and Development
 
@@ -57,8 +62,9 @@ For information on how to compile the project, consult the "Building from Source
 
 ## ✅ Project Status
 
-**Last Verification**: 2026-02-02  
-**Build Status**: ✅ Success (0 errors)  
-**3DS Compatibility**: ✅ Confirmed (100%)  
-**Verified APIs**: 29/29 (100%)  
-**Ready for**: Testing on real 3DS hardware
+**Last Update**: 2026-02-04  
+**Version**: v4.0.0  
+**Build Status**: ✅ Success (0 errors, minor warnings)  
+**Graphics System**: ✅ citro2d/citro3d (hardware-accelerated)  
+**3DS Compatibility**: ✅ Confirmed (Old 3DS, New 3DS, 2DS)  
+**Ready for**: Production use on real hardware
