@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.6.1 - SELECT Overlay Flickering Fix (2026-02-04)
+
+Fixed the flickering issue when holding the SELECT button.
+
+### Fix
+- **SELECT overlay no longer flickers**: Completely rewrote the rendering logic for the controls overlay. Instead of calling `C2D_SceneBegin()` twice on the same target (which caused flickering), the overlay now:
+  - Renders the complete UI in one pass when SELECT is held
+  - Draws the overlay elements directly on top using higher z-depth values
+  - Uses separate rendering path for overlay mode vs normal mode
+  - Properly manages text buffer clearing to prevent text overlap
+
+### Technical
+- Eliminated double `C2D_SceneBegin()` calls
+- Increased z-depth for overlay elements (0.6-0.7) to ensure proper layering
+- Added state variable to track SELECT button state
+- Fixed bottom screen overlay to render after touch controls
+
 ## v2.6 - Selected Titles List and UX Improvements (2026-02-04)
 
 Added visual feedback during uninstall operations.

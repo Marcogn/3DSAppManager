@@ -1883,86 +1883,178 @@ int main(int argc, char **argv) {
         // Renderizza sempre un frame per evitare crash durante sleep/wake
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
-        // Disegna SEMPRE la UI normale
-        drawUI();
-        drawTouchControls();
-        needsRedraw = false;
+        bool isSelectHeld = (kHeld & KEY_SELECT);
 
-        // Se SELECT è premuto, disegna SOLO l'overlay sopra (senza ridisegnare UI)
-        if (kHeld & KEY_SELECT) {
-            // Non chiamare SceneBegin di nuovo! Disegna solo sopra
-            // L'overlay deve essere disegnato DOPO drawUI ma nello STESSO frame
-
-            // Top screen - overlay con semi-trasparenza
+        // Rendering condizionale per evitare flickering
+        if (isSelectHeld) {
+            // Modalità overlay: disegna tutto manualmente senza chiamare drawUI()
+            // TOP SCREEN
+            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
             C2D_SceneBegin(top);
-            C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
+            C2D_TextBufClear(dynamicBuf);
 
-            // Controls box
+            // Disegna UI base
+            float uiY = 3.0f;
+            C2D_DrawRectSolid(0, uiY, 0.5f, 400, 18, C2D_Color32(255, 255, 255, 255));
+            C2D_Text text;
+            C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, 5.0f, uiY + 3, 0.5f, 0.55f, 0.55f, C2D_Color32(0, 0, 0, 255));
+            uiY += 22;
+
+            int selectedCount = 0;
+            for (int i = 0; i < titleCount; i++) {
+                if (titles[i].selected) selectedCount++;
+            }
+
+            const char *sortModeStr = "";
+            if (currentSortMode == SORT_BY_NAME) sortModeStr = "Name";
+            else if (currentSortMode == SORT_BY_SIZE) sortModeStr = "Size";
+            else sortModeStr = "TID";
+
+            const char *filterModeStr = "";
+            if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Upd]";
+            else if (currentFilterMode == FILTER_DLC) filterModeStr = " [DLC]";
+
+            char titleCountText[64];
+            snprintf(titleCountText, sizeof(titleCountText), "T:%d%s", titleCount, filterModeStr);
+            u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
+
+            char statsText[128];
+            snprintf(statsText, sizeof(statsText), "%-12s Sel:%-4d Sort:%-6s", titleCountText, selectedCount, sortModeStr);
+            C2D_TextParse(&text, dynamicBuf, statsText);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, 10.0f, uiY, 0.5f, 0.43f, 0.43f, countColor);
+            uiY += 16;
+
+            C2D_DrawRectSolid(0, uiY, 0.5f, 400, 1, C2D_Color32(100, 100, 150, 255));
+            uiY += 3;
+
+            // Disegna i titoli
+            for (int i = 0; i < MAX_VISIBLE_TITLES && (scrollOffset + i) < filteredCount; i++) {
+                int titleIdx = filteredIndices[scrollOffset + i];
+                TitleInfo *title = &titles[titleIdx];
+                bool isSelected = (scrollOffset + i == cursor);
+                u32 bgColor = isSelected ? C2D_Color32(50, 100, 200, 255) : C2D_Color32(0, 0, 0, 0);
+                if (bgColor != 0)
+                    C2D_DrawRectSolid(0, uiY - 1, 0.5f, 400, 16, bgColor);
+
+                u32 textColor = title->selected ? C2D_Color32(100, 255, 100, 255) : C2D_Color32(220, 220, 220, 255);
+                char displayText[128];
+                const char *prefix = title->selected ? "> " : "  ";
+                snprintf(displayText, sizeof(displayText), "%s%s", prefix, title->name);
+                C2D_TextParse(&text, dynamicBuf, displayText);
+                C2D_TextOptimize(&text);
+                C2D_DrawText(&text, C2D_WithColor, 10.0f, uiY, 0.5f, 0.42f, 0.42f, textColor);
+                uiY += 16;
+            }
+
+            // Ora disegna l'overlay dei controlli sopra
+            C2D_DrawRectSolid(0, 0, 0.6f, 400, 240, C2D_Color32(0, 0, 0, 180));
+
             float boxX = 15.0f;
             float boxY = 15.0f;
             float boxW = 370.0f;
             float boxH = 210.0f;
 
-            C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
-            C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX, boxY, 0.7f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
+            C2D_DrawRectSolid(boxX, boxY, 0.7f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.7f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX, boxY, 0.7f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.7f, 2, boxH, C2D_Color32(100, 180, 255, 255));
 
-            // Title
-            C2D_Text text;
-            float y = boxY + 8.0f;
-
+            float overlayY = boxY + 8.0f;
             C2D_TextParse(&text, dynamicBuf, "CONTROLS");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
-            y += 18;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, overlayY, 0.7f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
+            overlayY += 18;
 
-            // Draw controls - 13 lines (removed empty lines to save space)
             C2D_TextParse(&text, dynamicBuf, "A: Select/Deselect");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "X: Uninstall selected");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "D-Pad Up/Down: Navigate");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "D-Pad Left/Right: Page jump");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "L/R: Sort (Name/Size/TID)");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "Y: Filter (All/Updates/DLC)");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            y += 18;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            overlayY += 18;
 
             C2D_TextParse(&text, dynamicBuf, "SELECT: Release to hide");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
-            y += 13;
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
+            overlayY += 13;
 
             C2D_TextParse(&text, dynamicBuf, "START: Exit app");
             C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
 
-            // Bottom screen - oscura
+            // BOTTOM SCREEN - disegna i dettagli + overlay scuro
+            C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
             C2D_SceneBegin(bottom);
-            C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
+
+            // Renderizza i dettagli del titolo
+            C2D_TextBufClear(dynamicBuf);
+            float bottomY = 10.0f;
+
+            if (filteredCount > 0 && cursor >= 0 && cursor < filteredCount) {
+                int titleIdx = filteredIndices[cursor];
+                TitleInfo *currentTitle = &titles[titleIdx];
+
+                float textX = 15.0f;
+                C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
+                C2D_TextOptimize(&text);
+                C2D_DrawText(&text, C2D_WithColor, textX, bottomY + 5, 0.5f, 0.55f, 0.55f, C2D_Color32(100, 180, 255, 255));
+                bottomY += 20;
+
+                C2D_DrawRectSolid(10, bottomY, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
+                bottomY += 10;
+
+                C2D_TextParse(&text, dynamicBuf, "Name:");
+                C2D_TextOptimize(&text);
+                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.43f, 0.43f, C2D_Color32(150, 150, 150, 255));
+                bottomY += 14;
+
+                C2D_TextParse(&text, dynamicBuf, currentTitle->fullName);
+                C2D_TextOptimize(&text);
+                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 255, 255, 255));
+                bottomY += 18;
+
+                char tidStr[64];
+                snprintf(tidStr, sizeof(tidStr), "Title ID: %016llX", currentTitle->titleID);
+                C2D_TextParse(&text, dynamicBuf, tidStr);
+                C2D_TextOptimize(&text);
+                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+            }
+
+            // Overlay scuro sopra
+            C2D_DrawRectSolid(0, 0, 0.9f, 320, 240, C2D_Color32(0, 0, 0, 180));
+        } else {
+            // Modalità normale: usa le funzioni standard
+            drawUI();
+            drawTouchControls();
         }
 
+        needsRedraw = false;
         C3D_FrameEnd(0);
 
         // Piccola pausa per evitare consumo eccessivo CPU
