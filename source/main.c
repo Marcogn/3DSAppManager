@@ -111,8 +111,10 @@ void drawTitleDetails();
 void drawLoadingScreen(int current, int total, const char *status);
 void loadTitles();
 void drawUI();
+void drawSelectedTitlesList();
 void drawTouchControls();
 void drawDialog(const char **lines, int lineCount);
+void drawDialogWithSelectedList(const char **lines, int lineCount);
 void handleInput();
 void backupSaveData(TitleInfo *title);
 void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
@@ -730,19 +732,19 @@ void drawUI() {
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.48f, 0.48f, countColor);
 
-    // Selected count
+    // Selected count - centrato nella sezione centrale
     char selectedText[64];
     snprintf(selectedText, sizeof(selectedText), "Sel:%d", selectedCount);
     C2D_TextParse(&text, dynamicBuf, selectedText);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 95.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, 135.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
 
-    // Sort mode
+    // Sort mode - a destra
     char sortText[64];
     snprintf(sortText, sizeof(sortText), "Sort:%s", sortModeStr);
     C2D_TextParse(&text, dynamicBuf, sortText);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 170.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
+    C2D_DrawText(&text, C2D_WithColor, 265.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
 
     y += 18;
 
@@ -834,6 +836,89 @@ void drawUI() {
         C2D_DrawText(&text, C2D_WithColor, 255.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
 
         y += 15;  // Line spacing aumentato
+    }
+}
+
+void drawSelectedTitlesList() {
+    // Render bottom screen - selected titles list
+    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
+    C2D_SceneBegin(bottom);
+
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+    float y = 10.0f;
+
+    // Count selected
+    int selectedCount = 0;
+    for (int i = 0; i < titleCount; i++) {
+        if (titles[i].selected)
+            selectedCount++;
+    }
+
+    // Title
+    char titleText[64];
+    snprintf(titleText, sizeof(titleText), "SELECTED TITLES (%d)", selectedCount);
+    C2D_TextParse(&text, dynamicBuf, titleText);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.55f, 0.55f, C2D_Color32(255, 100, 100, 255));
+    y += 20;
+
+    // Separator
+    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(255, 100, 100, 255));
+    y += 8;
+
+    // Draw selected titles (max 10 visible)
+    int drawn = 0;
+    int maxVisible = 10;
+
+    for (int i = 0; i < titleCount && drawn < maxVisible; i++) {
+        if (titles[i].selected) {
+            // Clean name (remove symbols)
+            char cleanName[256];
+            strncpy(cleanName, titles[i].name, sizeof(cleanName) - 1);
+            cleanName[sizeof(cleanName) - 1] = '\0';
+
+            char *arrow = strstr(cleanName, " \xE2\x86\x91");
+            if (arrow) *arrow = '\0';
+            char *plus1 = strstr(cleanName, " \xE2\x8A\x85");
+            if (plus1) *plus1 = '\0';
+            char *plus2 = strstr(cleanName, " \xE2\x8A\x95");
+            if (plus2) *plus2 = '\0';
+
+            // Truncate if too long
+            char displayName[40];
+            if (strlen(cleanName) > 35) {
+                snprintf(displayName, sizeof(displayName), "%.32s...", cleanName);
+            } else {
+                snprintf(displayName, sizeof(displayName), "%s", cleanName);
+            }
+
+            // Type indicator
+            u32 highID = (u32)(titles[i].titleID >> 32);
+            const char *typeIcon = "";
+            if (highID == 0x0004000E) typeIcon = " \xE2\x86\x91";
+            else if (highID == 0x0004008C) typeIcon = " \xE2\x8A\x85";
+
+            char fullLine[64];
+            snprintf(fullLine, sizeof(fullLine), "%s%s", displayName, typeIcon);
+
+            C2D_TextParse(&text, dynamicBuf, fullLine);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 255, 255, 255));
+
+            y += 15;
+            drawn++;
+        }
+    }
+
+    // Show "and X more..." if there are more
+    if (selectedCount > maxVisible) {
+        y += 5;
+        char moreText[64];
+        snprintf(moreText, sizeof(moreText), "...and %d more", selectedCount - maxVisible);
+        C2D_TextParse(&text, dynamicBuf, moreText);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(150, 150, 150, 255));
     }
 }
 
@@ -993,6 +1078,33 @@ void drawDialog(const char **lines, int lineCount) {
         }
         y += 15;
     }
+
+    C3D_FrameEnd(0);
+}
+
+void drawDialogWithSelectedList(const char **lines, int lineCount) {
+    // Like drawDialog but also shows selected titles on bottom screen
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
+    // Top screen - dialog
+    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(top);
+
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+    float y = 20.0f;
+
+    for (int i = 0; i < lineCount; i++) {
+        if (lines[i] && strlen(lines[i]) > 0) {
+            C2D_TextParse(&text, dynamicBuf, lines[i]);
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
+        }
+        y += 15;
+    }
+
+    // Bottom screen - selected titles list
+    drawSelectedTitlesList();
 
     C3D_FrameEnd(0);
 }
@@ -1475,7 +1587,7 @@ void handleInput() {
             "  B: No, skip backup",
             "  START: Cancel"
         };
-        drawDialog(backupLines, 8);
+        drawDialogWithSelectedList(backupLines, 8);
 
         bool backupSaves = false;
         bool cancelled = false;
@@ -1520,7 +1632,7 @@ void handleInput() {
                 "  Y: Choose alternative path",
                 "  START: Cancel"
             };
-            drawDialog(pathLines, 10);
+            drawDialogWithSelectedList(pathLines, 10);
 
             bool useDefault = true;
 
@@ -1643,7 +1755,7 @@ void handleInput() {
             "  A: Confirm",
             "  B: Cancel"
         };
-        drawDialog(confirmLines, 9);
+        drawDialogWithSelectedList(confirmLines, 9);
 
         bool confirmed = false;
 
