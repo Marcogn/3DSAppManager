@@ -45,11 +45,18 @@ typedef struct {
 ### Rendering Pipeline
 
 1. **Frame Begin**: `C3D_FrameBegin(C3D_FRAME_SYNCDRAW)`
-2. **Top Screen**: Title list with filtering/sorting
-3. **Bottom Screen**: Selected title details
-4. **Frame End**: `C3D_FrameEnd(0)`
+2. **Branch on SELECT state**:
+   - If SELECT held: Draw UI + overlay in single SceneBegin (prevents flickering)
+   - If SELECT not held: Normal UI rendering
+3. **Top Screen**: Title list with filtering/sorting
+4. **Bottom Screen**: 
+   - Normal mode: Selected title details (`drawTouchControls()`)
+   - Dialog mode: Selected titles list (`drawSelectedTitlesList()`)
+5. **Frame End**: `C3D_FrameEnd(0)`
 
 **Important**: Always render every frame for sleep mode compatibility.
+
+**Flickering Prevention**: Never call `C2D_SceneBegin()` twice for the same target in one frame. The SELECT overlay is drawn in the same SceneBegin call as the UI to prevent double rendering.
 
 ### Input Handling
 
@@ -110,6 +117,38 @@ Requires: devkitARM, libctru, citro2d, citro3d
 - **Title loading**: ~0.1s per title (SMDH read)
 - **Rendering**: 60 FPS target
 - **Memory usage**: ~2MB total
+
+## UI Components
+
+### Top Screen Layout
+```
+T:300  Sel:5  Sort:Name    <- Info bar (evenly spaced: 5px, 135px, 265px)
+────────────────────────────
+[ ] Title Name         ↑  TitleID
+ ^      ^              ^      ^
+ 3px   28px          235px  255px
+```
+
+### Bottom Screen Modes
+
+**Normal Mode** (`drawTouchControls()`):
+- Shows details of currently selected title
+- Full name, TitleID, version, size, type, location
+- Backup status and path
+
+**Dialog Mode** (`drawSelectedTitlesList()`):
+- Shows list of selected titles during uninstall
+- Max 10 visible + "...and X more"
+- Clean names with type symbols
+- Header: "SELECTED TITLES (X)" in red
+
+### Dialog System
+
+**`drawDialog()`**: Standard top-screen-only dialog
+**`drawDialogWithSelectedList()`**: Dialog + selected list combo
+- Used for uninstall confirmation dialogs
+- Top: Dialog text
+- Bottom: Selected titles list
 
 ## Known Limitations
 

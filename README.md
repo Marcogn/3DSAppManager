@@ -20,13 +20,14 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
 - 🛡️ **Safe** - System titles are protected
 - 🎨 **Clear indicators** - Unicode symbols (↑ for Updates, ⊕ for DLC) in separate column
-- 📊 **Detailed info panel** - Bottom screen shows title details with size, version, and backup status
+- 📊 **Selected titles list** - Bottom screen shows selected titles during uninstall dialogs (up to 10 visible)
+- 📏 **Evenly spaced info bar** - T:XXX / Sel:XXX / Sort:XXX properly distributed across screen
 - 🌙 **Sleep mode support** - No crashes when closing/opening the 3DS
 - ⏱️ **Loading progress** - Visual progress bar when loading titles
 - 🚨 **Smart warnings** - Red counter if you have over 300 titles (HOME menu limit)
-- 📏 **Table layout** - Clean columnar display: checkbox | title name | type symbol | TitleID
+- 📐 **Table layout** - Clean columnar display: checkbox | title name | type symbol | TitleID
 - 🎯 **Precise scrolling** - Slow, controlled navigation without accidental jumps
-- 💡 **Hold SELECT** - Hold SELECT button to see controls, release to hide
+- 💡 **Hold SELECT** - Hold SELECT button to see controls, release to hide (zero flickering)
 - 🌐 **Multi-language** - Japanese, English, and all SMDH languages supported
 
 ## Installation
@@ -59,6 +60,8 @@ checkbox|                         symbol   TitleID
 ```
 
 **Bottom Screen:**
+
+**During normal browsing:**
 Shows detailed information about the currently selected title:
 - Full title name (no truncation)
 - Title ID (hexadecimal)
@@ -70,21 +73,31 @@ Shows detailed information about the currently selected title:
 - Backup path (if backup exists)
 - Reminder: "Press SELECT for controls"
 
+**During uninstall dialogs:**
+Shows list of selected titles (when you press X):
+- Header: "SELECTED TITLES (X)" in red
+- Up to 10 titles visible
+- Clean names with type symbols
+- If more than 10: "...and X more" at bottom
+- Visible during all confirmation dialogs
+
 ### Uninstalling Titles
 
 1. Navigate to the titles you want to uninstall using the D-Pad
 2. Press **A** to select each title (a checkbox will appear)
 3. Press **X** to begin the uninstallation process
-4. Choose whether to backup save data:
+4. **The bottom screen will now show your selected titles** (up to 10 visible)
+5. Choose whether to backup save data:
    - Press **A** to backup all save data types (User Save, ExtData, Boss ExtData)
    - Press **B** to skip backup
    - Press **START** to cancel
-5. If you chose to backup, select the backup location:
+6. If you chose to backup, select the backup location:
    - Press **A** to use the default path from config
    - Press **Y** to choose from alternative paths
    - Use **D-Pad** to navigate alternative paths, **A** to confirm
-6. Review the final confirmation showing titles, backup option, and backup path
-7. Press **A** to confirm the deletion
+7. Review the final confirmation showing titles, backup option, and backup path
+   - **The bottom screen continues showing your selected titles throughout**
+8. Press **A** to confirm the deletion
 
 The application will completely remove all data associated with selected titles, including the title itself, save data, ExtData, and Boss ExtData.
 

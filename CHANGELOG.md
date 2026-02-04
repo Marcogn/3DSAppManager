@@ -1,5 +1,44 @@
 # Changelog
 
+## v2.6 - Enhanced UX and Selected Titles List (2026-02-04)
+
+Major UX improvements focused on better feedback during uninstall operations.
+
+### What's New
+- **Selected titles list on bottom screen**: When you press X to uninstall, the bottom screen now shows a list of all selected titles instead of staying on the last viewed title. You can see exactly what you're about to delete.
+- **Evenly spaced info bar**: The T:XXX / Sel:XXX / Sort:XXX info is now properly distributed across the top screen (5px / 135px / 265px) for a cleaner look.
+- **Better visual feedback**: During all uninstall dialogs (backup confirmation, path selection, final confirmation), the bottom screen continuously shows your selected titles.
+
+### How It Works
+The new `drawSelectedTitlesList()` function shows up to 10 selected titles at once. If you have more than 10 selected, it shows "...and X more" at the bottom. Each title is displayed with its clean name and type symbol (↑ for updates, ⊕ for DLC).
+
+### Why This Matters
+Before this update, when you pressed X to uninstall, the bottom screen would just show details of whatever title you last had selected. This was confusing - you couldn't see what you were about to delete. Now you get a clear list during every step of the uninstall process.
+
+### Technical Details
+- New function: `drawSelectedTitlesList()` - renders bottom screen with selected titles
+- New function: `drawDialogWithSelectedList()` - combines top dialog with bottom list
+- Modified handleInput() to use new dialog function for uninstall confirmations
+- Info bar uses fixed X positions for consistent spacing
+
+## v2.5.1 - Flickering Fix and Polish (2026-02-04)
+
+Critical bug fixes for SELECT overlay rendering and symbol display.
+
+### Bug Fixes
+- **SELECT overlay flickering eliminated**: The overlay was flickering because `C2D_SceneBegin(top)` was being called twice in the same frame (once in drawUI, once for overlay). Fixed by using a single branch - if SELECT is held, render UI + overlay in one SceneBegin call, otherwise render normal UI.
+- **DLC double symbol fixed**: DLC titles were showing the ⊕ symbol both in the name AND in the symbol column. Now removes all three symbol variants (↑, ⊕ variant 1, ⊕ variant 2) from the title name.
+- **Box sizing corrected**: SELECT overlay box increased to 215px height with 11px line spacing to properly fit all 15 control lines without overlap.
+
+### Technical Improvements
+- Single frame rendering path for SELECT overlay
+- No more double SceneBegin calls
+- Proper symbol stripping with strstr() for all Unicode variants
+- Bottom screen properly cleared when showing overlay
+
+### Why The Flickering Happened
+The citro2d library doesn't handle multiple SceneBegin calls per target per frame well. The fix branches early in the main loop: if SELECT is held, it draws everything (UI + overlay) in one pass. If not, it draws the normal UI. Zero flickering now.
+
 ## v2.5 - The Production Release (2026-02-04)
 
 Final polish and bug fixes. This is the stable release.
