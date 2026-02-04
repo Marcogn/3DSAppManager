@@ -149,6 +149,7 @@ make
 
 - **Language**: C
 - **SDK**: libctru (devkitARM)
+- **Graphics**: citro3d + citro2d (hardware-accelerated rendering)
 - **Services Used**: 
   - AM (Application Manager) - Title management and deletion
   - FS (File System) - Save data access and backup
@@ -157,6 +158,14 @@ make
   - ARCHIVE_USER_SAVEDATA (main game saves)
   - ARCHIVE_EXTDATA (extended data)
   - ARCHIVE_BOSS_EXTDATA (SpotPass data)
+
+### Graphics System
+
+The application uses **citro3d** and **citro2d** for hardware-accelerated graphics rendering:
+- **No flickering** - Smooth, synchronized frame updates
+- **Efficient rendering** - Only redraws when needed
+- **Double buffering** - PICA200 GPU handles all graphics processing
+- **Text rendering** - Dynamic text buffers for optimal performance
 
 ### How Complete Deletion Works
 
@@ -220,12 +229,13 @@ Note: Some features may require CFW for full functionality.
 
 ## Technical Documentation
 
-For detailed technical information, build verification, and compatibility analysis, see the [docs/](docs/) folder:
+For detailed technical information about specific fixes and troubleshooting, see the [docs/](docs/) folder:
 
-- **[Build Verification](docs/BUILD_VERIFICATION.md)** - Detailed build and compatibility report
-- **[Compatibility Confirmation](docs/COMPATIBILITY_CONFIRMED.md)** - Complete 3DS compatibility analysis
-- **[Final Verification](docs/FINAL_VERIFICATION.md)** - Final checklist and verification
-- **[Build Log](docs/build.log)** - Latest successful compilation log
+- **[Character Corruption Fix](docs/CHARACTER_CORRUPTION_FIX.md)** - UTF-16 character handling and sanitization
+- **[Flickering Fix](docs/FLICKERING_FIX.md)** - Initial console rendering fixes
+- **[Flickering Fix v3 Final](docs/FLICKERING_FIX_v3_FINAL.md)** - citro2d/citro3d migration details
+- **[Rendering Troubleshooting](docs/RENDERING_TROUBLESHOOTING.md)** - Graphics troubleshooting guide
+- **[Project Summary](docs/PROJECT_SUMMARY.md)** - Complete project overview
 
 ## License
 

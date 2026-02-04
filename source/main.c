@@ -5,7 +5,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <sys/stat.h>
-#include <dirent.h>
 
 // SMDH structure definition (from old libctru)
 typedef struct {
@@ -714,8 +713,6 @@ void deleteTitleCompletely(TitleInfo *title) {
     
     // Delete the main title (this removes the title, save data, and most content)
     AM_DeleteTitle(title->mediaType, title->titleID);
-
-    return;
 }
 
 void deleteTitle(TitleInfo *title) {
@@ -967,8 +964,6 @@ void handleInput() {
                     }
                 }
                 
-                bool pathSelected = false;
-                
                 while (aptMainLoop()) {
                     hidScanInput();
                     u32 kDown2c = hidKeysDown();
@@ -983,7 +978,6 @@ void handleInput() {
                     }
                     if (kDown2c & KEY_A) {
                         snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", BACKUP_PATH_OPTIONS[pathCursor]);
-                        pathSelected = true;
                         break;
                     }
                     if (kDown2c & KEY_B) {
