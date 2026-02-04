@@ -1,0 +1,53 @@
+===================================
+3DS FAST UNINSTALL v2.5.1 - BUILD INFO
+===================================
+
+DATA COMPILAZIONE: 2026-02-04
+ORA: Appena compilato (vedi timestamp file)
+
+MODIFICHE IN QUESTA BUILD:
+==========================
+
+1. ✅ SIMBOLO DLC RIMOSSO DAL NOME
+   - Rimuove TUTTE e 3 le varianti del simbolo:
+     * ↑ (0xE2 0x86 0x91)
+     * ⊕ variant 1 (0xE2 0x8A 0x85)
+     * ⊕ variant 2 (0xE2 0x8A 0x95)
+   - Simbolo appare SOLO nella colonna a X=235
+   - Nome pulito senza simboli
+
+2. ✅ SELECT OVERLAY CON UI VISIBILE
+   - Overlay disegnato SOPRA la UI esistente
+   - Box 370x205px (START completamente visibile)
+   - Semi-transparent background mostra lista dietro
+   - Text: "Release to hide"
+
+COME VERIFICARE CHE HAI LA VERSIONE CORRETTA:
+=============================================
+
+1. Copia QUESTO file (3ds-fast-uninstall.3dsx) sul 3DS
+2. Avvia l'app
+3. VERIFICA 1: Guarda un DLC nella lista
+   - Il simbolo ⊕ deve apparire SOLO nella colonna prima del TitleID
+   - Il nome NON deve avere il simbolo
+
+4. VERIFICA 2: Premi e tieni premuto SELECT
+   - Devi vedere l'overlay sopra la lista sfocata
+   - La riga "START   Exit app" deve essere DENTRO il riquadro blu
+   - Non deve essere tagliata
+
+SE ANCORA VEDI I VECCHI PROBLEMI:
+=================================
+- Assicurati di aver sovrascritto il file .3dsx sul 3DS
+- Riavvia completamente il 3DS
+- Verifica di non avere una copia cache dell'app vecchia
+
+POSIZIONE FILE:
+==============
+/home/marco/Projects/3ds-fast-uninstall/3ds-fast-uninstall.3dsx
+
+FILE DA COPIARE SUL 3DS:
+=======================
+Copia questo file nella cartella /3ds/ della SD card del tuo 3DS.
+
+===================================
