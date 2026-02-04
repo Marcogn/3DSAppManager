@@ -1881,25 +1881,29 @@ int main(int argc, char **argv) {
         handleInput();
 
         // Renderizza sempre un frame per evitare crash durante sleep/wake
-        // Il 3DS richiede rendering continuo per gestire correttamente lo sleep mode
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
-        // Disegna sempre la UI normale
-        drawUI();
-        drawTouchControls();
-        needsRedraw = false;
-
-        // Se SELECT è premuto, disegna overlay SOPRA la UI
+        // Se SELECT è premuto, mostra overlay invece della UI normale
         if (kHeld & KEY_SELECT) {
-            // Darken top screen
+            // Top screen - prima disegna UI normale, poi overlay sopra
+            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
             C2D_SceneBegin(top);
+
+            // Disegna UI di sfondo (serve per vedere la lista sfocata sotto)
+            // Ma usiamo un metodo più efficiente: disegniamo solo il necessario
+            C2D_TextBufClear(dynamicBuf);
+
+            // Ridisegna UI
+            drawUI();
+
+            // Ora overlay sopra (SENZA chiamare di nuovo SceneBegin)
             C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
 
             // Draw controls box
             float boxX = 15.0f;
             float boxY = 15.0f;
             float boxW = 370.0f;
-            float boxH = 210.0f;  // Aumentato per evitare sovrapposizioni
+            float boxH = 215.0f;  // Aumentato ancora per evitare sovrapposizioni
 
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
@@ -1907,7 +1911,6 @@ int main(int argc, char **argv) {
             C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
             C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
 
-            C2D_TextBufClear(dynamicBuf);
             C2D_Text text;
             float y = boxY + 8.0f;
 
@@ -1948,14 +1951,20 @@ int main(int argc, char **argv) {
                     C2D_TextOptimize(&text);
                     C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(180, 180, 180, 255));
                 }
-                y += 12;
+                y += 11;  // Ridotto spacing per far stare tutto
             }
 
-            // Darken bottom screen too
+            // Bottom screen - oscurato
+            C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
             C2D_SceneBegin(bottom);
             C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
+        } else {
+            // UI normale
+            drawUI();
+            drawTouchControls();
         }
 
+        needsRedraw = false;
         C3D_FrameEnd(0);
 
         // Piccola pausa per evitare consumo eccessivo CPU
