@@ -95,6 +95,7 @@ void getTitleInfo(TitleInfo *title);
 bool checkBackupExists(u64 titleID);
 void loadTitleIcon(TitleInfo *title);
 void drawTitleDetails();
+void drawLoadingScreen(int current, int total, const char *status);
 void loadTitles();
 void drawUI();
 void drawTouchControls();
@@ -373,6 +374,58 @@ void getTitleInfo(TitleInfo *title) {
     title->hasBackup = checkBackupExists(title->titleID);
 }
 
+void drawLoadingScreen(int current, int total, const char *status) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(top);
+
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+
+    // Title
+    C2D_TextParse(&text, dynamicBuf, "Loading installed titles...");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 50.0f, 80.0f, 0.5f, 0.6f, 0.6f, C2D_Color32(255, 255, 255, 255));
+
+    // Status message
+    if (status) {
+        C2D_TextParse(&text, dynamicBuf, status);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 50.0f, 105.0f, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
+    }
+
+    // Progress bar
+    if (total > 0) {
+        float progress = (float)current / (float)total;
+        float barWidth = 300.0f;
+        float barHeight = 20.0f;
+        float barX = 50.0f;
+        float barY = 130.0f;
+
+        // Background
+        C2D_DrawRectSolid(barX, barY, 0.5f, barWidth, barHeight, C2D_Color32(50, 50, 50, 255));
+
+        // Progress fill
+        float fillWidth = barWidth * progress;
+        C2D_DrawRectSolid(barX, barY, 0.5f, fillWidth, barHeight, C2D_Color32(100, 180, 255, 255));
+
+        // Border
+        C2D_DrawRectSolid(barX, barY, 0.5f, barWidth, 2, C2D_Color32(255, 255, 255, 255));
+        C2D_DrawRectSolid(barX, barY + barHeight - 2, 0.5f, barWidth, 2, C2D_Color32(255, 255, 255, 255));
+        C2D_DrawRectSolid(barX, barY, 0.5f, 2, barHeight, C2D_Color32(255, 255, 255, 255));
+        C2D_DrawRectSolid(barX + barWidth - 2, barY, 0.5f, 2, barHeight, C2D_Color32(255, 255, 255, 255));
+
+        // Progress text
+        char progressText[64];
+        snprintf(progressText, sizeof(progressText), "%d / %d", current, total);
+        C2D_TextParse(&text, dynamicBuf, progressText);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, barX + barWidth / 2 - 20, barY + 25, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
+    }
+
+    C3D_FrameEnd(0);
+}
+
 void loadTitles() {
     titleCount = 0;
     
@@ -384,9 +437,13 @@ void loadTitles() {
     AM_GetTitleCount(MEDIATYPE_NAND, &titleCountNAND);
     
     u32 totalCount = titleCountSD + titleCountNAND;
-    if (totalCount == 0)
+    if (totalCount == 0) {
+        drawLoadingScreen(0, 0, "No titles found");
         return;
-    
+    }
+
+    drawLoadingScreen(0, totalCount, "Allocating memory...");
+
     u64 *titleIDs = (u64*)malloc(totalCount * sizeof(u64));
     if (titleIDs == NULL)
         return;
@@ -395,11 +452,19 @@ void loadTitles() {
     
     // Load SD titles
     if (titleCountSD > 0) {
+        drawLoadingScreen(0, totalCount, "Loading SD titles...");
         Result res = AM_GetTitleList(&readCount, MEDIATYPE_SD, titleCountSD, titleIDs);
         if (R_SUCCEEDED(res)) {
             for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
                 u64 tid = titleIDs[i];
                 
+                // Update progress every 10 titles
+                if (i % 10 == 0) {
+                    char statusMsg[128];
+                    snprintf(statusMsg, sizeof(statusMsg), "Loading SD titles... (%d/%d)", i, readCount);
+                    drawLoadingScreen(i, totalCount, statusMsg);
+                }
+
                 // Skip system titles (0x00040010 and 0x00040030 range)
                 u32 highID = (u32)(tid >> 32);
                 if (highID == 0x00040010 || highID == 0x00040030)
@@ -422,11 +487,19 @@ void loadTitles() {
     
     // Load NAND titles (only user-installable ones)
     if (titleCountNAND > 0) {
+        drawLoadingScreen(titleCountSD, totalCount, "Loading NAND titles...");
         Result res = AM_GetTitleList(&readCount, MEDIATYPE_NAND, titleCountNAND, titleIDs);
         if (R_SUCCEEDED(res)) {
             for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
                 u64 tid = titleIDs[i];
                 
+                // Update progress every 10 titles
+                if (i % 10 == 0) {
+                    char statusMsg[128];
+                    snprintf(statusMsg, sizeof(statusMsg), "Loading NAND titles... (%d/%d)", i, readCount);
+                    drawLoadingScreen(titleCountSD + i, totalCount, statusMsg);
+                }
+
                 // Skip system titles
                 u32 highID = (u32)(tid >> 32);
                 if (highID == 0x00040010 || highID == 0x00040030 || highID == 0x00040138)
@@ -451,6 +524,8 @@ void loadTitles() {
         }
     }
     
+    drawLoadingScreen(totalCount, totalCount, "Sorting titles...");
+
     free(titleIDs);
 
     // Sort titles after loading
@@ -467,19 +542,19 @@ void drawUI() {
     // Clear dynamic text buffer and prepare for new text
     C2D_TextBufClear(dynamicBuf);
     
-    float y = 5.0f;
-    
+    float y = 3.0f;
+
     // Draw header background (white bar)
-    C2D_DrawRectSolid(0, y, 0.5f, 400, 14, C2D_Color32(255, 255, 255, 255));
-    
+    C2D_DrawRectSolid(0, y, 0.5f, 400, 18, C2D_Color32(255, 255, 255, 255));
+
     // Draw header text
     C2D_Text text;
     C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 5.0f, y + 2, 0.5f, 0.5f, 0.5f, C2D_Color32(0, 0, 0, 255));
-    
-    y += 20;
-    
+    C2D_DrawText(&text, C2D_WithColor, 5.0f, y + 3, 0.5f, 0.55f, 0.55f, C2D_Color32(0, 0, 0, 255));
+
+    y += 22;
+
     // Count selected titles
     int selectedCount = 0;
     for (int i = 0; i < titleCount; i++) {
@@ -487,22 +562,38 @@ void drawUI() {
             selectedCount++;
     }
     
-    // Display title count, selected count and sort mode
-    const char *sortModeStr = (currentSortMode == SORT_BY_NAME) ? "Name" : "Title ID";
-    char infoText[128];
-    snprintf(infoText, sizeof(infoText), "Titles: %d | Selected: %d | Sort: %s", 
-             titleCount, selectedCount, sortModeStr);
-    C2D_TextParse(&text, dynamicBuf, infoText);
+    // Display title count with color based on count - ROSSO se oltre 300
+    const char *sortModeStr = (currentSortMode == SORT_BY_NAME) ? "Name" : "TID";
+    char titleCountText[64];
+    snprintf(titleCountText, sizeof(titleCountText), "Titles: %d", titleCount);
+
+    u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
+
+    C2D_TextParse(&text, dynamicBuf, titleCountText);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(255, 255, 255, 255));
-    
-    y += 15;
-    
+    C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.48f, 0.48f, countColor);
+
+    // Selected count
+    char selectedText[64];
+    snprintf(selectedText, sizeof(selectedText), "Selected: %d", selectedCount);
+    C2D_TextParse(&text, dynamicBuf, selectedText);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 110.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
+
+    // Sort mode
+    char sortText[64];
+    snprintf(sortText, sizeof(sortText), "Sort: %s", sortModeStr);
+    C2D_TextParse(&text, dynamicBuf, sortText);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 250.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
+
+    y += 18;
+
     // Draw separator line
-    C2D_DrawRectSolid(5, y, 0.5f, 390, 1, C2D_Color32(255, 255, 255, 255));
-    
-    y += 5;
-    
+    C2D_DrawRectSolid(2, y, 0.5f, 396, 1, C2D_Color32(255, 255, 255, 255));
+
+    y += 4;
+
     // Calculate visible range
     int maxVisible = MAX_VISIBLE_TITLES;
     int startIdx = scrollOffset;
@@ -521,27 +612,39 @@ void drawUI() {
     if (endIdx > titleCount)
         endIdx = titleCount;
     
-    // Draw each title
+    // Draw each title - NUOVO LAYOUT: nome espanso a SX, TitleID allineato a DX
     for (int i = startIdx; i < endIdx; i++) {
         // Draw selection highlight
         if (i == cursor) {
-            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 14, C2D_Color32(255, 255, 255, 255));
+            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, C2D_Color32(255, 255, 255, 255));
         }
         
-        // Format title text
-        char titleText[256];
-        snprintf(titleText, sizeof(titleText), "%s %.23s [%016llX]",
-                 titles[i].selected ? "[X]" : "[ ]",
-                 titles[i].name,
-                 titles[i].titleID);
-        
-        // Draw title text
-        C2D_TextParse(&text, dynamicBuf, titleText);
-        C2D_TextOptimize(&text);
         u32 textColor = (i == cursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
-        C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.35f, 0.35f, textColor);
-        
-        y += 14;  // Line spacing
+        u32 tidColor = (i == cursor) ? C2D_Color32(60, 60, 60, 255) : C2D_Color32(150, 150, 150, 255);
+
+        // Checkbox
+        const char *checkbox = titles[i].selected ? "[X]" : "[ ]";
+        C2D_TextParse(&text, dynamicBuf, checkbox);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 3.0f, y, 0.5f, 0.42f, 0.42f, textColor);
+
+        // Title name - espanso fino a dove serve per il TitleID
+        // Tronca il nome a ~35 caratteri per lasciare spazio al TitleID
+        char truncName[40];
+        snprintf(truncName, sizeof(truncName), "%.35s", titles[i].name);
+        C2D_TextParse(&text, dynamicBuf, truncName);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 28.0f, y, 0.5f, 0.40f, 0.40f, textColor);
+
+        // Title ID - allineato a DESTRA
+        char tidText[32];
+        snprintf(tidText, sizeof(tidText), "%016llX", titles[i].titleID);
+        C2D_TextParse(&text, dynamicBuf, tidText);
+        C2D_TextOptimize(&text);
+        // Posizione X calcolata per allineare a destra (400 - larghezza testo - margine)
+        C2D_DrawText(&text, C2D_WithColor, 268.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
+
+        y += 15;  // Line spacing aumentato
     }
 }
 
@@ -552,7 +655,7 @@ void drawTouchControls() {
     
     C2D_TextBufClear(dynamicBuf);
     C2D_Text text;
-    float y = 8.0f;
+    float y = 10.0f;
 
     // If no titles or invalid cursor, show basic info
     if (titleCount == 0 || cursor < 0 || cursor >= titleCount) {
@@ -568,45 +671,46 @@ void drawTouchControls() {
     C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
     C2D_TextParse(&text, dynamicBuf, "?");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 25.0f, y + 12, 0.5f, 1.5f, 1.5f, C2D_Color32(150, 150, 180, 255));
+    // Centro il punto interrogativo: x = 10 + (48/2) - (larghezza_testo/2) ≈ 28, y = 10 + (48/2) - (altezza_testo/2) ≈ 22
+    C2D_DrawText(&text, C2D_WithColor, 28.0f, y + 14, 0.5f, 1.5f, 1.5f, C2D_Color32(150, 150, 180, 255));
 
     // Title name (next to icon placeholder)
     float textX = 65.0f;
     C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, textX, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
-    y += 15;
-    
+    C2D_DrawText(&text, C2D_WithColor, textX, y + 5, 0.5f, 0.55f, 0.55f, C2D_Color32(100, 180, 255, 255));
+    y += 58;
+
     // Separator
     C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 8;
+    y += 10;
 
     // Full title name (word wrap if needed)
     C2D_TextParse(&text, dynamicBuf, "Name:");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(150, 150, 150, 255));
-    y += 12;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.43f, 0.43f, C2D_Color32(150, 150, 150, 255));
+    y += 14;
 
     C2D_TextParse(&text, dynamicBuf, currentTitle->fullName);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 255, 255, 255));
-    y += 16;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 255, 255, 255));
+    y += 18;
 
     // Title ID
     char tidStr[64];
     snprintf(tidStr, sizeof(tidStr), "Title ID: %016llX", currentTitle->titleID);
     C2D_TextParse(&text, dynamicBuf, tidStr);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
-    y += 14;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+    y += 15;
 
     // Version
     char verStr[64];
     snprintf(verStr, sizeof(verStr), "Version: v%d", currentTitle->version);
     C2D_TextParse(&text, dynamicBuf, verStr);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
-    y += 14;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+    y += 15;
 
     // Type
     u32 highID = (u32)(currentTitle->titleID >> 32);
@@ -618,8 +722,8 @@ void drawTouchControls() {
     snprintf(typeFullStr, sizeof(typeFullStr), "Type: %s", typeStr);
     C2D_TextParse(&text, dynamicBuf, typeFullStr);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
-    y += 14;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+    y += 15;
 
     // Media Type
     const char *mediaStr = (currentTitle->mediaType == MEDIATYPE_SD) ? "SD Card" : "NAND";
@@ -627,53 +731,54 @@ void drawTouchControls() {
     snprintf(mediaFullStr, sizeof(mediaFullStr), "Location: %s", mediaStr);
     C2D_TextParse(&text, dynamicBuf, mediaFullStr);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(200, 200, 200, 255));
-    y += 16;
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+    y += 18;
 
     // Separator
     C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 8;
+    y += 10;
 
     // Backup status
     if (currentTitle->hasBackup) {
         C2D_TextParse(&text, dynamicBuf, "Backup: YES \xE2\x9C\x93");  // ✓
         C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(100, 255, 100, 255));
-        y += 12;
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(100, 255, 100, 255));
+        y += 14;
 
         // Show backup path
         char backupPathStr[128];
         snprintf(backupPathStr, sizeof(backupPathStr), "Path: %s/%016llX", config.backupPath, currentTitle->titleID);
         C2D_TextParse(&text, dynamicBuf, backupPathStr);
         C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.28f, 0.28f, C2D_Color32(150, 150, 150, 255));
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.30f, 0.30f, C2D_Color32(150, 150, 150, 255));
     } else {
         C2D_TextParse(&text, dynamicBuf, "Backup: NO \xE2\x9C\x97");  // ✗
         C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(255, 100, 100, 255));
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 100, 100, 255));
     }
-    y += 16;
+    y += 18;
 
     // Separator
     C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
     y += 8;
 
-    // Controls hint (compact)
+    // Controls hint (compact e ridotto per evitare taglio)
     C2D_TextParse(&text, dynamicBuf, "Controls:");
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(150, 150, 150, 255));
     y += 12;
 
     const char* controls[] = {
-        "A:Select X:Uninstall L/R:Sort",
-        "START:Exit D-Pad:Navigate"
+        "A:Select  X:Uninstall",
+        "L/R:Sort  START:Exit",
+        "D-Pad:Navigate"
     };
     
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         C2D_TextParse(&text, dynamicBuf, controls[i]);
         C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.3f, 0.3f, C2D_Color32(180, 180, 180, 255));
-        y += 10;
+        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.32f, 0.32f, C2D_Color32(180, 180, 180, 255));
+        y += 11;
     }
 }
 
@@ -926,46 +1031,63 @@ void handleInput() {
     u32 kDown = hidKeysDown();
     u32 kHeld = hidKeysHeld();
     
-    static u32 repeatTimer = 0;
-    
+    static u32 scrollDelayTimer = 0;
+    static bool canScroll = true;
+
     if (titleCount == 0)
         return;
     
-    // Navigation
+    // Sistema di scroll migliorato: richiede rilascio completo del tasto prima del prossimo movimento
+    // Se nessun tasto direzionale è premuto, resetta il timer e abilita lo scroll
+    if (!(kHeld & KEY_DUP) && !(kHeld & KEY_DDOWN)) {
+        scrollDelayTimer = 0;
+        canScroll = true;
+    }
+
+    // Navigation UP con controllo preciso
     if (kDown & KEY_DUP) {
+        // Prima pressione: movimento immediato
         if (cursor > 0) {
             cursor--;
-            repeatTimer = 0;
             needsRedraw = true;
+            canScroll = false;  // Disabilita scroll continuo
+            scrollDelayTimer = 0;
         }
-    } else if (kHeld & KEY_DUP) {
-        repeatTimer++;
-        if (repeatTimer > 20 && repeatTimer % 5 == 0) {
-            if (cursor > 0) {
-                cursor--;
-                needsRedraw = true;
+    } else if (kHeld & KEY_DUP && canScroll) {
+        // Tasto tenuto premuto: aspetta molto prima di iniziare scroll continuo
+        scrollDelayTimer++;
+        if (scrollDelayTimer > 90) {  // ~1.5 secondi di delay
+            // Ora permetti scroll continuo ma MOLTO lento
+            if (scrollDelayTimer % 25 == 0) {  // 1 movimento ogni ~0.4 secondi
+                if (cursor > 0) {
+                    cursor--;
+                    needsRedraw = true;
+                }
             }
         }
     }
     
+    // Navigation DOWN con controllo preciso
     if (kDown & KEY_DDOWN) {
+        // Prima pressione: movimento immediato
         if (cursor < titleCount - 1) {
             cursor++;
-            repeatTimer = 0;
             needsRedraw = true;
+            canScroll = false;  // Disabilita scroll continuo
+            scrollDelayTimer = 0;
         }
-    } else if (kHeld & KEY_DDOWN) {
-        repeatTimer++;
-        if (repeatTimer > 20 && repeatTimer % 5 == 0) {
-            if (cursor < titleCount - 1) {
-                cursor++;
-                needsRedraw = true;
+    } else if (kHeld & KEY_DDOWN && canScroll) {
+        // Tasto tenuto premuto: aspetta molto prima di iniziare scroll continuo
+        scrollDelayTimer++;
+        if (scrollDelayTimer > 90) {  // ~1.5 secondi di delay
+            // Ora permetti scroll continuo ma MOLTO lento
+            if (scrollDelayTimer % 25 == 0) {  // 1 movimento ogni ~0.4 secondi
+                if (cursor < titleCount - 1) {
+                    cursor++;
+                    needsRedraw = true;
+                }
             }
         }
-    }
-    
-    if (!(kHeld & KEY_DUP) && !(kHeld & KEY_DDOWN)) {
-        repeatTimer = 0;
     }
     
     // Toggle selection
@@ -1306,22 +1428,7 @@ int main(int argc, char **argv) {
     // Load configuration
     loadConfig();
     
-    // Load titles - show loading message using citro2d
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
-    C2D_SceneBegin(top);
-    
-    C2D_Text text;
-    C2D_TextParse(&text, dynamicBuf, "Loading installed titles...");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 50.0f, 100.0f, 0.5f, 0.6f, 0.6f, C2D_Color32(255, 255, 255, 255));
-    
-    C2D_TextParse(&text, dynamicBuf, "Please wait...");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 50.0f, 120.0f, 0.5f, 0.5f, 0.5f, C2D_Color32(200, 200, 200, 255));
-    
-    C3D_FrameEnd(0);
-    
+    // Load titles with progress bar
     loadTitles();
     
     // Initial draw - both screens in one frame
@@ -1334,6 +1441,9 @@ int main(int argc, char **argv) {
     // Main loop
     bool running = true;
     while (aptMainLoop() && running) {
+        // Gestione sleep mode: aptMainLoop() ritorna false durante sleep
+        // e riprende quando il 3DS si sveglia
+
         hidScanInput();
         u32 kDown = hidKeysDown();
         
@@ -1345,14 +1455,25 @@ int main(int argc, char **argv) {
         
         handleInput();
 
-        // Only redraw if something changed
+        // Renderizza sempre un frame per evitare crash durante sleep/wake
+        // Il 3DS richiede rendering continuo per gestire correttamente lo sleep mode
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
+        // Solo ridisegna la UI se necessario, altrimenti riusa il frame precedente
         if (needsRedraw) {
-            C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
             drawUI();
             drawTouchControls();
-            C3D_FrameEnd(0);
             needsRedraw = false;
+        } else {
+            // Ridisegna comunque per mantenere il frame buffer attivo
+            drawUI();
+            drawTouchControls();
         }
+
+        C3D_FrameEnd(0);
+
+        // Piccola pausa per evitare consumo eccessivo CPU
+        // gspWaitForVBlank() è già chiamato internamente da C3D_FrameEnd
     }
     
     // Cleanup
