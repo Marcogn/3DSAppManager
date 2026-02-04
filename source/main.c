@@ -384,7 +384,8 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
                 }
             }
 
-            // Sanitize but keep Unicode characters
+            // Sanitize but keep Unicode characters (don't filter out high bytes)
+            // Only remove problematic filesystem characters
             char *src = outName;
             char *dst = outName;
             while (*src) {
@@ -397,23 +398,6 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             }
             *dst = '\0';
 
-            // Check if we got a valid name (not empty, not just "--" or spaces)
-            bool isValidName = false;
-            if (strlen(outName) > 0) {
-                bool hasRealContent = false;
-                for (char *p = outName; *p; p++) {
-                    if (*p != '-' && *p != ' ' && *p != '\t') {
-                        hasRealContent = true;
-                        break;
-                    }
-                }
-                isValidName = hasRealContent;
-            }
-
-            if (!isValidName) {
-                goto use_titleid_fallback;
-            }
-
             // Add type indicator based on titleID with Unicode symbols
             u32 highID = (u32)(titleID >> 32);
             if (highID == 0x0004000E) {
@@ -425,13 +409,12 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             return;
         }
     }
-    
-use_titleid_fallback:
+
     // Fallback to title ID with type indicator
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";
-    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";
+    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
+    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";  // ⊕ for DLC
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
@@ -592,14 +575,14 @@ void drawLoadingScreen(int current, int total, const char *status) {
 
 void loadTitles() {
     titleCount = 0;
-    
+
     u32 titleCountSD = 0;
     u32 titleCountNAND = 0;
-    
+
     // Get title counts
     AM_GetTitleCount(MEDIATYPE_SD, &titleCountSD);
     AM_GetTitleCount(MEDIATYPE_NAND, &titleCountNAND);
-    
+
     u32 totalCount = titleCountSD + titleCountNAND;
     if (totalCount == 0) {
         drawLoadingScreen(0, 0, "No titles found");
@@ -611,9 +594,9 @@ void loadTitles() {
     u64 *titleIDs = (u64*)malloc(totalCount * sizeof(u64));
     if (titleIDs == NULL)
         return;
-    
+
     u32 readCount = 0;
-    
+
     // Load SD titles
     if (titleCountSD > 0) {
         drawLoadingScreen(0, totalCount, "Loading SD titles...");
@@ -621,7 +604,7 @@ void loadTitles() {
         if (R_SUCCEEDED(res)) {
             for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
                 u64 tid = titleIDs[i];
-                
+
                 // Update progress every 10 titles
                 if (i % 10 == 0) {
                     char statusMsg[128];
@@ -633,7 +616,7 @@ void loadTitles() {
                 u32 highID = (u32)(tid >> 32);
                 if (highID == 0x00040010 || highID == 0x00040030)
                     continue;
-                
+
                 titles[titleCount].titleID = tid;
                 titles[titleCount].mediaType = MEDIATYPE_SD;
                 titles[titleCount].selected = false;
@@ -649,7 +632,7 @@ void loadTitles() {
             }
         }
     }
-    
+
     // Load NAND titles (only user-installable ones)
     if (titleCountNAND > 0) {
         drawLoadingScreen(titleCountSD, totalCount, "Loading NAND titles...");
@@ -657,7 +640,7 @@ void loadTitles() {
         if (R_SUCCEEDED(res)) {
             for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
                 u64 tid = titleIDs[i];
-                
+
                 // Update progress every 10 titles
                 if (i % 10 == 0) {
                     char statusMsg[128];
@@ -669,11 +652,11 @@ void loadTitles() {
                 u32 highID = (u32)(tid >> 32);
                 if (highID == 0x00040010 || highID == 0x00040030 || highID == 0x00040138)
                     continue;
-                
+
                 // Only show user-installed content (0x00040000 = applications, 0x0004000E = updates)
                 if (highID != 0x00040000 && highID != 0x0004000E && highID != 0x0004008C)
                     continue;
-                
+
                 titles[titleCount].titleID = tid;
                 titles[titleCount].mediaType = MEDIATYPE_NAND;
                 titles[titleCount].selected = false;
@@ -689,7 +672,7 @@ void loadTitles() {
             }
         }
     }
-    
+
     drawLoadingScreen(totalCount, totalCount, "Sorting titles...");
 
     free(titleIDs);
@@ -704,10 +687,10 @@ void drawUI() {
     // Render top screen - title list
     C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(top);
-    
+
     // Clear dynamic text buffer and prepare for new text
     C2D_TextBufClear(dynamicBuf);
-    
+
     float y = 3.0f;
 
     // Draw header background (white bar)
@@ -727,7 +710,7 @@ void drawUI() {
         if (titles[i].selected)
             selectedCount++;
     }
-    
+
     // Display title count with color based on count - ROSSO se oltre 300
     const char *sortModeStr = "";
     if (currentSortMode == SORT_BY_NAME) sortModeStr = "Name";
@@ -783,13 +766,13 @@ void drawUI() {
         scrollOffset = cursor;
     if (cursor >= scrollOffset + maxVisible)
         scrollOffset = cursor - maxVisible + 1;
-    
+
     startIdx = scrollOffset;
     endIdx = scrollOffset + maxVisible;
     if (endIdx > filteredCount)
         endIdx = filteredCount;
 
-    // Draw each title - NUOVO LAYOUT: checkbox - nome - simbolo - TitleID
+    // Draw each title - NUOVO LAYOUT: nome espanso a SX, TitleID allineato a DX
     for (int i = startIdx; i < endIdx; i++) {
         int titleIdx = filteredIndices[i];
 
@@ -797,7 +780,7 @@ void drawUI() {
         if (i == cursor) {
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, C2D_Color32(255, 255, 255, 255));
         }
-        
+
         u32 textColor = (i == cursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
         u32 tidColor = (i == cursor) ? C2D_Color32(60, 60, 60, 255) : C2D_Color32(150, 150, 150, 255);
         u32 symbolColor = (i == cursor) ? C2D_Color32(100, 100, 255, 255) : C2D_Color32(150, 180, 255, 255);
@@ -813,13 +796,13 @@ void drawUI() {
         strncpy(cleanName, titles[titleIdx].name, sizeof(cleanName) - 1);
         cleanName[sizeof(cleanName) - 1] = '\0';
 
-        // Rimuovi i simboli ↑ e ⊕ dal nome se presenti
+        // Rimuovi TUTTI i simboli dal nome (↑ e entrambe le varianti di ⊕)
         char *arrow = strstr(cleanName, " \xE2\x86\x91");
         if (arrow) *arrow = '\0';
-        char *plus = strstr(cleanName, " \xE2\x8A\x85");
-        if (plus) *plus = '\0';
-        char *circledPlus = strstr(cleanName, " \xE2\x8A\x95");
-        if (circledPlus) *circledPlus = '\0';
+        char *plus1 = strstr(cleanName, " \xE2\x8A\x85");
+        if (plus1) *plus1 = '\0';
+        char *plus2 = strstr(cleanName, " \xE2\x8A\x95");
+        if (plus2) *plus2 = '\0';
 
         char truncName[40];
         int nameLen = strlen(cleanName);
@@ -850,7 +833,7 @@ void drawUI() {
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 255.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
 
-        y += 15;  // Line spacing
+        y += 15;  // Line spacing aumentato
     }
 }
 
@@ -858,7 +841,7 @@ void drawTouchControls() {
     // Render bottom screen - title details
     C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
     C2D_SceneBegin(bottom);
-    
+
     C2D_TextBufClear(dynamicBuf);
     C2D_Text text;
     float y = 10.0f;
@@ -997,11 +980,11 @@ void drawDialog(const char **lines, int lineCount) {
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(top);
-    
+
     C2D_TextBufClear(dynamicBuf);
     C2D_Text text;
     float y = 20.0f;
-    
+
     for (int i = 0; i < lineCount; i++) {
         if (lines[i] && strlen(lines[i]) > 0) {
             C2D_TextParse(&text, dynamicBuf, lines[i]);
@@ -1010,7 +993,7 @@ void drawDialog(const char **lines, int lineCount) {
         }
         y += 15;
     }
-    
+
     C3D_FrameEnd(0);
 }
 
@@ -1028,7 +1011,7 @@ void drawControlsOverlay() {
     float boxX = 15.0f;
     float boxY = 15.0f;
     float boxW = 370.0f;
-    float boxH = 200.0f;  // Ridotto perché non serve spazio per "press any button"
+    float boxH = 195.0f;  // Ridotto perché non serve spazio per "press any button"
 
     // Box background
     C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
@@ -1063,7 +1046,7 @@ void drawControlsOverlay() {
         {"Y", "Filter mode"},
         {"", "(All/Updates/DLC)"},
         {"", ""},
-        {"SELECT", "Release to hide"},
+        {"SELECT", "Hide this help"},
         {"START", "Exit app"}
     };
 
@@ -1098,31 +1081,31 @@ void drawControlsOverlay() {
 void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
     Handle dirHandle;
     FS_Path fsSrcPath = fsMakePath(PATH_ASCII, srcPath);
-    
+
     Result res = FSUSER_OpenDirectory(&dirHandle, archive, fsSrcPath);
     if (R_FAILED(res))
         return;
-    
+
     createDirectory(dstPath);
-    
+
     u32 entriesRead = 0;
     FS_DirectoryEntry entries[32];
-    
+
     while (true) {
         res = FSDIR_Read(dirHandle, &entriesRead, 32, entries);
         if (R_FAILED(res) || entriesRead == 0)
             break;
-        
+
         for (u32 i = 0; i < entriesRead; i++) {
             char entryName[256];
             utf16_to_utf8((uint8_t*)entryName, entries[i].name, sizeof(entryName) - 1);
             entryName[sizeof(entryName) - 1] = '\0';
-            
+
             char srcFile[512];
             char dstFile[512];
             snprintf(srcFile, sizeof(srcFile), "%s/%s", srcPath, entryName);
             snprintf(dstFile, sizeof(dstFile), "%s/%s", dstPath, entryName);
-            
+
             if (entries[i].attributes & FS_ATTRIBUTE_DIRECTORY) {
                 // Recursively copy subdirectory
                 copyDirectory(archive, srcFile, dstFile);
@@ -1134,7 +1117,7 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
                 if (R_SUCCEEDED(res)) {
                     u64 fileSize = 0;
                     FSFILE_GetSize(fileHandle, &fileSize);
-                    
+
                     if (fileSize > 0 && fileSize < MAX_FILE_SIZE) {
                         void *buffer = malloc(fileSize);
                         if (buffer) {
@@ -1155,7 +1138,7 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
             }
         }
     }
-    
+
     FSDIR_Close(dirHandle);
 }
 
@@ -1169,11 +1152,11 @@ void backupArchive(FS_Archive archive, const char *basePath, const char *archive
 void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     // Create backup directory structure
     createDirectory(backupPath);
-    
+
     char backupDir[512];
     snprintf(backupDir, sizeof(backupDir), "%s/%016llX", backupPath, title->titleID);
     createDirectory(backupDir);
-    
+
     // Create info file
     char infoPath[512];
     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
@@ -1189,10 +1172,10 @@ void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
         fprintf(info, "- Boss ExtData (if present)\n");
         fclose(info);
     }
-    
+
     u32 archivePath[] = {title->titleID & 0xFFFFFFFF, (title->titleID >> 32) & 0xFFFFFFFF, title->mediaType, 0};
     FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
-    
+
     // 1. Backup User Save Data
     FS_Archive saveArchive;
     Result res = FSUSER_OpenArchive(&saveArchive, ARCHIVE_USER_SAVEDATA, binArchPath);
@@ -1200,7 +1183,7 @@ void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
         backupArchive(saveArchive, backupDir, "savedata");
         FSUSER_CloseArchive(saveArchive);
     }
-    
+
     // 2. Backup ExtData
     // Get the correct ExtData ID from the system
     u64 extdataID = 0;
@@ -1264,7 +1247,7 @@ void deleteTitleCompletely(TitleInfo *title) {
             // Boss extdata is deleted automatically with title or can be cleaned separately
         }
     }
-    
+
     // Delete the main title (this removes the title, save data, and most content)
     AM_DeleteTitle(title->mediaType, title->titleID);
 }
@@ -1272,15 +1255,15 @@ void deleteTitleCompletely(TitleInfo *title) {
 void deleteTitle(TitleInfo *title) {
     // Perform complete deletion
     deleteTitleCompletely(title);
-    
+
     // Verify deletion by checking if title still exists
     AM_TitleEntry titleEntry;
     Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &titleEntry);
-    
+
     // If title not found, deletion was successful
     if (R_FAILED(res) || res == 0xC8A04478) {
         title->isValid = false;
-        
+
         const char *successLines[] = {
             "",
             "Successfully deleted:",
@@ -1306,11 +1289,11 @@ void deleteTitle(TitleInfo *title) {
         };
         drawDialog(failLines, 6);
     }
-    
+
     while (aptMainLoop()) {
         hidScanInput();
         u32 kDown = hidKeysDown();
-        
+
         if (kDown & KEY_A)
             break;
     }
@@ -1320,13 +1303,13 @@ void handleInput() {
     // Input già scannerizzato nel main loop
     u32 kDown = hidKeysDown();
     u32 kHeld = hidKeysHeld();
-    
+
     static u32 scrollDelayTimer = 0;
     static bool canScroll = true;
 
     if (filteredCount == 0)
         return;
-    
+
     // Sistema di scroll migliorato: richiede rilascio completo del tasto prima del prossimo movimento
     // Se nessun tasto direzionale è premuto, resetta il timer e abilita lo scroll
     if (!(kHeld & KEY_DUP) && !(kHeld & KEY_DDOWN)) {
@@ -1356,7 +1339,7 @@ void handleInput() {
             }
         }
     }
-    
+
     // Navigation DOWN con controllo preciso
     if (kDown & KEY_DDOWN) {
         // Prima pressione: movimento immediato
@@ -1379,7 +1362,7 @@ void handleInput() {
             }
         }
     }
-    
+
     // Toggle selection - use filtered index
     if (kDown & KEY_A) {
         if (cursor >= 0 && cursor < filteredCount) {
@@ -1387,6 +1370,12 @@ void handleInput() {
             titles[titleIdx].selected = !titles[titleIdx].selected;
             needsRedraw = true;
         }
+    }
+
+    // Show controls overlay while SELECT is held
+    if (kHeld & KEY_SELECT) {
+        drawControlsOverlay();
+        // No need to wait - overlay shows as long as button is held
     }
 
     // Cycle sort mode with L/R buttons
@@ -1454,7 +1443,7 @@ void handleInput() {
             if (titles[i].selected)
                 selectedCount++;
         }
-        
+
         if (selectedCount == 0) {
             const char *noSelLines[] = {
                 "",
@@ -1472,7 +1461,7 @@ void handleInput() {
             }
             return;
         }
-        
+
         // Ask for backup confirmation
         char countMsg[64];
         snprintf(countMsg, sizeof(countMsg), "You are about to uninstall %d title(s).", selectedCount);
@@ -1490,11 +1479,11 @@ void handleInput() {
 
         bool backupSaves = false;
         bool cancelled = false;
-        
+
         while (aptMainLoop()) {
             hidScanInput();
             u32 kDown2 = hidKeysDown();
-            
+
             if (kDown2 & KEY_A) {
                 backupSaves = true;
                 break;
@@ -1508,14 +1497,14 @@ void handleInput() {
                 break;
             }
         }
-        
+
         if (cancelled)
             return;
-        
+
         // Ask about backup path if backing up
         char selectedBackupPath[256];
         snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", config.backupPath);
-        
+
         if (backupSaves) {
             char pathMsg[300];
             snprintf(pathMsg, sizeof(pathMsg), "Current path: %s", config.backupPath);
@@ -1534,11 +1523,11 @@ void handleInput() {
             drawDialog(pathLines, 10);
 
             bool useDefault = true;
-            
+
             while (aptMainLoop()) {
                 hidScanInput();
                 u32 kDown2b = hidKeysDown();
-                
+
                 if (kDown2b & KEY_A) {
                     useDefault = true;
                     break;
@@ -1552,14 +1541,14 @@ void handleInput() {
                     break;
                 }
             }
-            
+
             if (cancelled)
                 return;
-            
+
             if (!useDefault) {
                 // Show alternative backup paths
                 int pathCursor = 0;
-                
+
                 // Find current path in list or default to 0
                 for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
                     if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) {
@@ -1567,11 +1556,11 @@ void handleInput() {
                         break;
                     }
                 }
-                
+
                 while (aptMainLoop()) {
                     hidScanInput();
                     u32 kDown2c = hidKeysDown();
-                    
+
                     if (kDown2c & KEY_DUP) {
                         if (pathCursor > 0)
                             pathCursor--;
@@ -1593,16 +1582,16 @@ void handleInput() {
                     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
                     C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
                     C2D_SceneBegin(top);
-                    
+
                     C2D_TextBufClear(dynamicBuf);
                     C2D_Text text;
                     float y = 20.0f;
-                    
+
                     C2D_TextParse(&text, dynamicBuf, "Select Backup Path");
                     C2D_TextOptimize(&text);
                     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
                     y += 20;
-                    
+
                     C2D_TextParse(&text, dynamicBuf, "Use D-Pad to select, A to confirm");
                     C2D_TextOptimize(&text);
                     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
@@ -1626,23 +1615,23 @@ void handleInput() {
 
                     C3D_FrameEnd(0);
                 }
-                
+
                 if (cancelled)
                     return;
             }
         }
-        
+
         // Final confirmation
         char uninstallMsg[64];
         char backupMsg[64];
         snprintf(uninstallMsg, sizeof(uninstallMsg), "Uninstall %d title(s)?", selectedCount);
         snprintf(backupMsg, sizeof(backupMsg), "Backup saves: %s", backupSaves ? "YES" : "NO");
-        
+
         char pathInfoMsg[300] = "";
         if (backupSaves) {
             snprintf(pathInfoMsg, sizeof(pathInfoMsg), "Backup path: %s", selectedBackupPath);
         }
-        
+
         const char *confirmLines[9] = {
             "",
             "Final confirmation:",
@@ -1657,11 +1646,11 @@ void handleInput() {
         drawDialog(confirmLines, 9);
 
         bool confirmed = false;
-        
+
         while (aptMainLoop()) {
             hidScanInput();
             u32 kDown3 = hidKeysDown();
-            
+
             if (kDown3 & KEY_A) {
                 confirmed = true;
                 break;
@@ -1670,10 +1659,10 @@ void handleInput() {
                 break;
             }
         }
-        
+
         if (!confirmed)
             return;
-        
+
         // Process deletions - show processing screen
         const char *processingLines[] = {
             "",
@@ -1681,12 +1670,12 @@ void handleInput() {
             ""
         };
         drawDialog(processingLines, 3);
-        
+
         for (int i = 0; i < titleCount; i++) {
             if (titles[i].selected && titles[i].isValid) {
                 char statusLines[5][256];
                 snprintf(statusLines[0], 256, "Processing: %s", titles[i].name);
-                
+
                 const char *statusPtrs[5] = {
                     "",
                     statusLines[0],
@@ -1694,7 +1683,7 @@ void handleInput() {
                     "",
                     ""
                 };
-                
+
                 if (backupSaves) {
                     snprintf(statusLines[2], 256, "  Backing up save data to:");
                     snprintf(statusLines[3], 256, "  %s", selectedBackupPath);
@@ -1703,15 +1692,15 @@ void handleInput() {
                     drawDialog(statusPtrs, 5);
                     backupSaveDataToPath(&titles[i], selectedBackupPath);
                 }
-                
+
                 snprintf(statusLines[4], 256, "  Deleting title...");
                 statusPtrs[4] = statusLines[4];
                 drawDialog(statusPtrs, 5);
-                
+
                 deleteTitle(&titles[i]);
             }
         }
-        
+
         // Reload titles
         const char *reloadLines[] = {
             "",
@@ -1719,7 +1708,7 @@ void handleInput() {
             ""
         };
         drawDialog(reloadLines, 3);
-        
+
         loadTitles();
         cursor = 0;
         scrollOffset = 0;
@@ -1728,3 +1717,146 @@ void handleInput() {
 }
 
 
+int main(int argc, char **argv) {
+    // Initialize graphics
+    gfxInitDefault();
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
+    C2D_Prepare();
+
+    // Create render targets for top and bottom screens
+    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
+
+    // Create text buffer for dynamic text rendering
+    // 4096 bytes is sufficient for ~100 text objects (average 40 bytes each)
+    // Increase if experiencing text rendering issues with long strings
+    dynamicBuf = C2D_TextBufNew(4096);
+
+    // Initialize services
+    amInit();
+    fsInit();
+
+    // Load configuration
+    loadConfig();
+
+    // Load titles with progress bar
+    loadTitles();
+
+    // Initial draw - both screens in one frame
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    drawUI();
+    drawTouchControls();
+    C3D_FrameEnd(0);
+    needsRedraw = false;
+
+    // Main loop
+    bool running = true;
+    while (aptMainLoop() && running) {
+        // Gestione sleep mode: aptMainLoop() ritorna false durante sleep
+        // e riprende quando il 3DS si sveglia
+
+        hidScanInput();
+        u32 kDown = hidKeysDown();
+        u32 kHeld = hidKeysHeld();
+
+        // Check for exit before drawing/handling
+        if (kDown & KEY_START) {
+            running = false;
+            break;
+        }
+
+        handleInput();
+
+        // Renderizza sempre un frame per evitare crash durante sleep/wake
+        // Il 3DS richiede rendering continuo per gestire correttamente lo sleep mode
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
+        // Disegna sempre la UI normale
+        drawUI();
+        drawTouchControls();
+        needsRedraw = false;
+
+        // Se SELECT è premuto, disegna overlay SOPRA la UI
+        if (kHeld & KEY_SELECT) {
+            // Darken top screen
+            C2D_SceneBegin(top);
+            C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
+
+            // Draw controls box
+            float boxX = 15.0f;
+            float boxY = 15.0f;
+            float boxW = 370.0f;
+            float boxH = 205.0f;  // Aumentato per contenere START
+
+            C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
+            C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+            C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+
+            C2D_TextBufClear(dynamicBuf);
+            C2D_Text text;
+            float y = boxY + 8.0f;
+
+            C2D_TextParse(&text, dynamicBuf, "CONTROLS");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
+            y += 18;
+
+            const char* controls[][2] = {
+                {"A", "Select/Deselect"},
+                {"X", "Uninstall selected"},
+                {"", ""},
+                {"D-Pad Up/Down", "Navigate list"},
+                {"D-Pad Left/Right", "Page jump"},
+                {"", ""},
+                {"L", "Sort backward"},
+                {"R", "Sort forward"},
+                {"", "(Name/Size/TID)"},
+                {"", ""},
+                {"Y", "Filter mode"},
+                {"", "(All/Updates/DLC)"},
+                {"", ""},
+                {"SELECT", "Release to hide"},
+                {"START", "Exit app"}
+            };
+
+            for (int i = 0; i < 15; i++) {
+                if (controls[i][0][0] != '\0') {
+                    C2D_TextParse(&text, dynamicBuf, controls[i][0]);
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 200, 100, 255));
+
+                    C2D_TextParse(&text, dynamicBuf, controls[i][1]);
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+                } else if (controls[i][1][0] != '\0') {
+                    C2D_TextParse(&text, dynamicBuf, controls[i][1]);
+                    C2D_TextOptimize(&text);
+                    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(180, 180, 180, 255));
+                }
+                y += 12;
+            }
+
+            // Darken bottom screen too
+            C2D_SceneBegin(bottom);
+            C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
+        }
+
+        C3D_FrameEnd(0);
+
+        // Piccola pausa per evitare consumo eccessivo CPU
+        // gspWaitForVBlank() è già chiamato internamente da C3D_FrameEnd
+    }
+
+    // Cleanup
+    C2D_TextBufDelete(dynamicBuf);
+    C2D_Fini();
+    C3D_Fini();
+    fsExit();
+    amExit();
+    gfxExit();
+
+    return 0;
+}
