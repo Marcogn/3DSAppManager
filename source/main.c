@@ -1883,27 +1883,25 @@ int main(int argc, char **argv) {
         // Renderizza sempre un frame per evitare crash durante sleep/wake
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
-        // Se SELECT è premuto, mostra overlay invece della UI normale
+        // Disegna SEMPRE la UI normale
+        drawUI();
+        drawTouchControls();
+        needsRedraw = false;
+
+        // Se SELECT è premuto, disegna SOLO l'overlay sopra (senza ridisegnare UI)
         if (kHeld & KEY_SELECT) {
-            // Top screen - prima disegna UI normale, poi overlay sopra
-            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+            // Non chiamare SceneBegin di nuovo! Disegna solo sopra
+            // L'overlay deve essere disegnato DOPO drawUI ma nello STESSO frame
+
+            // Top screen - overlay con semi-trasparenza
             C2D_SceneBegin(top);
-
-            // Disegna UI di sfondo (serve per vedere la lista sfocata sotto)
-            // Ma usiamo un metodo più efficiente: disegniamo solo il necessario
-            C2D_TextBufClear(dynamicBuf);
-
-            // Ridisegna UI
-            drawUI();
-
-            // Ora overlay sopra (SENZA chiamare di nuovo SceneBegin)
             C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
 
-            // Draw controls box
+            // Controls box
             float boxX = 15.0f;
             float boxY = 15.0f;
             float boxW = 370.0f;
-            float boxH = 215.0f;  // Aumentato ancora per evitare sovrapposizioni
+            float boxH = 210.0f;
 
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
             C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
@@ -1911,6 +1909,7 @@ int main(int argc, char **argv) {
             C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
             C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
 
+            // Title
             C2D_Text text;
             float y = boxY + 8.0f;
 
@@ -1919,52 +1918,51 @@ int main(int argc, char **argv) {
             C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
             y += 18;
 
-            const char* controls[][2] = {
-                {"A", "Select/Deselect"},
-                {"X", "Uninstall selected"},
-                {"", ""},
-                {"D-Pad Up/Down", "Navigate list"},
-                {"D-Pad Left/Right", "Page jump"},
-                {"", ""},
-                {"L", "Sort backward"},
-                {"R", "Sort forward"},
-                {"", "(Name/Size/TID)"},
-                {"", ""},
-                {"Y", "Filter mode"},
-                {"", "(All/Updates/DLC)"},
-                {"", ""},
-                {"SELECT", "Release to hide"},
-                {"START", "Exit app"}
-            };
+            // Draw controls - 13 lines (removed empty lines to save space)
+            C2D_TextParse(&text, dynamicBuf, "A: Select/Deselect");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 13;
 
-            for (int i = 0; i < 15; i++) {
-                if (controls[i][0][0] != '\0') {
-                    C2D_TextParse(&text, dynamicBuf, controls[i][0]);
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 200, 100, 255));
+            C2D_TextParse(&text, dynamicBuf, "X: Uninstall selected");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 13;
 
-                    C2D_TextParse(&text, dynamicBuf, controls[i][1]);
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-                } else if (controls[i][1][0] != '\0') {
-                    C2D_TextParse(&text, dynamicBuf, controls[i][1]);
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(180, 180, 180, 255));
-                }
-                y += 11;  // Ridotto spacing per far stare tutto
-            }
+            C2D_TextParse(&text, dynamicBuf, "D-Pad Up/Down: Navigate");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 13;
 
-            // Bottom screen - oscurato
-            C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
+            C2D_TextParse(&text, dynamicBuf, "D-Pad Left/Right: Page jump");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 13;
+
+            C2D_TextParse(&text, dynamicBuf, "L/R: Sort (Name/Size/TID)");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 13;
+
+            C2D_TextParse(&text, dynamicBuf, "Y: Filter (All/Updates/DLC)");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+            y += 18;
+
+            C2D_TextParse(&text, dynamicBuf, "SELECT: Release to hide");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
+            y += 13;
+
+            C2D_TextParse(&text, dynamicBuf, "START: Exit app");
+            C2D_TextOptimize(&text);
+            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
+
+            // Bottom screen - oscura
             C2D_SceneBegin(bottom);
             C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
-        } else {
-            // UI normale
-            drawUI();
-            drawTouchControls();
         }
 
-        needsRedraw = false;
         C3D_FrameEnd(0);
 
         // Piccola pausa per evitare consumo eccessivo CPU
