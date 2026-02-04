@@ -32,7 +32,7 @@ typedef struct {
     u8 largeIcon[0x1200];
 } SMDH;
 
-#define MAX_TITLES 300
+#define MAX_TITLES 500  // Increased to support more titles than HOME menu limit
 #define CONFIG_PATH "sdmc:/3ds/fast-uninstall/config.ini"
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
 #define LANGUAGE_ENGLISH 1
@@ -70,8 +70,15 @@ typedef struct {
 
 typedef enum {
     SORT_BY_NAME,
+    SORT_BY_SIZE,
     SORT_BY_TITLEID
 } SortMode;
+
+typedef enum {
+    FILTER_ALL,
+    FILTER_UPDATES,
+    FILTER_DLC
+} FilterMode;
 
 static TitleInfo titles[MAX_TITLES];
 static int titleCount = 0;
@@ -83,6 +90,9 @@ static C3D_RenderTarget* bottom;
 static C2D_TextBuf dynamicBuf;  // Text buffer for dynamic text rendering
 static bool needsRedraw = true;  // Flag to track if UI needs redrawing
 static SortMode currentSortMode = SORT_BY_NAME;  // Default sort by name
+static FilterMode currentFilterMode = FILTER_ALL;  // Default show all
+static int filteredIndices[MAX_TITLES];  // Indices of filtered titles
+static int filteredCount = 0;  // Count of filtered titles
 
 // Function prototypes
 void loadConfig();
@@ -90,6 +100,7 @@ void saveDefaultConfig();
 void sanitizeName(char *name);
 void sortTitles();
 int compareTitlesByName(const void *a, const void *b);
+int compareTitlesBySize(const void *a, const void *b);
 int compareTitlesByID(const void *a, const void *b);
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize);
 void getTitleInfo(TitleInfo *title);
@@ -229,6 +240,14 @@ int compareTitlesByName(const void *a, const void *b) {
     return strcasecmp(ta->name, tb->name);
 }
 
+int compareTitlesBySize(const void *a, const void *b) {
+    const TitleInfo *ta = (const TitleInfo*)a;
+    const TitleInfo *tb = (const TitleInfo*)b;
+    if (ta->size < tb->size) return -1;
+    if (ta->size > tb->size) return 1;
+    return 0;
+}
+
 int compareTitlesByID(const void *a, const void *b) {
     const TitleInfo *ta = (const TitleInfo*)a;
     const TitleInfo *tb = (const TitleInfo*)b;
@@ -242,6 +261,8 @@ void sortTitles() {
 
     if (currentSortMode == SORT_BY_NAME) {
         qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesByName);
+    } else if (currentSortMode == SORT_BY_SIZE) {
+        qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesBySize);
     } else {
         qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesByID);
     }
@@ -250,6 +271,35 @@ void sortTitles() {
     cursor = 0;
     scrollOffset = 0;
     needsRedraw = true;
+}
+
+void updateFilteredList() {
+    filteredCount = 0;
+
+    for (int i = 0; i < titleCount; i++) {
+        u32 highID = (u32)(titles[i].titleID >> 32);
+        bool shouldShow = false;
+
+        if (currentFilterMode == FILTER_ALL) {
+            shouldShow = true;
+        } else if (currentFilterMode == FILTER_UPDATES && highID == 0x0004000E) {
+            shouldShow = true;
+        } else if (currentFilterMode == FILTER_DLC && highID == 0x0004008C) {
+            shouldShow = true;
+        }
+
+        if (shouldShow) {
+            filteredIndices[filteredCount++] = i;
+        }
+    }
+
+    // Adjust cursor for filtered list
+    if (cursor >= filteredCount && filteredCount > 0) {
+        cursor = filteredCount - 1;
+    }
+    if (cursor < 0 && filteredCount > 0) {
+        cursor = 0;
+    }
 }
 
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
@@ -287,14 +337,14 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             // Sanitize the name to remove problematic characters
             sanitizeName(outName);
 
-            // Add type indicator based on titleID with simple ASCII symbols
+            // Add type indicator based on titleID with Unicode symbols
             u32 highID = (u32)(titleID >> 32);
             if (highID == 0x0004000E) {
-                // Update/Patch - use UP arrow
-                strncat(outName, " ^", outSize - strlen(outName) - 1);  // ^
+                // Update/Patch - use up arrow symbol
+                strncat(outName, " \xE2\x86\x91", outSize - strlen(outName) - 1);  // ↑
             } else if (highID == 0x0004008C) {
-                // DLC - use plus symbol
-                strncat(outName, " +", outSize - strlen(outName) - 1);  // +
+                // DLC - use circled plus symbol
+                strncat(outName, " \xE2\x8A\x95", outSize - strlen(outName) - 1);  // ⊕
             }
 
             return;
@@ -304,8 +354,8 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
     // Fallback to title ID with type indicator
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " ^";  // ^ for Update
-    else if (highID == 0x0004008C) typeStr = " +";  // + for DLC
+    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
+    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x95";  // ⊕ for DLC
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
@@ -603,9 +653,17 @@ void drawUI() {
     }
     
     // Display title count with color based on count - ROSSO se oltre 300
-    const char *sortModeStr = (currentSortMode == SORT_BY_NAME) ? "Name" : "TID";
+    const char *sortModeStr = "";
+    if (currentSortMode == SORT_BY_NAME) sortModeStr = "Name";
+    else if (currentSortMode == SORT_BY_SIZE) sortModeStr = "Size";
+    else sortModeStr = "TID";
+
+    const char *filterModeStr = "";
+    if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Updates]";
+    else if (currentFilterMode == FILTER_DLC) filterModeStr = " [DLC]";
+
     char titleCountText[64];
-    snprintf(titleCountText, sizeof(titleCountText), "Titles: %d", titleCount);
+    snprintf(titleCountText, sizeof(titleCountText), "Titles: %d%s", titleCount, filterModeStr);
 
     u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
 
@@ -634,13 +692,16 @@ void drawUI() {
 
     y += 4;
 
+    // Update filtered list
+    updateFilteredList();
+
     // Calculate visible range
     int maxVisible = MAX_VISIBLE_TITLES;
     int startIdx = scrollOffset;
     int endIdx = scrollOffset + maxVisible;
-    if (endIdx > titleCount)
-        endIdx = titleCount;
-    
+    if (endIdx > filteredCount)
+        endIdx = filteredCount;
+
     // Ensure cursor is visible
     if (cursor < scrollOffset)
         scrollOffset = cursor;
@@ -649,11 +710,13 @@ void drawUI() {
     
     startIdx = scrollOffset;
     endIdx = scrollOffset + maxVisible;
-    if (endIdx > titleCount)
-        endIdx = titleCount;
-    
+    if (endIdx > filteredCount)
+        endIdx = filteredCount;
+
     // Draw each title - NUOVO LAYOUT: nome espanso a SX, TitleID allineato a DX
     for (int i = startIdx; i < endIdx; i++) {
+        int titleIdx = filteredIndices[i];
+
         // Draw selection highlight
         if (i == cursor) {
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, C2D_Color32(255, 255, 255, 255));
@@ -663,7 +726,7 @@ void drawUI() {
         u32 tidColor = (i == cursor) ? C2D_Color32(60, 60, 60, 255) : C2D_Color32(150, 150, 150, 255);
 
         // Checkbox
-        const char *checkbox = titles[i].selected ? "[X]" : "[ ]";
+        const char *checkbox = titles[titleIdx].selected ? "[X]" : "[ ]";
         C2D_TextParse(&text, dynamicBuf, checkbox);
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 3.0f, y, 0.5f, 0.42f, 0.42f, textColor);
@@ -671,12 +734,12 @@ void drawUI() {
         // Title name - espanso fino a dove serve per il TitleID
         // Tronca il nome a ~35 caratteri per lasciare spazio al TitleID
         char truncName[40];
-        int nameLen = strlen(titles[i].name);
+        int nameLen = strlen(titles[titleIdx].name);
         if (nameLen > 35) {
             // Nome troppo lungo, tronca e aggiungi "..."
-            snprintf(truncName, sizeof(truncName), "%.32s...", titles[i].name);
+            snprintf(truncName, sizeof(truncName), "%.32s...", titles[titleIdx].name);
         } else {
-            snprintf(truncName, sizeof(truncName), "%s", titles[i].name);
+            snprintf(truncName, sizeof(truncName), "%s", titles[titleIdx].name);
         }
         C2D_TextParse(&text, dynamicBuf, truncName);
         C2D_TextOptimize(&text);
@@ -684,7 +747,7 @@ void drawUI() {
 
         // Title ID - allineato a DESTRA
         char tidText[32];
-        snprintf(tidText, sizeof(tidText), "%016llX", titles[i].titleID);
+        snprintf(tidText, sizeof(tidText), "%016llX", titles[titleIdx].titleID);
         C2D_TextParse(&text, dynamicBuf, tidText);
         C2D_TextOptimize(&text);
         // Posizione X calcolata per allineare a destra (400 - larghezza testo - margine)
@@ -704,14 +767,16 @@ void drawTouchControls() {
     float y = 10.0f;
 
     // If no titles or invalid cursor, show basic info
-    if (titleCount == 0 || cursor < 0 || cursor >= titleCount) {
+    if (filteredCount == 0 || cursor < 0 || cursor >= filteredCount) {
         C2D_TextParse(&text, dynamicBuf, "No title selected");
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 10.0f, 100.0f, 0.5f, 0.5f, 0.5f, C2D_Color32(200, 200, 200, 255));
         return;
     }
 
-    TitleInfo *currentTitle = &titles[cursor];
+    // Get the actual title from filtered list
+    int titleIdx = filteredIndices[cursor];
+    TitleInfo *currentTitle = &titles[titleIdx];
 
     // Draw icon placeholder (icon loading disabled for now)
     C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
@@ -783,8 +848,8 @@ void drawTouchControls() {
     // Type
     u32 highID = (u32)(currentTitle->titleID >> 32);
     const char *typeStr = "Game/Application";
-    if (highID == 0x0004000E) typeStr = "Update (^)";
-    else if (highID == 0x0004008C) typeStr = "DLC (+)";
+    if (highID == 0x0004000E) typeStr = "Update \xE2\x86\x91";  // ↑
+    else if (highID == 0x0004008C) typeStr = "DLC \xE2\x8A\x95";  // ⊕
 
     char typeFullStr[64];
     snprintf(typeFullStr, sizeof(typeFullStr), "Type: %s", typeStr);
@@ -856,6 +921,75 @@ void drawDialog(const char **lines, int lineCount) {
         y += 15;
     }
     
+    C3D_FrameEnd(0);
+}
+
+void drawControlsOverlay() {
+    // Draw overlay on both screens with darkened background
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
+    // Top screen - darken background and show controls
+    C2D_SceneBegin(top);
+
+    // Draw semi-transparent dark overlay
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
+
+    // Draw controls box
+    float boxX = 20.0f;
+    float boxY = 20.0f;
+    float boxW = 360.0f;
+    float boxH = 200.0f;
+
+    // Box background
+    C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
+    // Box border
+    C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+    C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
+    C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+    C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
+
+    C2D_TextBufClear(dynamicBuf);
+    C2D_Text text;
+    float y = boxY + 10.0f;
+
+    // Title
+    C2D_TextParse(&text, dynamicBuf, "CONTROLS");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
+    y += 20;
+
+    // Controls list
+    const char* controls[] = {
+        "A: Select/Deselect title",
+        "X: Uninstall selected",
+        "",
+        "D-Pad Up/Down: Navigate",
+        "D-Pad Left/Right: Page jump",
+        "",
+        "L/R: Change sort",
+        "  (Name/Size/TitleID)",
+        "Y: Filter (All/Updates/DLC)",
+        "",
+        "SELECT: Show this help",
+        "START: Exit app"
+    };
+
+    for (int i = 0; i < 12; i++) {
+        C2D_TextParse(&text, dynamicBuf, controls[i]);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
+        y += 13;
+    }
+
+    y += 5;
+    C2D_TextParse(&text, dynamicBuf, "Press any button to close");
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, boxX + 80.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(150, 200, 255, 255));
+
+    // Bottom screen - just darken it
+    C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
+
     C3D_FrameEnd(0);
 }
 
@@ -1088,7 +1222,7 @@ void handleInput() {
     static u32 scrollDelayTimer = 0;
     static bool canScroll = true;
 
-    if (titleCount == 0)
+    if (filteredCount == 0)
         return;
     
     // Sistema di scroll migliorato: richiede rilascio completo del tasto prima del prossimo movimento
@@ -1124,7 +1258,7 @@ void handleInput() {
     // Navigation DOWN con controllo preciso
     if (kDown & KEY_DDOWN) {
         // Prima pressione: movimento immediato
-        if (cursor < titleCount - 1) {
+        if (cursor < filteredCount - 1) {
             cursor++;
             needsRedraw = true;
             canScroll = false;  // Disabilita scroll continuo
@@ -1136,7 +1270,7 @@ void handleInput() {
         if (scrollDelayTimer > 90) {  // ~1.5 secondi di delay
             // Ora permetti scroll continuo ma MOLTO lento
             if (scrollDelayTimer % 25 == 0) {  // 1 movimento ogni ~0.4 secondi
-                if (cursor < titleCount - 1) {
+                if (cursor < filteredCount - 1) {
                     cursor++;
                     needsRedraw = true;
                 }
@@ -1144,52 +1278,68 @@ void handleInput() {
         }
     }
     
-    // Toggle selection
+    // Toggle selection - use filtered index
     if (kDown & KEY_A) {
-        titles[cursor].selected = !titles[cursor].selected;
-        needsRedraw = true;
+        if (cursor >= 0 && cursor < filteredCount) {
+            int titleIdx = filteredIndices[cursor];
+            titles[titleIdx].selected = !titles[titleIdx].selected;
+            needsRedraw = true;
+        }
     }
     
-    // Show controls with SELECT
+    // Show controls overlay with SELECT
     if (kDown & KEY_SELECT) {
-        const char *controlLines[] = {
-            "",
-            "=== CONTROLS ===",
-            "",
-            "A: Select/Deselect title",
-            "X: Uninstall selected titles",
-            "",
-            "D-Pad Up/Down: Navigate",
-            "D-Pad Left/Right: Page up/down",
-            "",
-            "L: Sort by Name",
-            "R: Sort by Title ID",
-            "",
-            "START: Exit application",
-            "",
-            "Press A to continue..."
-        };
-        drawDialog(controlLines, 15);
+        drawControlsOverlay();
 
+        // Wait for any button press to close
         while (aptMainLoop()) {
             hidScanInput();
             u32 kDown2 = hidKeysDown();
-            if (kDown2 & KEY_A)
-                break;
+            if (kDown2) break;  // Any button closes
         }
         needsRedraw = true;
     }
 
-    // Change sort mode with L/R buttons
+    // Cycle sort mode with L/R buttons
     if (kDown & KEY_L) {
-        currentSortMode = SORT_BY_NAME;
+        // Cycle backward: Name <- Size <- TitleID <- Name
+        if (currentSortMode == SORT_BY_NAME) {
+            currentSortMode = SORT_BY_TITLEID;
+        } else if (currentSortMode == SORT_BY_SIZE) {
+            currentSortMode = SORT_BY_NAME;
+        } else {
+            currentSortMode = SORT_BY_SIZE;
+        }
         sortTitles();
         needsRedraw = true;
     }
 
     if (kDown & KEY_R) {
-        currentSortMode = SORT_BY_TITLEID;
+        // Cycle forward: Name -> Size -> TitleID -> Name
+        if (currentSortMode == SORT_BY_NAME) {
+            currentSortMode = SORT_BY_SIZE;
+        } else if (currentSortMode == SORT_BY_SIZE) {
+            currentSortMode = SORT_BY_TITLEID;
+        } else {
+            currentSortMode = SORT_BY_NAME;
+        }
         sortTitles();
+        needsRedraw = true;
+    }
+
+    // Cycle filter mode with Y button
+    if (kDown & KEY_Y) {
+        if (currentFilterMode == FILTER_ALL) {
+            currentFilterMode = FILTER_UPDATES;
+        } else if (currentFilterMode == FILTER_UPDATES) {
+            currentFilterMode = FILTER_DLC;
+        } else {
+            currentFilterMode = FILTER_ALL;
+        }
+
+        // Reset cursor when changing filter
+        cursor = 0;
+        scrollOffset = 0;
         needsRedraw = true;
     }
 
@@ -1204,7 +1354,7 @@ void handleInput() {
     if (kDown & KEY_DRIGHT) {
         // Scroll down one page
         cursor += MAX_VISIBLE_TITLES;
-        if (cursor >= titleCount) cursor = titleCount - 1;
+        if (cursor >= filteredCount) cursor = filteredCount - 1;
         needsRedraw = true;
     }
 
