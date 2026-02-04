@@ -18,8 +18,13 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 - ⚙️ **Configurable** - Customize backup location
 - 🎮 **Optimized UI** - Smooth updates, no flickering, dual-screen layout
 - 🛡️ **Safe** - System titles are protected
-- 🎨 **Enhanced visuals** - Unicode symbols for Updates (↑) and DLC (⊕)
-- 📊 **Detailed info panel** - Bottom screen shows selected title details, icon, version, and backup status
+- 🎨 **Clear indicators** - ASCII symbols for Updates (^) and DLC (+)
+- 📊 **Detailed info panel** - Bottom screen shows title details with size, version, and backup status
+- 🌙 **Sleep mode support** - No crashes when closing/opening the 3DS
+- ⏱️ **Loading progress** - Visual progress bar when loading titles
+- 🚨 **Smart warnings** - Red counter if you have over 300 titles (HOME menu limit)
+- 📏 **Better readability** - Optimized layout with aligned Title IDs and expanded names
+- 🎯 **Precise scrolling** - Slow, controlled navigation without accidental jumps
 
 ## Installation
 
@@ -30,24 +35,27 @@ A Nintendo 3DS homebrew application for quickly uninstalling multiple titles wit
 ## Controls
 
 **Top Screen:**
-- **D-Pad ↑/↓**: Navigate list (one by one)
+- **D-Pad ↑/↓**: Navigate list (precise, one item at a time)
 - **D-Pad ←→**: Fast scroll (page up/down)
 - **A**: Toggle selection
 - **X**: Uninstall selected
 - **L**: Sort by Name
 - **R**: Sort by Title ID
+- **SELECT**: Show full controls help
 - **START**: Exit
 
 **Bottom Screen:**
 Shows detailed information about the currently selected title:
-- Title icon (if available)
+- Title icon placeholder (? symbol)
 - Full title name
 - Title ID (hexadecimal)
 - Version number
-- Type (Game/Application, Update ↑, or DLC ⊕)
+- **Size** (in KB/MB/GB)
+- Type (Game/Application, Update (^), or DLC (+))
 - Storage location (SD Card / NAND)
-- Backup status (✓ if backup exists, ✗ if not)
+- Backup status (YES ✓ if backup exists, NO ✗ if not)
 - Backup path (if backup exists)
+- Controls reminder (press SELECT for full list)
 
 ### Uninstalling Titles
 
@@ -197,6 +205,15 @@ When you delete a title, the application:
 ### Q: The application doesn't show any titles
 **A**: Make sure you have titles installed on your 3DS. The application only shows user-installed titles (games, apps). System titles are filtered out for safety.
 
+### Q: The title counter is red - what does that mean?
+**A**: If you have over 300 titles installed, the counter turns red. This is a warning because the 3DS HOME menu can only display up to 300 titles properly. Consider deleting some unused titles.
+
+### Q: Why do I see "..." at the end of some title names?
+**A**: Long title names are truncated in the top screen list to fit the layout. You can see the full name in the bottom screen details panel.
+
+### Q: The scroll is too slow/fast
+**A**: The scroll has been carefully tuned to be precise. Single presses move one item, holding the button waits 1.5 seconds before starting continuous scroll (to prevent accidents). Use D-Pad Left/Right for faster navigation (page up/down).
+
 ### Q: Can I recover a title after deleting it?
 **A**: Once deleted, the title cannot be recovered unless you:
 - Have a backup of the save data (created by this app)
@@ -226,9 +243,13 @@ Note: A future version may include automatic restore functionality.
 - Deleting DLC will remove the DLC content
 - Deleting updates will revert the game to its base version
 - Base games and DLC are separate titles
+- You'll see (^) for updates and (+) for DLC in the title list
 
-### Q: The app seems slow when loading titles
-**A**: This is normal if you have many titles installed. The app needs to read information for each title to display its name.
+### Q: The app freezes when I close the 3DS lid
+**A**: This has been fixed in v2.2+. The app now properly supports sleep mode - you can close and open the 3DS without issues.
+
+### Q: Why does loading take a while?
+**A**: The app now shows a progress bar while loading. The time depends on how many titles you have installed - each title needs to be read from the system to get its name, size, and details.
 
 ### Q: Can I use this on a stock 3DS (no CFW)?
 **A**: No, you need a 3DS with access to the Homebrew Launcher. This typically requires either:
@@ -238,12 +259,19 @@ Note: Some features may require CFW for full functionality.
 
 ## Technical Documentation
 
-For detailed technical information about specific fixes and troubleshooting, see the [docs/](docs/) folder:
+For detailed technical information about specific fixes and improvements, see the [docs/](docs/) folder:
 
+### Core Documentation
 - **[Character Corruption Fix](docs/CHARACTER_CORRUPTION_FIX.md)** - UTF-16 character handling and sanitization
 - **[Flickering Fix](docs/FLICKERING_FIX.md)** - Initial console rendering fixes
 - **[Flickering Fix v3 Final](docs/FLICKERING_FIX_v3_FINAL.md)** - citro2d/citro3d migration details
 - **[Rendering Troubleshooting](docs/RENDERING_TROUBLESHOOTING.md)** - Graphics troubleshooting guide
+
+### UI Improvements (v2.x)
+- **[UI Improvements v2](docs/UI_IMPROVEMENTS_v2.md)** - Initial UI overhaul (progress bar, red counter, layout optimization)
+- **[UI Improvements v2.1](docs/UI_IMPROVEMENTS_v2.1_FIXES.md)** - Name length, scroll sensitivity, alignment fixes
+- **[UI Improvements v2.2](docs/UI_IMPROVEMENTS_v2.2_SCROLL_SLEEP.md)** - Precise scroll control and sleep mode support
+- **[UI Improvements v2.3](docs/UI_IMPROVEMENTS_v2.3_FINAL_POLISH.md)** - Size display, ASCII symbols, SELECT controls
 
 ## License
 

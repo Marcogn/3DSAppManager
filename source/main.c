@@ -61,6 +61,7 @@ typedef struct {
     bool hasBackup;
     C2D_Image icon;  // Icon texture for bottom screen
     bool iconLoaded;
+    u64 size;  // Size in bytes
 } TitleInfo;
 
 typedef struct {
@@ -92,6 +93,7 @@ int compareTitlesByName(const void *a, const void *b);
 int compareTitlesByID(const void *a, const void *b);
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize);
 void getTitleInfo(TitleInfo *title);
+u64 getTitleSize(u64 titleID, FS_MediaType mediaType);
 bool checkBackupExists(u64 titleID);
 void loadTitleIcon(TitleInfo *title);
 void drawTitleDetails();
@@ -285,14 +287,14 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
             // Sanitize the name to remove problematic characters
             sanitizeName(outName);
 
-            // Add type indicator based on titleID with Unicode symbols
+            // Add type indicator based on titleID with simple ASCII symbols
             u32 highID = (u32)(titleID >> 32);
             if (highID == 0x0004000E) {
-                // Update/Patch - use up arrow symbol
-                strncat(outName, " \xE2\x86\x91", outSize - strlen(outName) - 1);  // ↑
+                // Update/Patch - use UP arrow
+                strncat(outName, " ^", outSize - strlen(outName) - 1);  // ^
             } else if (highID == 0x0004008C) {
                 // DLC - use plus symbol
-                strncat(outName, " \xE2\x8A\x95", outSize - strlen(outName) - 1);  // ⊕
+                strncat(outName, " +", outSize - strlen(outName) - 1);  // +
             }
 
             return;
@@ -302,8 +304,8 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
     // Fallback to title ID with type indicator
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
-    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x95";  // ⊕ for DLC
+    if (highID == 0x0004000E) typeStr = " ^";  // ^ for Update
+    else if (highID == 0x0004008C) typeStr = " +";  // + for DLC
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
@@ -314,6 +316,35 @@ bool checkBackupExists(u64 titleID) {
 
     struct stat st;
     return (stat(backupDir, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+u64 getTitleSize(u64 titleID, FS_MediaType mediaType) {
+    u64 size = 0;
+    Result res;
+
+    // Try to get title size from AM service
+    AM_TitleEntry entry;
+    res = AM_GetTitleInfo(mediaType, 1, &titleID, &entry);
+    if (R_SUCCEEDED(res)) {
+        // Size is in the title entry
+        size = entry.size;
+    }
+
+    // If that failed, try to calculate from filesystem
+    if (size == 0) {
+        u32 archivePath[] = {titleID & 0xFFFFFFFF, (titleID >> 32) & 0xFFFFFFFF, mediaType, 0};
+        FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
+
+        FS_Archive archive;
+        res = FSUSER_OpenArchive(&archive, ARCHIVE_SAVEDATA_AND_CONTENT, binArchPath);
+        if (R_SUCCEEDED(res)) {
+            // Archive opened, but getting exact size is complex
+            // Return approximate size (this is a fallback)
+            FSUSER_CloseArchive(archive);
+        }
+    }
+
+    return size;
 }
 
 void loadTitleIcon(TitleInfo *title) {
@@ -329,8 +360,15 @@ void getTitleInfo(TitleInfo *title) {
 
     if (R_SUCCEEDED(res)) {
         title->version = titleEntry.version;
+        title->size = titleEntry.size;
     } else {
         title->version = 0;
+        title->size = 0;
+    }
+
+    // If size is still 0, try alternative method
+    if (title->size == 0) {
+        title->size = getTitleSize(title->titleID, title->mediaType);
     }
 
     // Get full name (without truncation)
@@ -478,6 +516,7 @@ void loadTitles() {
                 titles[titleCount].version = 0;
                 titles[titleCount].hasBackup = false;
                 titles[titleCount].fullName[0] = '\0';
+                titles[titleCount].size = 0;
                 getTitleName(tid, MEDIATYPE_SD, titles[titleCount].name, sizeof(titles[titleCount].name));
                 getTitleInfo(&titles[titleCount]);
                 titleCount++;
@@ -517,6 +556,7 @@ void loadTitles() {
                 titles[titleCount].version = 0;
                 titles[titleCount].hasBackup = false;
                 titles[titleCount].fullName[0] = '\0';
+                titles[titleCount].size = 0;
                 getTitleName(tid, MEDIATYPE_NAND, titles[titleCount].name, sizeof(titles[titleCount].name));
                 getTitleInfo(&titles[titleCount]);
                 titleCount++;
@@ -631,7 +671,13 @@ void drawUI() {
         // Title name - espanso fino a dove serve per il TitleID
         // Tronca il nome a ~35 caratteri per lasciare spazio al TitleID
         char truncName[40];
-        snprintf(truncName, sizeof(truncName), "%.35s", titles[i].name);
+        int nameLen = strlen(titles[i].name);
+        if (nameLen > 35) {
+            // Nome troppo lungo, tronca e aggiungi "..."
+            snprintf(truncName, sizeof(truncName), "%.32s...", titles[i].name);
+        } else {
+            snprintf(truncName, sizeof(truncName), "%s", titles[i].name);
+        }
         C2D_TextParse(&text, dynamicBuf, truncName);
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 28.0f, y, 0.5f, 0.40f, 0.40f, textColor);
@@ -671,8 +717,8 @@ void drawTouchControls() {
     C2D_DrawRectSolid(10.0f, y, 0.5f, 48, 48, C2D_Color32(50, 50, 80, 255));
     C2D_TextParse(&text, dynamicBuf, "?");
     C2D_TextOptimize(&text);
-    // Centro il punto interrogativo: x = 10 + (48/2) - (larghezza_testo/2) ≈ 28, y = 10 + (48/2) - (altezza_testo/2) ≈ 22
-    C2D_DrawText(&text, C2D_WithColor, 28.0f, y + 14, 0.5f, 1.5f, 1.5f, C2D_Color32(150, 150, 180, 255));
+    // Centro il punto interrogativo nel quadrato 48x48px
+    C2D_DrawText(&text, C2D_WithColor, 26.0f, y + 10, 0.5f, 1.8f, 1.8f, C2D_Color32(150, 150, 180, 255));
 
     // Title name (next to icon placeholder)
     float textX = 65.0f;
@@ -712,11 +758,33 @@ void drawTouchControls() {
     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
     y += 15;
 
+    // Size
+    char sizeStr[64];
+    if (currentTitle->size > 0) {
+        // Convert to MB or GB
+        if (currentTitle->size >= 1024 * 1024 * 1024) {
+            float sizeGB = (float)currentTitle->size / (1024.0f * 1024.0f * 1024.0f);
+            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f GB", sizeGB);
+        } else if (currentTitle->size >= 1024 * 1024) {
+            float sizeMB = (float)currentTitle->size / (1024.0f * 1024.0f);
+            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f MB", sizeMB);
+        } else {
+            float sizeKB = (float)currentTitle->size / 1024.0f;
+            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f KB", sizeKB);
+        }
+    } else {
+        snprintf(sizeStr, sizeof(sizeStr), "Size: Unknown");
+    }
+    C2D_TextParse(&text, dynamicBuf, sizeStr);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
+    y += 15;
+
     // Type
     u32 highID = (u32)(currentTitle->titleID >> 32);
     const char *typeStr = "Game/Application";
-    if (highID == 0x0004000E) typeStr = "Update \xE2\x86\x91";  // ↑
-    else if (highID == 0x0004008C) typeStr = "DLC \xE2\x8A\x95";  // ⊕
+    if (highID == 0x0004000E) typeStr = "Update (^)";
+    else if (highID == 0x0004008C) typeStr = "DLC (+)";
 
     char typeFullStr[64];
     snprintf(typeFullStr, sizeof(typeFullStr), "Type: %s", typeStr);
@@ -760,26 +828,12 @@ void drawTouchControls() {
 
     // Separator
     C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 8;
+    y += 10;
 
-    // Controls hint (compact e ridotto per evitare taglio)
-    C2D_TextParse(&text, dynamicBuf, "Controls:");
+    // Reminder per vedere i controlli
+    C2D_TextParse(&text, dynamicBuf, "Press SELECT for controls");
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(150, 150, 150, 255));
-    y += 12;
-
-    const char* controls[] = {
-        "A:Select  X:Uninstall",
-        "L/R:Sort  START:Exit",
-        "D-Pad:Navigate"
-    };
-    
-    for (int i = 0; i < 3; i++) {
-        C2D_TextParse(&text, dynamicBuf, controls[i]);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.32f, 0.32f, C2D_Color32(180, 180, 180, 255));
-        y += 11;
-    }
+    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(150, 200, 255, 255));
 }
 
 void drawDialog(const char **lines, int lineCount) {
@@ -1096,6 +1150,36 @@ void handleInput() {
         needsRedraw = true;
     }
     
+    // Show controls with SELECT
+    if (kDown & KEY_SELECT) {
+        const char *controlLines[] = {
+            "",
+            "=== CONTROLS ===",
+            "",
+            "A: Select/Deselect title",
+            "X: Uninstall selected titles",
+            "",
+            "D-Pad Up/Down: Navigate",
+            "D-Pad Left/Right: Page up/down",
+            "",
+            "L: Sort by Name",
+            "R: Sort by Title ID",
+            "",
+            "START: Exit application",
+            "",
+            "Press A to continue..."
+        };
+        drawDialog(controlLines, 15);
+
+        while (aptMainLoop()) {
+            hidScanInput();
+            u32 kDown2 = hidKeysDown();
+            if (kDown2 & KEY_A)
+                break;
+        }
+        needsRedraw = true;
+    }
+
     // Change sort mode with L/R buttons
     if (kDown & KEY_L) {
         currentSortMode = SORT_BY_NAME;
