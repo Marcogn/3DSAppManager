@@ -384,8 +384,7 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
                 }
             }
 
-            // Sanitize but keep Unicode characters (don't filter out high bytes)
-            // Only remove problematic filesystem characters
+            // Sanitize but keep Unicode characters
             char *src = outName;
             char *dst = outName;
             while (*src) {
@@ -397,6 +396,23 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
                 src++;
             }
             *dst = '\0';
+
+            // Check if we got a valid name (not empty, not just "--" or spaces)
+            bool isValidName = false;
+            if (strlen(outName) > 0) {
+                bool hasRealContent = false;
+                for (char *p = outName; *p; p++) {
+                    if (*p != '-' && *p != ' ' && *p != '\t') {
+                        hasRealContent = true;
+                        break;
+                    }
+                }
+                isValidName = hasRealContent;
+            }
+
+            if (!isValidName) {
+                goto use_titleid_fallback;
+            }
 
             // Add type indicator based on titleID with Unicode symbols
             u32 highID = (u32)(titleID >> 32);
@@ -410,11 +426,12 @@ void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t out
         }
     }
     
+use_titleid_fallback:
     // Fallback to title ID with type indicator
     u32 highID = (u32)(titleID >> 32);
     const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
-    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";  // ⊕ for DLC
+    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";
+    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";
 
     snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
 }
@@ -772,7 +789,7 @@ void drawUI() {
     if (endIdx > filteredCount)
         endIdx = filteredCount;
 
-    // Draw each title - NUOVO LAYOUT: nome espanso a SX, TitleID allineato a DX
+    // Draw each title - NUOVO LAYOUT: checkbox - nome - simbolo - TitleID
     for (int i = startIdx; i < endIdx; i++) {
         int titleIdx = filteredIndices[i];
 
@@ -783,6 +800,7 @@ void drawUI() {
         
         u32 textColor = (i == cursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
         u32 tidColor = (i == cursor) ? C2D_Color32(60, 60, 60, 255) : C2D_Color32(150, 150, 150, 255);
+        u32 symbolColor = (i == cursor) ? C2D_Color32(100, 100, 255, 255) : C2D_Color32(150, 180, 255, 255);
 
         // Checkbox
         const char *checkbox = titles[titleIdx].selected ? "[X]" : "[ ]";
@@ -790,29 +808,47 @@ void drawUI() {
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 3.0f, y, 0.5f, 0.42f, 0.42f, textColor);
 
-        // Title name - espanso fino a dove serve per il TitleID
-        // Tronca il nome a ~35 caratteri per lasciare spazio al TitleID
+        // Title name - senza simbolo ora, espanso fino alla colonna simbolo
+        char cleanName[256];
+        strncpy(cleanName, titles[titleIdx].name, sizeof(cleanName) - 1);
+        cleanName[sizeof(cleanName) - 1] = '\0';
+
+        // Rimuovi i simboli ↑ e ⊕ dal nome se presenti
+        char *arrow = strstr(cleanName, " \xE2\x86\x91");
+        if (arrow) *arrow = '\0';
+        char *plus = strstr(cleanName, " \xE2\x8A\x85");
+        if (plus) *plus = '\0';
+
         char truncName[40];
-        int nameLen = strlen(titles[titleIdx].name);
-        if (nameLen > 35) {
-            // Nome troppo lungo, tronca e aggiungi "..."
-            snprintf(truncName, sizeof(truncName), "%.32s...", titles[titleIdx].name);
+        int nameLen = strlen(cleanName);
+        if (nameLen > 30) {
+            // Nome troppo lungo, tronca
+            snprintf(truncName, sizeof(truncName), "%.27s...", cleanName);
         } else {
-            snprintf(truncName, sizeof(truncName), "%s", titles[titleIdx].name);
+            snprintf(truncName, sizeof(truncName), "%s", cleanName);
         }
         C2D_TextParse(&text, dynamicBuf, truncName);
         C2D_TextOptimize(&text);
         C2D_DrawText(&text, C2D_WithColor, 28.0f, y, 0.5f, 0.40f, 0.40f, textColor);
 
-        // Title ID - allineato a DESTRA
+        // Type symbol in separate column (before TitleID)
+        u32 highID = (u32)(titles[titleIdx].titleID >> 32);
+        const char *symbol = "  ";  // Empty for normal titles
+        if (highID == 0x0004000E) symbol = "\xE2\x86\x91";  // ↑
+        else if (highID == 0x0004008C) symbol = "\xE2\x8A\x85";  // ⊕
+
+        C2D_TextParse(&text, dynamicBuf, symbol);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor, 235.0f, y, 0.5f, 0.45f, 0.45f, symbolColor);
+
+        // Title ID - allineato a DESTRA ma più vicino al simbolo
         char tidText[32];
         snprintf(tidText, sizeof(tidText), "%016llX", titles[titleIdx].titleID);
         C2D_TextParse(&text, dynamicBuf, tidText);
         C2D_TextOptimize(&text);
-        // Posizione X calcolata per allineare a destra (400 - larghezza testo - margine)
-        C2D_DrawText(&text, C2D_WithColor, 268.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
+        C2D_DrawText(&text, C2D_WithColor, 255.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
 
-        y += 15;  // Line spacing aumentato
+        y += 15;  // Line spacing
     }
 }
 
@@ -1350,12 +1386,6 @@ void handleInput() {
             needsRedraw = true;
         }
     }
-    
-    // Show controls overlay while SELECT is held
-    if (kHeld & KEY_SELECT) {
-        drawControlsOverlay();
-        // No need to wait - overlay shows as long as button is held
-    }
 
     // Cycle sort mode with L/R buttons
     if (kDown & KEY_L) {
@@ -1696,84 +1726,3 @@ void handleInput() {
 }
 
 
-int main(int argc, char **argv) {
-    // Initialize graphics
-    gfxInitDefault();
-    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
-    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
-    C2D_Prepare();
-    
-    // Create render targets for top and bottom screens
-    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
-    bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-    
-    // Create text buffer for dynamic text rendering
-    // 4096 bytes is sufficient for ~100 text objects (average 40 bytes each)
-    // Increase if experiencing text rendering issues with long strings
-    dynamicBuf = C2D_TextBufNew(4096);
-
-    // Initialize services
-    amInit();
-    fsInit();
-    
-    // Load configuration
-    loadConfig();
-    
-    // Load titles with progress bar
-    loadTitles();
-    
-    // Initial draw - both screens in one frame
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    drawUI();
-    drawTouchControls();
-    C3D_FrameEnd(0);
-    needsRedraw = false;
-
-    // Main loop
-    bool running = true;
-    while (aptMainLoop() && running) {
-        // Gestione sleep mode: aptMainLoop() ritorna false durante sleep
-        // e riprende quando il 3DS si sveglia
-
-        hidScanInput();
-        u32 kDown = hidKeysDown();
-        
-        // Check for exit before drawing/handling
-        if (kDown & KEY_START) {
-            running = false;
-            break;
-        }
-        
-        handleInput();
-
-        // Renderizza sempre un frame per evitare crash durante sleep/wake
-        // Il 3DS richiede rendering continuo per gestire correttamente lo sleep mode
-        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-
-        // Solo ridisegna la UI se necessario, altrimenti riusa il frame precedente
-        if (needsRedraw) {
-            drawUI();
-            drawTouchControls();
-            needsRedraw = false;
-        } else {
-            // Ridisegna comunque per mantenere il frame buffer attivo
-            drawUI();
-            drawTouchControls();
-        }
-
-        C3D_FrameEnd(0);
-
-        // Piccola pausa per evitare consumo eccessivo CPU
-        // gspWaitForVBlank() è già chiamato internamente da C3D_FrameEnd
-    }
-    
-    // Cleanup
-    C2D_TextBufDelete(dynamicBuf);
-    C2D_Fini();
-    C3D_Fini();
-    fsExit();
-    amExit();
-    gfxExit();
-    
-    return 0;
-}
