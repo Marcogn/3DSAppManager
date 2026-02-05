@@ -572,6 +572,10 @@ void drawLoadingScreen(int current, int total, const char *status) {
         C2D_DrawText(&text, C2D_WithColor, barX + barWidth / 2 - 20, barY + 25, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
     }
 
+    // Clear bottom screen with blue background
+    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
+    C2D_SceneBegin(bottom);
+
     C3D_FrameEnd(0);
 }
 
@@ -857,7 +861,7 @@ void drawSelectedTitlesList() {
 
     // Title
     char titleText[64];
-    snprintf(titleText, sizeof(titleText), "SELECTED TITLES (%d)", selectedCount);
+    snprintf(titleText, sizeof(titleText), "TITLES TO BE REMOVED (%d)", selectedCount);
     C2D_TextParse(&text, dynamicBuf, titleText);
     C2D_TextOptimize(&text);
     C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.55f, 0.55f, C2D_Color32(255, 100, 100, 255));
