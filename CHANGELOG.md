@@ -1,6 +1,32 @@
 # Changelog
 
-## v2.6.1 - SELECT Overlay Flickering Fix (2026-02-04)
+## v1.0.1 - UI Improvements (2026-02-05)
+
+Improved user interface clarity and screen management.
+
+### Changes
+- **Clear bottom screen during loading**: Bottom screen now shows a clean blue background while loading titles, instead of displaying the old selected titles list
+- **Improved text clarity**: Changed "SELECTED TITLES" to "TITLES TO BE REMOVED" for better understanding
+- **Better UX after uninstall**: When reloading titles after uninstalling, the bottom screen is properly cleared
+
+## v1.0 - First Stable Release (2026-02-04)
+
+Unified screen colors and production release.
+
+### Changes
+- **Unified screen colors**: Changed top screen background to match bottom screen (20, 20, 30)
+- **Release binary**: Added compiled .3dsx to repository for easy distribution
+- **Feature complete**: All planned features implemented and tested
+
+This is the first production-ready stable release!
+
+---
+
+## PreAlpha Development Versions
+
+The following versions were development iterations leading up to v1.0.
+
+### PreAlpha 0.11.1 - SELECT Overlay Flickering Fix (2026-02-04)
 
 Fixed the flickering issue when holding the SELECT button.
 
@@ -17,7 +43,7 @@ Fixed the flickering issue when holding the SELECT button.
 - Added state variable to track SELECT button state
 - Fixed bottom screen overlay to render after touch controls
 
-## v2.6 - Selected Titles List and UX Improvements (2026-02-04)
+### PreAlpha 0.11 - Selected Titles List and UX Improvements (2026-02-04)
 
 Added visual feedback during uninstall operations.
 
@@ -31,7 +57,7 @@ Added visual feedback during uninstall operations.
 - `drawDialogWithSelectedList()` - combines dialog with selected list
 - Modified uninstall flow to use new dialog function
 
-## v2.5.1 - SELECT Overlay and Symbol Fixes (2026-02-04)
+### PreAlpha 0.10.1 - SELECT Overlay and Symbol Fixes (2026-02-04)
 
 Fixed flickering and duplicate symbols.
 
@@ -45,7 +71,7 @@ Fixed flickering and duplicate symbols.
 - No text buffer conflicts
 - Separate SceneBegin for overlay (after UI completes)
 
-## v2.5 - Layout and Multi-language (2026-02-04)
+### PreAlpha 0.10 - Layout and Multi-language (2026-02-04)
 
 Table layout and better name handling.
 
@@ -66,7 +92,7 @@ Table layout and better name handling.
 - UTF-8 multi-byte character handling
 - Sleep mode compatible rendering
 
-## v2.4 - Feature Complete (2026-02-04)
+### PreAlpha 0.9.2 - Japanese Support and Icon Refinement (2026-02-04)
 
 Sorting, filtering, and 500 title support.
 
@@ -81,7 +107,7 @@ Sorting, filtering, and 500 title support.
 - 3 sort modes with comparator functions
 - MAX_TITLES = 500
 
-## v2.3 - Polish (2026-02-04)
+### PreAlpha 0.9 - Polish (2026-02-04)
 
 ### What's New
 - **Title size display**: Now you can see how much space each title takes (in KB/MB/GB)
@@ -94,7 +120,7 @@ Sorting, filtering, and 500 title support.
 - Fixed some edge cases where title info wasn't loading properly
 - Improved the getTitleInfo function to grab size data from the system
 
-## v2.2 - The Stability Update (2026-02-04)
+### PreAlpha 0.8 - The Stability Update (2026-02-04)
 
 ### Major Fixes
 - **Sleep mode works now**: You can finally close your 3DS without the app crashing when you open it back up
@@ -108,7 +134,7 @@ Sorting, filtering, and 500 title support.
 - Implemented frame-based scroll delay system with canScroll flag
 - Continuous rendering for system event compatibility
 
-## v2.1 - The Details Update (2026-02-04)
+### PreAlpha 0.7 - The Details Update (2026-02-04)
 
 ### Improvements
 - **Longer names**: Title names now show up to 35 characters instead of 27
@@ -119,7 +145,7 @@ Sorting, filtering, and 500 title support.
 ### Why These Changes?
 The original scroll was way too sensitive - you'd tap up or down once and it would shoot across half the list. Now it's actually usable for precise navigation.
 
-## v2.0 - The UI Overhaul (2026-02-04)
+### PreAlpha 0.6 - The UI Overhaul (2026-02-04)
 
 Complete redesign of the user interface. This was a big one.
 
@@ -138,23 +164,26 @@ The old UI was functional but cramped. This update makes everything easier to re
 
 ---
 
-## Earlier Versions
+## PreAlpha 0.1-0.5 - The Foundation
 
-### v1.x - The Foundation
+Early development versions focused on core functionality:
 
-Initial releases focused on:
-- Getting multi-select working
-- Implementing proper save backups (all types: savedata, extdata, boss extdata)
-- Sorting functionality
-- Fixing character encoding issues (UTF-16 was a pain)
-- Eliminating screen flickering with citro2d/citro3d
-- Making sure system titles can't be deleted by accident
+### Core Features Implemented
+- **Multi-select system**: Getting checkbox selection working properly
+- **Save backup system**: Implementing proper backups for all types:
+  - Regular savedata
+  - Extdata (extended data)
+  - BOSS extdata (SpotPass data)
+- **Title sorting**: Alphabetical and other sort modes
+- **Character encoding**: UTF-16 to UTF-8 conversion for proper Japanese/special character display
+- **Graphics migration**: Moved from console rendering to hardware-accelerated citro2d/citro3d to eliminate flickering
+- **Safety features**: Filtering system titles to prevent accidental deletion of critical system components
 
-### What Was Hard
-- **Character rendering**: Japanese/special characters were showing up as garbage. Had to implement proper UTF-16 to UTF-8 conversion and sanitization.
-- **Flickering**: The screen was flickering like crazy. Ended up migrating from console rendering to hardware-accelerated citro2d.
-- **Save backup**: 3DS has multiple save types (user saves, extdata, boss extdata) and they all need different handling.
-- **Title detection**: Filtering out system titles without breaking anything took some trial and error.
+### Technical Challenges Overcome
+- **Character rendering**: Japanese and special characters were displaying as garbage. Implemented proper UTF-16 to UTF-8 conversion and sanitization.
+- **Screen flickering**: Console rendering caused severe flickering. Migrated entire UI to citro2d hardware acceleration.
+- **Save backup complexity**: 3DS has multiple save archive types, each requiring different handling through the FS service.
+- **Title filtering**: Distinguishing user-installed titles from system titles without breaking functionality required extensive testing.
 
 ---
 
