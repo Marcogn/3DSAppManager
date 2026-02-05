@@ -1,6 +1,5 @@
 # Build artifacts
 build/
-*.3dsx
 *.elf
 *.smdh
 *.cia

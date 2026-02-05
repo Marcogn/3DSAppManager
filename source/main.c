@@ -687,7 +687,7 @@ void loadTitles() {
 
 void drawUI() {
     // Render top screen - title list
-    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
     C2D_SceneBegin(top);
 
     // Clear dynamic text buffer and prepare for new text
@@ -1063,7 +1063,7 @@ void drawDialog(const char **lines, int lineCount) {
     // This function manages its own frame since it's used for modal dialogs
     // that are displayed outside the main rendering loop during user interactions
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
     C2D_SceneBegin(top);
 
     C2D_TextBufClear(dynamicBuf);
@@ -1692,7 +1692,7 @@ void handleInput() {
 
                     // Draw path selection dialog
                     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-                    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+                    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
                     C2D_SceneBegin(top);
 
                     C2D_TextBufClear(dynamicBuf);
@@ -1889,7 +1889,7 @@ int main(int argc, char **argv) {
         if (isSelectHeld) {
             // Modalità overlay: disegna tutto manualmente senza chiamare drawUI()
             // TOP SCREEN
-            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
+            C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
             C2D_SceneBegin(top);
             C2D_TextBufClear(dynamicBuf);
 
