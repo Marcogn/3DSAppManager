@@ -1289,7 +1289,71 @@ void drawBackupScreen(void) {
     dt(4, 224, 0.5f, 0.33f, CLR_GRAY, "X=Backup sel   Y=Backup tutti");
 }
 void drawSysInfoScreen(void)     { _drawSoon("Info Sistema"); }
-void drawSettingsScreen(void)    { _drawSoon("Impostazioni"); }
+/* drawSettingsScreen: settings UI — NO C3D frame management (main loop). */
+void drawSettingsScreen(void) {
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "IMPOSTAZIONI");
+
+    static const char *labels[] = {
+        "Forza Backup:",
+        "Salta Conf. Disinstalla:",
+        "Forza Restore:",
+        "Salta Conf. Installa:",
+        "Dest. Installazione:",
+        "Cartella Backup:"
+    };
+    /* Build value strings */
+    char pathBuf[32];
+    const char *pFull = config.backupPath;
+    int plen = (int)strlen(pFull);
+    if (plen > 22) snprintf(pathBuf, sizeof(pathBuf), "...%s", pFull + plen - 19);
+    else           snprintf(pathBuf, sizeof(pathBuf), "%s", pFull);
+
+    const char *values[6] = {
+        config.forceBackup          ? "ON"   : "OFF",
+        config.skipUninstallConfirm ? "ON"   : "OFF",
+        config.forceRestore         ? "ON"   : "OFF",
+        config.skipInstallConfirm   ? "ON"   : "OFF",
+        (config.installDest == 0)   ? "SD"   : "NAND",
+        pathBuf
+    };
+
+    for (int i = 0; i < 6; i++) {
+        float y = 38.0f + (float)i * 28.0f;
+        if (i == settingsCursor)
+            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 24, CLR_SELECTED);
+        if (i == settingsCursor)
+            dt(12, y, 0.5f, 0.44f, CLR_WHITE, ">");
+        dt(28, y, 0.5f, 0.42f, (i == settingsCursor) ? CLR_WHITE : CLR_GRAY, labels[i]);
+        dt(258, y, 0.5f, 0.44f, CLR_CYAN, values[i]);
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.35f, CLR_WHITE, "A/Dx=Cambia  Sx=Cambia  B/START=Salva e Torna");
+
+    /* Bottom screen: contextual description */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Descrizione");
+
+    static const char *desc[6][3] = {
+        { "Backup automatico prima di",     "disinstallare (nessuna richiesta).",  "Consigliato: ON per sicurezza." },
+        { "Salta la conferma prima di",     "disinstallare titoli.",               "Consigliato: OFF (conferma sempre)." },
+        { "Ripristina save automaticamente","dopo ogni installazione CIA riuscita.","Usa solo con backup aggiornati." },
+        { "Salta la conferma prima di",     "installare file CIA.",                "Consigliato: OFF (conferma sempre)." },
+        { "Dove installare i file CIA:",    "SD = scheda di memoria,",             "NAND = solo titoli di sistema." },
+        { "Cartella per i backup save.",    "Usa Sx/Dx per ciclare fra le",       "5 destinazioni disponibili." }
+    };
+    dt(8, 28, 0.5f, 0.40f, CLR_WHITE, desc[settingsCursor][0]);
+    dt(8, 48, 0.5f, 0.38f, CLR_GRAY,  desc[settingsCursor][1]);
+    dt(8, 68, 0.5f, 0.36f, CLR_CYAN,  desc[settingsCursor][2]);
+
+    C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 206, 0.5f, 0.36f, CLR_GREEN, "Modifiche salvate in tempo reale.");
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "B/START = salva e torna al menu");
+}
 void drawTitleDetails(void)      { _drawSoon("Dettagli Titolo"); }
 
 /* ============================================================
@@ -1866,9 +1930,50 @@ void handleSysInfoInput(void) {
     if ((keys & KEY_B) || (keys & KEY_START)) appState = APP_MAIN_MENU;
 }
 
-/* handleSettingsInput: stub, B/START saves and returns. */
+/* handleSettingsInput: full settings handler with real-time config save. */
 void handleSettingsInput(void) {
     u32 keys = hidKeysDown();
+
+    if (keys & KEY_DOWN) settingsCursor = (settingsCursor + 1) % 6;
+    if (keys & KEY_UP)   settingsCursor = (settingsCursor + 5) % 6;
+
+    bool *boolPtrs[4] = {
+        &config.forceBackup,
+        &config.skipUninstallConfirm,
+        &config.forceRestore,
+        &config.skipInstallConfirm
+    };
+
+    /* Find current backup path index (for items 5 LEFT/RIGHT) */
+    int pidx = 0;
+    for (int i = 0; i < (int)NUM_BACKUP_PATHS; i++)
+        if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) { pidx = i; break; }
+
+    bool changed = false;
+
+    if ((keys & KEY_A) || (keys & KEY_RIGHT)) {
+        if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
+        else if (settingsCursor == 4) { config.installDest = (config.installDest + 1) % 2; changed = true; }
+        else if (settingsCursor == 5) {
+            pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS;
+            snprintf(config.backupPath, sizeof(config.backupPath), "%s", BACKUP_PATH_OPTIONS[pidx]);
+            changed = true;
+        }
+    }
+    if (keys & KEY_LEFT) {
+        if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
+        else if (settingsCursor == 4) { config.installDest = (config.installDest + 1) % 2; changed = true; }
+        else if (settingsCursor == 5) {
+            pidx = (pidx + (int)NUM_BACKUP_PATHS - 1) % (int)NUM_BACKUP_PATHS;
+            snprintf(config.backupPath, sizeof(config.backupPath), "%s", BACKUP_PATH_OPTIONS[pidx]);
+            changed = true;
+        }
+    }
+
+    /* Real-time save on every change */
+    if (changed) saveConfig();
+
+    /* Exit: ensure saved and return to menu */
     if ((keys & KEY_B) || (keys & KEY_START)) {
         saveConfig();
         appState = APP_MAIN_MENU;
