@@ -141,6 +141,8 @@ static int sysInfoSubIndices[MAX_TITLES];
 static int sysInfoSubCount             = 0;
 /* Settings */
 static int settingsCursor = 0;
+/* Flag: set to true after a CIA install so next Uninstall/Backup/SysInfo entry reloads */
+static bool titlesNeedRefresh = false;
 /* ============================================================
    SECTION 3: Function Prototypes
    ============================================================ */
@@ -1546,6 +1548,9 @@ void handleMainMenuInput(void) {
                 break;
             case 2: /* Uninstall */
                 cursor = 0; scrollOffset = 0;
+                /* Se i titoli sono già caricati, aggiorna subito la lista filtrata
+                   (evita lista vuota quando si arriva da Backup senza reload) */
+                if (titleCount > 0) updateFilteredList();
                 appState = APP_UNINSTALL;
                 break;
             case 3: /* SysInfo */
@@ -1851,6 +1856,7 @@ static int _installFolderCIAs(const char *folderPath) {
     const char *resDl[] = { "", "  Batch install completed.", resMsg, "", "  A=Continue" };
     drawDialog(resDl, 5);
     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+    if (installed > 0) titlesNeedRefresh = true;
     return installed;
 }
 
@@ -1984,6 +1990,7 @@ void runInstallFlow(void) {
                 bool ok = installCIA(ciaPath, dest); /* installCIA manages its own C3D frames */
 
                 if (ok) {
+                    titlesNeedRefresh = true; /* lista titoli da ricaricare al prossimo Uninstall/SysInfo */
                     char fn2[42]; strncpy(fn2, fe->name, 40); fn2[40]='\0';
                     char okMsg[48]; snprintf(okMsg, sizeof(okMsg), "  %.40s", fn2);
                     const char *okDl[] = { "  Installation complete!", okMsg, "", "  A=Continue" };
@@ -2316,8 +2323,9 @@ int main(void) {
 
         /* --- Pre-frame: lazy-load titles (OUTSIDE C3D frame to avoid nesting) --- */
         if ((appState == APP_UNINSTALL || appState == APP_BACKUP || appState == APP_SYSINFO)
-                && titleCount == 0) {
+                && (titleCount == 0 || titlesNeedRefresh)) {
             loadTitles(); /* manages its own C3D frames for progress display */
+            titlesNeedRefresh = false;
             if (appState == APP_UNINSTALL) {
                 updateFilteredList();
                 cursor = 0; scrollOffset = 0;
