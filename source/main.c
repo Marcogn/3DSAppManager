@@ -879,7 +879,7 @@ static void _renderSelectedList(void) {
     for (int i = 0; i < titleCount; i++)
         if (titles[i].selected && titles[i].isValid) selCount++;
     char hdr[64];
-    snprintf(hdr, sizeof(hdr), "TITOLI SELEZIONATI (%d)", selCount);
+    snprintf(hdr, sizeof(hdr), "SELECTED TITLES (%d)", selCount);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_RED);
     dt(4, 2, 0.5f, 0.44f, CLR_WHITE, hdr);
     int shown = 0;
@@ -893,7 +893,7 @@ static void _renderSelectedList(void) {
         shown++;
     }
     if (selCount > 10) {
-        char more[32]; snprintf(more, sizeof(more), "...e altri %d", selCount - 10);
+        char more[32]; snprintf(more, sizeof(more), "...and %d more", selCount - 10);
         dt(4, 22.0f + 10.0f * 20.0f, 0.5f, 0.40f, CLR_GRAY, more);
     }
 }
@@ -946,16 +946,16 @@ void drawControlsOverlay(void) {
     C2D_DrawRectSolid(bx,      by+bh-2,   0.5f, bw, 2,  CLR_WHITE);
     C2D_DrawRectSolid(bx,      by,        0.5f, 2,  bh, CLR_WHITE);
     C2D_DrawRectSolid(bx+bw-2, by,        0.5f, 2,  bh, CLR_WHITE);
-    dt(bx+8, by+6, 0.5f, 0.46f, CLR_CYAN, "=== COMANDI ===");
+    dt(bx+8, by+6, 0.5f, 0.46f, CLR_CYAN, "=== CONTROLS ===");
     static const char *ctrl[] = {
-        "Su/Giu    : Naviga lista",
-        "Sx/Dx     : Pagina -/+",
-        "A         : Seleziona titolo",
-        "X         : Esegui disinstallazione",
-        "L / R     : Cambia ordinamento",
-        "Y         : Cambia filtro",
-        "B         : Torna al menu principale",
-        "SELECT    : Mostra/nascondi comandi"
+        "Up/Down   : Navigate list",
+        "L/R Pad   : Page -/+",
+        "A         : Select title",
+        "X         : Run uninstall",
+        "L / R     : Change sort",
+        "Y         : Change filter",
+        "B         : Back to main menu",
+        "SELECT    : Show/hide controls"
     };
     for (int i = 0; i < 8; i++)
         dt(bx+8, by+26.0f + (float)i*13.0f, 0.5f, 0.38f, CLR_WHITE, ctrl[i]);
@@ -969,10 +969,10 @@ void drawControlsOverlay(void) {
     C2D_DrawRectSolid(bbx,       bby,        0.5f, 2,   bbh, CLR_WHITE);
     C2D_DrawRectSolid(bbx+bbw-2, bby,        0.5f, 2,   bbh, CLR_WHITE);
     dt(bbx+8, bby+8,  0.5f, 0.40f, CLR_CYAN,  "Touch screen");
-    dt(bbx+8, bby+28, 0.5f, 0.38f, CLR_GRAY,  "Dettagli titolo selezionato");
-    dt(bbx+8, bby+48, 0.5f, 0.38f, CLR_GRAY,  "visibili nella schermata");
-    dt(bbx+8, bby+68, 0.5f, 0.38f, CLR_GRAY,  "inferiore durante navigazione.");
-    dt(bbx+8, bby+88, 0.5f, 0.38f, CLR_WHITE, "Rilascia SELECT per tornare.");
+    dt(bbx+8, bby+28, 0.5f, 0.38f, CLR_GRAY,  "Selected title details are");
+    dt(bbx+8, bby+48, 0.5f, 0.38f, CLR_GRAY,  "visible on the bottom screen");
+    dt(bbx+8, bby+68, 0.5f, 0.38f, CLR_GRAY,  "while navigating.");
+    dt(bbx+8, bby+88, 0.5f, 0.38f, CLR_WHITE, "Release SELECT to return.");
 }
 
 /* drawTouchControls: draws title details on bottom screen.
@@ -980,13 +980,13 @@ void drawControlsOverlay(void) {
 void drawTouchControls(void) {
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     if (filteredCount == 0) {
-        dt(8, 110, 0.5f, 0.44f, CLR_GRAY, "Nessun titolo da mostrare.");
+        dt(8, 110, 0.5f, 0.44f, CLR_GRAY, "No titles to show.");
         return;
     }
     int idx = filteredIndices[cursor];
     TitleInfo *ti = &titles[idx];
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "DETTAGLI TITOLO");
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "TITLE DETAILS");
     /* Name */
     char nm[46]; strncpy(nm, ti->fullName[0] ? ti->fullName : ti->name, 44); nm[44] = '\0';
     dt(4, 22, 0.5f, 0.40f, CLR_WHITE, nm);
@@ -1000,20 +1000,20 @@ void drawTouchControls(void) {
     dt(4, 60, 0.5f, 0.36f, CLR_GRAY, vs);
     /* Type + Location */
     u32 hi = (u32)(ti->titleID >> 32);
-    const char *type = (hi == 0x0004000E) ? "Update" : (hi == 0x0004008C) ? "DLC" : "Gioco";
+    const char *type = (hi == 0x0004000E) ? "Update" : (hi == 0x0004008C) ? "DLC" : "Game";
     const char *loc  = (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND";
     char tl[32]; snprintf(tl, sizeof(tl), "%s  |  %s", type, loc);
     dt(4, 78, 0.5f, 0.38f, CLR_CYAN, tl);
     /* Backup */
     if (ti->hasBackup) {
         char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
-        char bk[64]; snprintf(bk, sizeof(bk), "Backup: SI [%s]", dateBuf);
+        char bk[64]; snprintf(bk, sizeof(bk), "Backup: YES [%s]", dateBuf);
         dt(4, 96, 0.5f, 0.36f, CLR_GREEN, bk);
     } else {
         dt(4, 96, 0.5f, 0.36f, CLR_RED, "Backup: NO");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "[SELECT = Comandi]");
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "[SELECT = Controls]");
 }
 
 /* drawMainMenu: called from main loop — NO C3D frame management. */
@@ -1024,11 +1024,11 @@ void drawMainMenu(void) {
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     dt(8, 4, 0.5f, 0.50f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
     static const char *items[] = {
-        "[A] Installa CIA",
-        "[B] Backup Salvataggi",
-        "[U] Disinstalla Titoli",
-        "[I] Info Sistema",
-        "[S] Impostazioni"
+        "[A] Install CIA",
+        "[B] Backup Saves",
+        "[U] Uninstall Titles",
+        "[I] System Info",
+        "[S] Settings"
     };
     for (int i = 0; i < 5; i++) {
         float y = 60.0f + (float)i * 30.0f;
@@ -1039,29 +1039,29 @@ void drawMainMenu(void) {
             dt(12, y, 0.5f, 0.50f, CLR_WHITE, ">");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "START = Esci");
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "START = Exit");
     /* Bottom screen */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     static const char *descLine1[] = {
-        "Installa file CIA dalla SD card.",
-        "Crea backup dei salvataggi",
-        "Disinstalla titoli installati",
-        "Visualizza info sui titoli",
-        "Configura le opzioni"
+        "Install CIA files from SD card.",
+        "Create save data backups",
+        "Uninstall installed titles",
+        "View info about installed titles",
+        "Configure application options"
     };
     static const char *descLine2[] = {
-        "Supporto SD e NAND.",
-        "per i titoli installati.",
-        "con backup opzionale.",
-        "installati (giochi, DLC, update).",
-        "dell'applicazione."
+        "Supports SD and NAND.",
+        "for installed titles.",
+        "with optional backup.",
+        "(games, DLC, updates).",
+        ""
     };
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Descrizione");
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Description");
     dt(8, 30, 0.5f, 0.44f, CLR_WHITE, descLine1[menuCursor]);
     dt(8, 52, 0.5f, 0.40f, CLR_GRAY,  descLine2[menuCursor]);
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A = Seleziona   START = Esci");
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A = Select   START = Exit");
 }
 
 /* drawUI: uninstall list — called from main loop, NO C3D frame management. */
@@ -1070,13 +1070,13 @@ void drawUI(void) {
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(4, 4, 0.5f, 0.46f, CLR_WHITE, "Disinstalla");
+    dt(4, 4, 0.5f, 0.46f, CLR_WHITE, "Uninstall");
     /* Info bar */
     int selCount = 0;
     for (int i = 0; i < titleCount; i++)
         if (titles[i].selected && titles[i].isValid) selCount++;
-    static const char *sortNames[]   = { "Nome", "Size", "ID" };
-    static const char *filterNames[] = { "Tutti", "Upd", "DLC" };
+    static const char *sortNames[]   = { "Name", "Size", "ID" };
+    static const char *filterNames[] = { "All", "Upd", "DLC" };
     char info[80];
     snprintf(info, sizeof(info), "T:%d  Sel:%d  Sort:%s  [%s]",
              filteredCount, selCount,
@@ -1115,7 +1115,7 @@ void drawUI(void) {
         dt(340, 225, 0.5f, 0.34f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.33f, CLR_WHITE, "A=Sel  X=Esegui  L/R=Sort  Y=Filt  B=Menu  SEL=Help");
+    dt(4, 224, 0.5f, 0.33f, CLR_WHITE, "A=Sel  X=Delete  L/R=Sort  Y=Filt  B=Menu  SEL=Help");
     /* Bottom screen via sub-function (no TextBufClear here) */
     drawTouchControls();
 }
@@ -1127,12 +1127,12 @@ static void _drawSoon(const char *feature) {
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     dt(8, 4, 0.5f, 0.50f, CLR_WHITE, feature);
-    dt(110, 95, 0.5f, 0.65f, CLR_YELLOW, "PROSSIMAMENTE");
-    dt(80, 135, 0.5f, 0.44f, CLR_GRAY, "Funzionalita' in sviluppo (v2.0).");
+    dt(110, 95, 0.5f, 0.65f, CLR_YELLOW, "COMING SOON");
+    dt(80, 135, 0.5f, 0.44f, CLR_GRAY, "Feature under development (v2.0).");
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "B / START = Torna al menu");
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "B / START = Back to menu");
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
-    dt(8, 108, 0.5f, 0.44f, CLR_GRAY, "Versione 2.0 in arrivo!");
+    dt(8, 108, 0.5f, 0.44f, CLR_GRAY, "Version 2.0 coming!");
 }
 
 /* drawFileBrowserScreen: file browser for CIA install.
@@ -1142,7 +1142,7 @@ void drawFileBrowserScreen(void) {
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Installa CIA");
+    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Install CIA");
     /* Path (show tail if long) */
     const char *dispPath = currentPath;
     char pathBuf[52];
@@ -1180,7 +1180,7 @@ void drawFileBrowserScreen(void) {
         dt(340, 225, 0.5f, 0.34f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.32f, CLR_WHITE, "A=Entra/Installa  Y=Tutto  B=Su/Menu  START=Annulla");
+    dt(4, 224, 0.5f, 0.32f, CLR_WHITE, "A=Enter/Install  Y=All  B=Up/Menu  START=Cancel");
     /* Bottom screen: info file selezionato */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1189,9 +1189,9 @@ void drawFileBrowserScreen(void) {
         FileEntry *fe = &fileEntries[fileCursor];
         if (fe->isDir) {
             if (strcmp(fe->name, "..") == 0) {
-                dt(8, 26, 0.5f, 0.40f, CLR_CYAN, "Torna alla cartella superiore");
+                dt(8, 26, 0.5f, 0.40f, CLR_CYAN, "Go to parent folder");
             } else {
-                char dline[48]; snprintf(dline, sizeof(dline), "Cartella: %.30s", fe->name);
+                char dline[48]; snprintf(dline, sizeof(dline), "Folder: %.30s", fe->name);
                 dt(8, 26, 0.5f, 0.40f, CLR_CYAN, dline);
             }
         } else {
@@ -1200,20 +1200,20 @@ void drawFileBrowserScreen(void) {
             u64 tid = getCIATitleID(fullCIAPath);
             char tidStr[36];
             if (tid) snprintf(tidStr, sizeof(tidStr), "ID: %016llX", (unsigned long long)tid);
-            else     snprintf(tidStr, sizeof(tidStr), "ID: N/D");
+            else     snprintf(tidStr, sizeof(tidStr), "ID: N/A");
             dt(8, 26, 0.5f, 0.36f, CLR_WHITE, tidStr);
             char szBuf[24]; formatSize(fe->size, szBuf, sizeof(szBuf));
-            char szLine[36]; snprintf(szLine, sizeof(szLine), "Dim: %s", szBuf);
+            char szLine[36]; snprintf(szLine, sizeof(szLine), "Size: %s", szBuf);
             dt(8, 46, 0.5f, 0.36f, CLR_GRAY, szLine);
         }
     } else {
-        dt(8, 50, 0.5f, 0.40f, CLR_GRAY, "Cartella vuota");
+        dt(8, 50, 0.5f, 0.40f, CLR_GRAY, "Empty folder");
     }
     const char *destStr = (config.installDest == 0) ? "Dest: SD" : "Dest: NAND";
     C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 206, 0.5f, 0.40f, CLR_CYAN, destStr);
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "(Dest in Impostazioni)");
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "(Dest in Settings)");
 }
 
 /* drawBackupScreen: list of ALL titles with backup status.
@@ -1226,7 +1226,7 @@ void drawBackupScreen(void) {
     int selCount = 0;
     for (int i = 0; i < titleCount; i++)
         if (titles[i].selected) selCount++;
-    char hdr[56]; snprintf(hdr, sizeof(hdr), "Backup Salvataggi   Sel:%d", selCount);
+    char hdr[56]; snprintf(hdr, sizeof(hdr), "Save Backups   Sel:%d", selCount);
     dt(4, 4, 0.5f, 0.44f, CLR_WHITE, hdr);
     /* Title list — direct index into titles[], NOT filteredIndices[] */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
@@ -1260,11 +1260,11 @@ void drawBackupScreen(void) {
         dt(352, 225, 0.5f, 0.34f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.34f, CLR_WHITE, "A=Sel  X=Backup Sel  Y=Backup Tutti  B=Menu");
+    dt(4, 224, 0.5f, 0.34f, CLR_WHITE, "A=Sel  X=Backup Sel  Y=Backup All  B=Menu");
     /* Bottom screen: details for backupCursor title */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Info Titolo");
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Title Info");
     if (backupCursor < titleCount) {
         TitleInfo *ti = &titles[backupCursor];
         char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
@@ -1282,11 +1282,11 @@ void drawBackupScreen(void) {
             char bkLine[52]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
             dt(4, 80, 0.5f, 0.36f, CLR_GREEN, bkLine);
         } else {
-            dt(4, 80, 0.5f, 0.36f, CLR_RED, "Nessun backup");
+            dt(4, 80, 0.5f, 0.36f, CLR_RED, "No backup");
         }
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.33f, CLR_GRAY, "X=Backup sel   Y=Backup tutti");
+    dt(4, 224, 0.5f, 0.33f, CLR_GRAY, "X=Backup sel   Y=Backup all");
 }
 /* SysInfo detail view state — set by _runSysInfoDetailFlow before drawTitleDetails */
 static int sysInfoDetailIdx    = 0;
@@ -1299,7 +1299,7 @@ void drawSysInfoScreen(void) {
 
     if (sysInfoMode == SYSINFO_OVERVIEW) {
         C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-        dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "INFORMAZIONI SISTEMA");
+        dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "SYSTEM INFORMATION");
         /* Calculate totals at runtime */
         int cntG=0, cntU=0, cntD=0;
         u64 szG=0, szU=0, szD=0;
@@ -1315,7 +1315,7 @@ void drawSysInfoScreen(void) {
         formatSize(szU, szBufU, sizeof(szBufU));
         formatSize(szD, szBufD, sizeof(szBufD));
         /* 3 navigable rows */
-        const char *rowLabels[] = { "Giochi: ", "Update: ", "DLC:    " };
+        const char *rowLabels[] = { "Games:   ", "Updates: ", "DLC:     " };
         int   rowCnt[] = { cntG, cntU, cntD };
         const char *rowSz[]  = { szBufG, szBufU, szBufD };
         for (int i = 0; i < 3; i++) {
@@ -1332,22 +1332,22 @@ void drawSysInfoScreen(void) {
         char szFree[24], szTot[24];
         formatSize(freeB,  szFree, sizeof(szFree));
         formatSize(totalB, szTot,  sizeof(szTot));
-        char sdLine[64]; snprintf(sdLine, sizeof(sdLine), "  SD Libero: %s / %s", szFree, szTot);
+        char sdLine[64]; snprintf(sdLine, sizeof(sdLine), "  SD Free: %s / %s", szFree, szTot);
         dt(8, 170, 0.5f, 0.42f, CLR_CYAN, sdLine);
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Entra nella categoria   B=Menu");
+        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Enter category   B=Menu");
         /* Bottom: hint */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Panoramica");
-        dt(8, 26, 0.5f, 0.40f, CLR_GRAY, "Seleziona una categoria con A");
-        dt(8, 44, 0.5f, 0.38f, CLR_GRAY, "per vedere la lista titoli,");
-        dt(8, 62, 0.5f, 0.38f, CLR_GRAY, "backup, restore o cancellazione.");
+        dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Overview");
+        dt(8, 26, 0.5f, 0.40f, CLR_GRAY, "Select a category with A");
+        dt(8, 44, 0.5f, 0.38f, CLR_GRAY, "to see the title list,");
+        dt(8, 62, 0.5f, 0.38f, CLR_GRAY, "backup, restore or delete.");
     } else {
         /* Sublist: GIOCHI / UPDATE / DLC */
         const char *hdrLabel =
-            (sysInfoMode == SYSINFO_GAMES)   ? "GIOCHI"  :
-            (sysInfoMode == SYSINFO_UPDATES) ? "UPDATE" : "DLC";
+            (sysInfoMode == SYSINFO_GAMES)   ? "GAMES"   :
+            (sysInfoMode == SYSINFO_UPDATES) ? "UPDATES" : "DLC";
         char hdr[32]; snprintf(hdr, sizeof(hdr), "%s  (%d)", hdrLabel, sysInfoSubCount);
         C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
         dt(4, 4, 0.5f, 0.48f, CLR_WHITE, hdr);
@@ -1371,7 +1371,7 @@ void drawSysInfoScreen(void) {
             dt(352, 225, 0.5f, 0.34f, CLR_GRAY, sc);
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Dettagli e azioni   B=Indietro");
+        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Details & actions   B=Back");
         /* Bottom: simplified details for cursor item */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1392,9 +1392,9 @@ void drawSysInfoScreen(void) {
                 char bkLine[48]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
                 dt(4, 76, 0.5f, 0.34f, CLR_GREEN, bkLine);
             } else {
-                dt(4, 76, 0.5f, 0.34f, CLR_RED, "Nessun backup");
+                dt(4, 76, 0.5f, 0.34f, CLR_RED, "No backup");
             }
-            dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "A = Dettagli e azioni");
+            dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "A = Details & actions");
         }
     }
 }
@@ -1403,15 +1403,15 @@ void drawSettingsScreen(void) {
     C2D_TextBufClear(dynamicBuf);
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "IMPOSTAZIONI");
+    dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "SETTINGS");
 
     static const char *labels[] = {
-        "Forza Backup:",
-        "Salta Conf. Disinstalla:",
-        "Forza Restore:",
-        "Salta Conf. Installa:",
-        "Dest. Installazione:",
-        "Cartella Backup:"
+        "Force Backup:",
+        "Skip Uninstall Confirm:",
+        "Force Restore:",
+        "Skip Install Confirm:",
+        "Install Destination:",
+        "Backup Folder:"
     };
     /* Build value strings */
     char pathBuf[32];
@@ -1439,29 +1439,29 @@ void drawSettingsScreen(void) {
         dt(258, y, 0.5f, 0.44f, CLR_CYAN, values[i]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.35f, CLR_WHITE, "A/Dx=Cambia  Sx=Cambia  B/START=Salva e Torna");
+    dt(4, 224, 0.5f, 0.35f, CLR_WHITE, "A/R=Change  L=Change  B/START=Save & Back");
 
     /* Bottom screen: contextual description */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Descrizione");
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Description");
 
     static const char *desc[6][3] = {
-        { "Backup automatico prima di",     "disinstallare (nessuna richiesta).",  "Consigliato: ON per sicurezza." },
-        { "Salta la conferma prima di",     "disinstallare titoli.",               "Consigliato: OFF (conferma sempre)." },
-        { "Ripristina save automaticamente","dopo ogni installazione CIA riuscita.","Usa solo con backup aggiornati." },
-        { "Salta la conferma prima di",     "installare file CIA.",                "Consigliato: OFF (conferma sempre)." },
-        { "Dove installare i file CIA:",    "SD = scheda di memoria,",             "NAND = solo titoli di sistema." },
-        { "Cartella per i backup save.",    "Usa Sx/Dx per ciclare fra le",       "5 destinazioni disponibili." }
+        { "Auto backup before",              "uninstalling (no prompt).",           "Recommended: ON for safety." },
+        { "Skip confirmation before",        "uninstalling titles.",                "Recommended: OFF (always confirm)." },
+        { "Auto-restore save data",          "after each successful CIA install.",  "Use only with up-to-date backups." },
+        { "Skip confirmation before",        "installing CIA files.",               "Recommended: OFF (always confirm)." },
+        { "Where to install CIA files:",     "SD = memory card,",                  "NAND = system titles only." },
+        { "Folder for save backups.",        "Use L/R to cycle through",           "5 available destinations." }
     };
     dt(8, 28, 0.5f, 0.40f, CLR_WHITE, desc[settingsCursor][0]);
     dt(8, 48, 0.5f, 0.38f, CLR_GRAY,  desc[settingsCursor][1]);
     dt(8, 68, 0.5f, 0.36f, CLR_CYAN,  desc[settingsCursor][2]);
 
     C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 206, 0.5f, 0.36f, CLR_GREEN, "Modifiche salvate in tempo reale.");
+    dt(4, 206, 0.5f, 0.36f, CLR_GREEN, "Changes saved in real time.");
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "B/START = salva e torna al menu");
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "B/START = save & back to menu");
 }
 /* drawTitleDetails: detail view for a single title (SysInfo flow).
    Called from _runSysInfoDetailFlow within C3D_FrameBegin/End — NO frame mgmt. */
@@ -1471,7 +1471,7 @@ void drawTitleDetails(void) {
     int idx = sysInfoDetailIdx;
     TitleInfo *ti = &titles[idx];
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Dettagli Titolo");
+    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Title Details");
     /* Info */
     char nm[50]; strncpy(nm, ti->fullName[0] ? ti->fullName : ti->name, 48); nm[48]='\0';
     dt(4, 28, 0.5f, 0.40f, CLR_WHITE, nm);
@@ -1487,7 +1487,7 @@ void drawTitleDetails(void) {
         char bkLine[52]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
         dt(4, 80, 0.5f, 0.34f, CLR_GREEN, bkLine);
     } else {
-        dt(4, 80, 0.5f, 0.34f, CLR_RED, "Nessun backup");
+        dt(4, 80, 0.5f, 0.34f, CLR_RED, "No backup");
     }
     /* Related titles (only for base games) */
     u32 hi = (u32)(ti->titleID >> 32);
@@ -1495,7 +1495,7 @@ void drawTitleDetails(void) {
     if (hi == 0x00040000) findRelatedTitles(ti->titleID, idx, relIdx, &relCount);
     float actY = 100.0f;
     if (relCount > 0) {
-        dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "Correlati:");
+        dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "Related:");
         for (int r = 0; r < relCount && r < 3; r++) {
             u32 rhi = (u32)(titles[relIdx[r]].titleID >> 32);
             char rl[42]; snprintf(rl, sizeof(rl), "  %s %.32s",
@@ -1507,9 +1507,9 @@ void drawTitleDetails(void) {
     }
     /* 3 action options */
     static const char *actions[] = {
-        "[A] Backup Salvataggio",
-        "[Y] Ripristina Salvataggio",
-        "[X] Cancella Titolo (+ correlati)"
+        "[A] Backup Save Data",
+        "[Y] Restore Save Data",
+        "[X] Delete Title (+ related)"
     };
     for (int a = 0; a < 3; a++) {
         float y = actY + (float)a * 19.0f;
@@ -1518,20 +1518,20 @@ void drawTitleDetails(void) {
         dt(8, y, 0.5f, 0.38f, (a == sysInfoDetailCursor) ? CLR_WHITE : CLR_GRAY, actions[a]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.36f, CLR_WHITE, "Su/Giu=Naviga  A=Esegui  B=Indietro");
+    dt(4, 224, 0.5f, 0.36f, CLR_WHITE, "Up/Down=Nav  A=Execute  B=Back");
     /* Bottom: description of selected action */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Azione");
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Action");
     static const char *actDesc[3][2] = {
-        { "Salva i dati del titolo",          "nella cartella backup configurata." },
-        { "Ripristina i dati dal backup",     "precedentemente creato." },
-        { "Elimina il titolo dal sistema",    "inclusi DLC, Update e dati." }
+        { "Save the title data",              "to the configured backup folder." },
+        { "Restore data from backup",         "previously created." },
+        { "Delete the title from the system", "including DLC, Updates and data." }
     };
     dt(8, 28, 0.5f, 0.40f, CLR_WHITE, actDesc[sysInfoDetailCursor][0]);
     dt(8, 48, 0.5f, 0.38f, CLR_GRAY,  actDesc[sysInfoDetailCursor][1]);
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "A = conferma azione");
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "A = confirm action");
 }
 
 /* ============================================================
@@ -1634,9 +1634,9 @@ static void _runUninstallDeleteFlow(void) {
         if (titles[i].selected && titles[i].isValid) selectedCount++;
 
     if (selectedCount == 0) {
-        const char *msg[] = { "", "  Nessun titolo selezionato.", "",
-                              "  Seleziona almeno un titolo con A.", "",
-                              "  Premi A per continuare." };
+        const char *msg[] = { "", "  No title selected.", "",
+                              "  Select at least one title with A.", "",
+                              "  Press A to continue." };
         drawDialog(msg, 6);
         while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
         return;
@@ -1662,8 +1662,8 @@ static void _runUninstallDeleteFlow(void) {
     }
     if (pendingCount > 0) {
         char relMsg[64];
-        snprintf(relMsg, sizeof(relMsg), "  Trovati %d titoli correlati (DLC/Update).", pendingCount);
-        const char *dl[] = { "", relMsg, "", "  A=Includi  B=Salta  START=Annulla" };
+        snprintf(relMsg, sizeof(relMsg), "  Found %d related titles (DLC/Update).", pendingCount);
+        const char *dl[] = { "", relMsg, "", "  A=Include  B=Skip  START=Cancel" };
         bool addRelated = false, cancelAll = false;
         while (aptMainLoop()) {
             drawDialogWithSelectedList(dl, 4);
@@ -1689,8 +1689,8 @@ static void _runUninstallDeleteFlow(void) {
     if (config.forceBackup) {
         doBackup = true;
     } else {
-        const char *bkDl[] = { "", "  Eseguire backup salvataggi?", "",
-                               "  A=Si   B=No   START=Annulla" };
+        const char *bkDl[] = { "", "  Backup save data?", "",
+                               "  A=Yes   B=No   START=Cancel" };
         while (aptMainLoop()) {
             drawDialogWithSelectedList(bkDl, 4);
             hidScanInput(); u32 k = hidKeysDown();
@@ -1707,7 +1707,7 @@ static void _runUninstallDeleteFlow(void) {
     if (doBackup) {
         char pathLine[80];
         snprintf(pathLine, sizeof(pathLine), "  %.46s", config.backupPath);
-        const char *pd[] = { "", pathLine, "", "  A=Usa default   Y=Scegli altro" };
+        const char *pd[] = { "", pathLine, "", "  A=Use default   Y=Choose other" };
         bool choosePath = false;
         while (aptMainLoop()) {
             drawDialogWithSelectedList(pd, 4);
@@ -1721,8 +1721,8 @@ static void _runUninstallDeleteFlow(void) {
                 if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) { pidx = i; break; }
             while (aptMainLoop()) {
                 char pl[64]; snprintf(pl, sizeof(pl), "  %.52s", BACKUP_PATH_OPTIONS[pidx]);
-                const char *ppd[] = { "  Seleziona cartella backup:", pl,
-                                      "", "  Su/Giu=Cambia   A=Conferma   B=Annulla" };
+                const char *ppd[] = { "  Select backup folder:", pl,
+                                      "", "  Up/Down=Change   A=Confirm   B=Cancel" };
                 drawDialogWithSelectedList(ppd, 4);
                 hidScanInput(); u32 k = hidKeysDown();
                 if (k & KEY_DOWN) pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS;
@@ -1735,11 +1735,11 @@ static void _runUninstallDeleteFlow(void) {
 
     /* Step 6: confirm */
     if (!config.skipUninstallConfirm) {
-        char cntMsg[64]; snprintf(cntMsg, sizeof(cntMsg), "  Cancella %d titoli?", selectedCount);
+        char cntMsg[64]; snprintf(cntMsg, sizeof(cntMsg), "  Delete %d titles?", selectedCount);
         char bkMsg[64];
-        if (doBackup) snprintf(bkMsg, sizeof(bkMsg), "  Backup in: %.36s", chosenPath);
-        else          snprintf(bkMsg, sizeof(bkMsg), "  Nessun backup.");
-        const char *cfDl[] = { "", cntMsg, bkMsg, "", "  A=Conferma   B=Annulla" };
+        if (doBackup) snprintf(bkMsg, sizeof(bkMsg), "  Backup to: %.36s", chosenPath);
+        else          snprintf(bkMsg, sizeof(bkMsg), "  No backup.");
+        const char *cfDl[] = { "", cntMsg, bkMsg, "", "  A=Confirm   B=Cancel" };
         bool confirmed = false;
         while (aptMainLoop()) {
             drawDialogWithSelectedList(cfDl, 5);
@@ -1788,12 +1788,13 @@ static void _goUpDir(void) {
     fileCursor = 0; fileScrollOffset = 0;
 }
 
-/* _installFolderCIAs: installa tutti i .cia presenti in folderPath.
-   Mostra barra di progresso via installCIA, poi un dialog riassuntivo.
-   Restituisce numero di file installati con successo. */
+/* _installFolderCIAs: install all .cia files in folderPath.
+   Shows progress bar via installCIA. After each successful install,
+   checks for an existing backup and asks to restore (mirrors single-file behaviour).
+   Returns number of successfully installed files. */
 static int _installFolderCIAs(const char *folderPath) {
     /* Collect CIA paths with opendir to avoid clobbering fileEntries[] */
-    char ciaPaths[64][512]; /* max 64 CIA per cartella */
+    char ciaPaths[64][512]; /* max 64 CIA per folder */
     int ciaCount = 0;
     DIR *d = opendir(folderPath);
     if (d) {
@@ -1811,10 +1812,53 @@ static int _installFolderCIAs(const char *folderPath) {
     FS_MediaType dest = (config.installDest == 0) ? MEDIATYPE_SD : MEDIATYPE_NAND;
     int installed = 0, failed = 0;
     for (int i = 0; i < ciaCount; i++) {
-        if (installCIA(ciaPaths[i], dest)) installed++; else failed++;
+        bool ok = installCIA(ciaPaths[i], dest); /* installCIA manages its own C3D frames */
+        if (ok) {
+            installed++;
+            /* Post-install backup check — same behaviour as single-file install */
+            u64 tid = getCIATitleID(ciaPaths[i]);
+            if (tid != 0) {
+                char backupDir[512];
+                if (findBackupDir(tid, backupDir, sizeof(backupDir))) {
+                    TitleInfo tmp;
+                    memset(&tmp, 0, sizeof(tmp));
+                    tmp.titleID = tid; tmp.mediaType = dest;
+                    getTitleName(tid, dest, tmp.name, sizeof(tmp.name));
+                    if (config.forceRestore) {
+                        restoreSaveData(&tmp);
+                        const char *rDl[] = { "", "  Save data restored", "  automatically.", "", "  A=OK" };
+                        drawDialog(rDl, 5);
+                        while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                    } else {
+                        /* Extract filename for display */
+                        const char *fname = strrchr(ciaPaths[i], '/');
+                        fname = fname ? fname + 1 : ciaPaths[i];
+                        char fn2[42]; strncpy(fn2, fname, 40); fn2[40] = '\0';
+                        char fnMsg[48]; snprintf(fnMsg, sizeof(fnMsg), "  %.40s", fn2);
+                        const char *askDl[] = { fnMsg, "  Found backup for this title.",
+                                                "  Restore save data?", "", "  A=Yes   B=No" };
+                        bool doRestore = false;
+                        while (aptMainLoop()) {
+                            drawDialog(askDl, 5);
+                            hidScanInput(); u32 rk = hidKeysDown();
+                            if (rk & KEY_A) { doRestore = true; break; }
+                            if (rk & KEY_B) break;
+                        }
+                        if (doRestore) {
+                            restoreSaveData(&tmp);
+                            const char *rDl[] = { "", "  Save data restored.", "", "  A=OK" };
+                            drawDialog(rDl, 4);
+                            while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                        }
+                    }
+                }
+            }
+        } else {
+            failed++;
+        }
     }
-    char resMsg[64]; snprintf(resMsg, sizeof(resMsg), "  Installati: %d   Falliti: %d", installed, failed);
-    const char *resDl[] = { "", "  Installazione batch completata.", resMsg, "", "  A=Continua" };
+    char resMsg[64]; snprintf(resMsg, sizeof(resMsg), "  Installed: %d   Failed: %d", installed, failed);
+    const char *resDl[] = { "", "  Batch install completed.", resMsg, "", "  A=Continue" };
     drawDialog(resDl, 5);
     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     return installed;
@@ -1862,15 +1906,15 @@ void runInstallFlow(void) {
             for (int i = 0; i < fileCount; i++)
                 if (!fileEntries[i].isDir && fileEntries[i].isCIA) ciaInDir++;
             if (ciaInDir == 0) {
-                const char *msg[] = { "", "  Nessun file CIA in questa cartella.", "", "  A=Continua" };
+                const char *msg[] = { "", "  No CIA files in this folder.", "", "  A=Continue" };
                 drawDialog(msg, 4);
                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                 continue;
             }
             if (!config.skipInstallConfirm) {
-                char cntMsg[52]; snprintf(cntMsg, sizeof(cntMsg), "  Installare %d file CIA?", ciaInDir);
-                const char *destLbl = (config.installDest == 0) ? "  Destinazione: SD" : "  Destinazione: NAND";
-                const char *cfDl[] = { "", cntMsg, (char*)destLbl, "", "  A=Si   B=No" };
+                char cntMsg[52]; snprintf(cntMsg, sizeof(cntMsg), "  Install %d CIA files?", ciaInDir);
+                const char *destLbl = (config.installDest == 0) ? "  Destination: SD" : "  Destination: NAND";
+                const char *cfDl[] = { "", cntMsg, (char*)destLbl, "", "  A=Yes   B=No" };
                 bool confirmed = false;
                 while (aptMainLoop()) {
                     drawDialog(cfDl, 5);
@@ -1903,7 +1947,7 @@ void runInstallFlow(void) {
                     else
                         snprintf(newPath, sizeof(newPath), "%s/%s", currentPath, fe->name);
                     char dirMsg[52]; snprintf(dirMsg, sizeof(dirMsg), "  %.40s", fe->name);
-                    const char *dirDl[] = { "", dirMsg, "", "  A=Entra   Y=Installa tutti .cia   B=Annulla" };
+                    const char *dirDl[] = { "", dirMsg, "", "  A=Enter   Y=Install all .cia   B=Cancel" };
                     int dirAction = 0;
                     while (aptMainLoop()) {
                         drawDialog(dirDl, 4);
@@ -1934,11 +1978,11 @@ void runInstallFlow(void) {
                 if (!config.skipInstallConfirm) {
                     char tidStr[36];
                     if (tid) snprintf(tidStr, sizeof(tidStr), "  ID: %016llX", (unsigned long long)tid);
-                    else     snprintf(tidStr, sizeof(tidStr), "  ID: N/D");
+                    else     snprintf(tidStr, sizeof(tidStr), "  ID: N/A");
                     char fnShort[40]; strncpy(fnShort, fe->name, 38); fnShort[38]='\0';
                     char fileMsg[44]; snprintf(fileMsg, sizeof(fileMsg), "  %.38s", fnShort);
                     const char *destLbl = (dest == MEDIATYPE_SD) ? "  Dest: SD" : "  Dest: NAND";
-                    const char *cfDl[] = { "  Installare?", fileMsg, tidStr, (char*)destLbl, "", "  A=Si   B=No" };
+                    const char *cfDl[] = { "  Install?", fileMsg, tidStr, (char*)destLbl, "", "  A=Yes   B=No" };
                     bool confirmed = false;
                     while (aptMainLoop()) {
                         drawDialog(cfDl, 6);
@@ -1954,7 +1998,7 @@ void runInstallFlow(void) {
                 if (ok) {
                     char fn2[42]; strncpy(fn2, fe->name, 40); fn2[40]='\0';
                     char okMsg[48]; snprintf(okMsg, sizeof(okMsg), "  %.40s", fn2);
-                    const char *okDl[] = { "  Installazione completata!", okMsg, "", "  A=Continua" };
+                    const char *okDl[] = { "  Installation complete!", okMsg, "", "  A=Continue" };
                     drawDialog(okDl, 4);
                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
 
@@ -1968,11 +2012,11 @@ void runInstallFlow(void) {
                             getTitleName(tid, dest, tmp.name, sizeof(tmp.name));
                             if (config.forceRestore) {
                                 restoreSaveData(&tmp);
-                                const char *rDl[] = { "", "  Salvataggio ripristinato", "  automaticamente.", "", "  A=OK" };
+                                const char *rDl[] = { "", "  Save data restored", "  automatically.", "", "  A=OK" };
                                 drawDialog(rDl, 5);
                                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                             } else {
-                                const char *askDl[] = { "", "  Trovato backup per questo titolo.", "  Ripristinare il salvataggio?", "", "  A=Si   B=No" };
+                                const char *askDl[] = { "", "  Found backup for this title.", "  Restore save data?", "", "  A=Yes   B=No" };
                                 bool doRestore = false;
                                 while (aptMainLoop()) {
                                     drawDialog(askDl, 5);
@@ -1982,7 +2026,7 @@ void runInstallFlow(void) {
                                 }
                                 if (doRestore) {
                                     restoreSaveData(&tmp);
-                                    const char *rDl[] = { "", "  Salvataggio ripristinato.", "", "  A=OK" };
+                                    const char *rDl[] = { "", "  Save data restored.", "", "  A=OK" };
                                     drawDialog(rDl, 4);
                                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                                 }
@@ -1991,7 +2035,7 @@ void runInstallFlow(void) {
                     }
                     /* Stay in browser after single install (user may install more) */
                 } else {
-                    const char *errDl[] = { "", "  Errore durante l'installazione.", "  Verifica che il file CIA sia valido.", "", "  A=Continua" };
+                    const char *errDl[] = { "", "  Error during installation.", "  Check that the CIA file is valid.", "", "  A=Continue" };
                     drawDialog(errDl, 5);
                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                 }
@@ -2040,13 +2084,13 @@ void runBackupFlow(void) {
             for (int i = 0; i < titleCount; i++)
                 if (titles[i].selected && titles[i].isValid) selCount++;
             if (selCount == 0) {
-                const char *msg[] = { "", "  Nessun titolo selezionato.", "  Seleziona titoli con A.", "", "  Premi A per continuare." };
+                const char *msg[] = { "", "  No title selected.", "  Select titles with A.", "", "  Press A to continue." };
                 drawDialog(msg, 5);
                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                 continue;
             }
-            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup di %d titoli selezionati?", selCount);
-            const char *cfDl[] = { "", cntMsg, "", "  A=Si   B=No" };
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup %d selected titles?", selCount);
+            const char *cfDl[] = { "", cntMsg, "", "  A=Yes   B=No" };
             bool confirmed = false;
             while (aptMainLoop()) {
                 drawDialog(cfDl, 4);
@@ -2063,8 +2107,8 @@ void runBackupFlow(void) {
                 titles[i].hasBackup = true;
                 done++;
             }
-            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completato per %d titoli.", done);
-            const char *doneDl[] = { "", doneMsg, "", "  A=Continua" };
+            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
+            const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
             drawDialog(doneDl, 4);
             while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
@@ -2075,8 +2119,8 @@ void runBackupFlow(void) {
             int validCount = 0;
             for (int i = 0; i < titleCount; i++)
                 if (titles[i].isValid) validCount++;
-            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup di TUTTI i titoli (%d)?", validCount);
-            const char *cfDl[] = { "", cntMsg, "  Potrebbe richiedere del tempo.", "", "  A=Si   B=No" };
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup ALL titles (%d)?", validCount);
+            const char *cfDl[] = { "", cntMsg, "  This may take a while.", "", "  A=Yes   B=No" };
             bool confirmed = false;
             while (aptMainLoop()) {
                 drawDialog(cfDl, 5);
@@ -2093,8 +2137,8 @@ void runBackupFlow(void) {
                 titles[i].hasBackup = true;
                 done++;
             }
-            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completato per %d titoli.", done);
-            const char *doneDl[] = { "", doneMsg, "", "  A=Continua" };
+            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
+            const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
             drawDialog(doneDl, 4);
             while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
@@ -2167,24 +2211,24 @@ static void _runSysInfoDetailFlow(void) {
                 /* Backup save */
                 backupSaveData(&titles[idx]);
                 titles[idx].hasBackup = true;
-                const char *msg[] = { "", "  Backup eseguito.", "", "  A=OK" };
+                const char *msg[] = { "", "  Backup completed.", "", "  A=OK" };
                 drawDialog(msg, 4);
                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
 
             } else if (sysInfoDetailCursor == 1) {
                 /* Restore save */
                 if (!titles[idx].hasBackup) {
-                    const char *msg[] = { "", "  Nessun backup disponibile.", "", "  A=OK" };
+                    const char *msg[] = { "", "  No backup available.", "", "  A=OK" };
                     drawDialog(msg, 4);
                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                     continue;
                 }
                 bool ok = restoreSaveData(&titles[idx]);
                 if (ok) {
-                    const char *msg[] = { "", "  Salvataggio ripristinato.", "", "  A=OK" };
+                    const char *msg[] = { "", "  Save data restored.", "", "  A=OK" };
                     drawDialog(msg, 4);
                 } else {
-                    const char *msg[] = { "", "  Errore nel ripristino.", "", "  A=OK" };
+                    const char *msg[] = { "", "  Restore error.", "", "  A=OK" };
                     drawDialog(msg, 4);
                 }
                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
