@@ -2079,6 +2079,17 @@ void runBackupFlow(void) {
                 if (backupCursor < backupScrollOffset) backupScrollOffset = backupCursor;
             }
         }
+        if (k & KEY_RIGHT) {
+            backupCursor += MAX_VISIBLE_TITLES;
+            if (backupCursor >= titleCount) backupCursor = (titleCount > 0) ? titleCount - 1 : 0;
+            if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
+                backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
+        }
+        if (k & KEY_LEFT) {
+            backupCursor -= MAX_VISIBLE_TITLES;
+            if (backupCursor < 0) backupCursor = 0;
+            if (backupCursor < backupScrollOffset) backupScrollOffset = backupCursor;
+        }
 
         /* Select / deselect current title */
         if (k & KEY_A)
