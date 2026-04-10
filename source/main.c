@@ -1465,11 +1465,11 @@ void drawSettingsScreen(void) {
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Description");
 
     static const char *desc[5][3] = {
-        { "Auto backup before",              "uninstalling (no prompt).",           "Recommended: ON for safety." },
-        { "Skip confirmation before",        "uninstalling titles.",                "Recommended: OFF (always confirm)." },
-        { "Auto-restore save data",          "after each successful CIA install.",  "Use only with up-to-date backups." },
-        { "Skip confirmation before",        "installing CIA files.",               "Recommended: OFF (always confirm)." },
-        { "Folder for save backups.",        "Use Left/Right or L/R to cycle",     "through 5 available destinations." }
+        { "Backup automatico prima di ogni",   "uninstall (nessuna conferma).",      "Consigliato: ON per sicurezza." },
+        { "Salta la conferma di cancellazione","Elimina subito alla pressione X.",   "Consigliato: OFF (conferma sempre)." },
+        { "Ripristino save automatico",        "dopo ogni install CIA riuscita.",    "Usare solo con backup aggiornati." },
+        { "Salta la conferma di installazione","Installa il CIA immediatamente.",    "Consigliato: OFF (conferma sempre)." },
+        { "Folder for save backups.",          "Use Left/Right or L/R to cycle",    "through 5 available destinations." }
     };
     if (settingsCursor == 4) {
         /* Show full path on bottom screen */
