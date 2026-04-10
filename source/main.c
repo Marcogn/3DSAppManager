@@ -5,14 +5,15 @@
 #include <string.h>
 #include <stdbool.h>
 #include <sys/stat.h>
-
-// SMDH structure definition (from old libctru)
+#include <dirent.h>
+#include <sys/statvfs.h>
+#include <time.h>
+/* SMDH structure definition */
 typedef struct {
     u16 shortDescription[0x40];
     u16 longDescription[0x80];
     u16 publisher[0x40];
 } SMDH_title;
-
 typedef struct {
     u32 magic;
     u16 version;
@@ -31,16 +32,70 @@ typedef struct {
     u8 smallIcon[0x480];
     u8 largeIcon[0x1200];
 } SMDH;
-
-#define MAX_TITLES 500  // Increased to support more titles than HOME menu limit
-#define CONFIG_PATH "sdmc:/3ds/fast-uninstall/config.ini"
+#define MAX_TITLES        500
+#define CONFIG_PATH       "sdmc:/3ds/fast-uninstall/config.ini"
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
-#define LANGUAGE_ENGLISH 1
-#define SMDH_ICON_PATH 0x6E6F6369  // "icon" in little-endian
-#define MAX_FILE_SIZE (100 * 1024 * 1024)  // 100MB per file
-#define MAX_VISIBLE_TITLES 13  // Reduced for double-spacing (better readability)
-
-// Alternative backup paths for user selection
+#define LANGUAGE_ENGLISH  1
+#define SMDH_ICON_PATH    0x6E6F6369
+#define MAX_FILE_SIZE     (100 * 1024 * 1024)
+#define MAX_VISIBLE_TITLES 13
+#define MAX_FILES         256
+#define CHUNK_SIZE        0x10000
+#define ALIGN64(x)        (((u32)(x) + 63) & ~63U)
+/* ---- Enums ---- */
+typedef enum {
+    APP_MAIN_MENU,
+    APP_INSTALL,
+    APP_BACKUP,
+    APP_UNINSTALL,
+    APP_SYSINFO,
+    APP_SETTINGS
+} AppState;
+typedef enum {
+    SORT_BY_NAME,
+    SORT_BY_SIZE,
+    SORT_BY_TITLEID
+} SortMode;
+typedef enum {
+    FILTER_ALL,
+    FILTER_UPDATES,
+    FILTER_DLC
+} FilterMode;
+typedef enum {
+    SYSINFO_OVERVIEW,
+    SYSINFO_GAMES,
+    SYSINFO_UPDATES,
+    SYSINFO_DLC
+} SysInfoMode;
+/* ---- Structs ---- */
+typedef struct {
+    u64 titleID;
+    char name[256];
+    char fullName[256];
+    FS_MediaType mediaType;
+    bool selected;
+    bool isValid;
+    u16 version;
+    bool hasBackup;
+    C2D_Image icon;
+    bool iconLoaded;
+    u64 size;
+} TitleInfo;
+typedef struct {
+    char backupPath[256];
+    bool forceBackup;
+    bool skipUninstallConfirm;
+    bool forceRestore;
+    bool skipInstallConfirm;
+    int  installDest; /* 0=SD, 1=NAND */
+} Config;
+typedef struct {
+    char name[256];
+    bool isDir;
+    bool isCIA;
+    u64  size;
+} FileEntry;
+/* Alternative backup paths */
 static const char *BACKUP_PATH_OPTIONS[] = {
     "sdmc:/3ds/fast-uninstall/backups",
     "sdmc:/backups/3ds-titles",
@@ -48,2030 +103,1412 @@ static const char *BACKUP_PATH_OPTIONS[] = {
     "sdmc:/3ds-backups",
     "sdmc:/backups"
 };
-#define NUM_BACKUP_PATHS (sizeof(BACKUP_PATH_OPTIONS) / sizeof(BACKUP_PATH_OPTIONS[0]))
-
-typedef struct {
-    u64 titleID;
-    char name[256];
-    char fullName[256];  // Full name without truncation
-    FS_MediaType mediaType;
-    bool selected;
-    bool isValid;
-    u16 version;
-    bool hasBackup;
-    C2D_Image icon;  // Icon texture for bottom screen
-    bool iconLoaded;
-    u64 size;  // Size in bytes
-} TitleInfo;
-
-typedef struct {
-    char backupPath[256];
-} Config;
-
-typedef enum {
-    SORT_BY_NAME,
-    SORT_BY_SIZE,
-    SORT_BY_TITLEID
-} SortMode;
-
-typedef enum {
-    FILTER_ALL,
-    FILTER_UPDATES,
-    FILTER_DLC
-} FilterMode;
-
+#define NUM_BACKUP_PATHS (sizeof(BACKUP_PATH_OPTIONS)/sizeof(BACKUP_PATH_OPTIONS[0]))
+/* ============================================================
+   SECTION 2: Global Variables
+   ============================================================ */
 static TitleInfo titles[MAX_TITLES];
-static int titleCount = 0;
-static int cursor = 0;
-static int scrollOffset = 0;
+static int titleCount      = 0;
+static int cursor          = 0;
+static int scrollOffset    = 0;
 static Config config;
-static C3D_RenderTarget* top;
-static C3D_RenderTarget* bottom;
-static C2D_TextBuf dynamicBuf;  // Text buffer for dynamic text rendering
-static bool needsRedraw = true;  // Flag to track if UI needs redrawing
-static SortMode currentSortMode = SORT_BY_NAME;  // Default sort by name
-static FilterMode currentFilterMode = FILTER_ALL;  // Default show all
-static int filteredIndices[MAX_TITLES];  // Indices of filtered titles
-static int filteredCount = 0;  // Count of filtered titles
-
-// Function prototypes
-void loadConfig();
-void saveDefaultConfig();
+static C3D_RenderTarget *top;
+static C3D_RenderTarget *bottom;
+static C2D_TextBuf dynamicBuf;
+static bool needsRedraw    = true;
+static SortMode  currentSortMode   = SORT_BY_NAME;
+static FilterMode currentFilterMode = FILTER_ALL;
+static int filteredIndices[MAX_TITLES];
+static int filteredCount   = 0;
+/* App state */
+static AppState appState   = APP_MAIN_MENU;
+static int menuCursor      = 0;
+/* File browser */
+static FileEntry fileEntries[MAX_FILES];
+static int fileCount       = 0;
+static int fileCursor      = 0;
+static int fileScrollOffset = 0;
+static char currentPath[512];
+/* Backup flow */
+static int backupCursor      = 0;
+static int backupScrollOffset = 0;
+/* System Info */
+static SysInfoMode sysInfoMode         = SYSINFO_OVERVIEW;
+static int sysInfoCursor               = 0;
+static int sysInfoSubCursor            = 0;
+static int sysInfoSubScrollOffset      = 0;
+static int sysInfoSubIndices[MAX_TITLES];
+static int sysInfoSubCount             = 0;
+/* Settings */
+static int settingsCursor = 0;
+/* ============================================================
+   SECTION 3: Function Prototypes
+   ============================================================ */
+void createDirectory(const char *path);
+void loadConfig(void);
+void saveConfig(void);
+void saveDefaultConfig(void);
 void sanitizeName(char *name);
-void sortTitles();
-int compareTitlesByName(const void *a, const void *b);
-int compareTitlesBySize(const void *a, const void *b);
-int compareTitlesByID(const void *a, const void *b);
+void formatSize(u64 size, char *buf, size_t bufSize);
+void sortTitles(void);
+void updateFilteredList(void);
+int  compareTitlesByName(const void *a, const void *b);
+int  compareTitlesBySize(const void *a, const void *b);
+int  compareTitlesByID(const void *a, const void *b);
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize);
 void getTitleInfo(TitleInfo *title);
-u64 getTitleSize(u64 titleID, FS_MediaType mediaType);
+u64  getTitleSize(u64 titleID, FS_MediaType mediaType);
 bool checkBackupExists(u64 titleID);
+bool findBackupDir(u64 titleID, char *outDir, size_t outSize);
+void getBackupDirName(u64 titleID, const char *titleName, char *outName, size_t outSize);
+bool getBackupLastDate(u64 titleID, char *outDate, size_t outSize);
 void loadTitleIcon(TitleInfo *title);
-void drawTitleDetails();
 void drawLoadingScreen(int current, int total, const char *status);
-void loadTitles();
-void drawUI();
-void drawSelectedTitlesList();
-void drawTouchControls();
+void loadTitles(void);
+void findRelatedTitles(u64 baseTitleID, int selfIdx, int *outIdx, int *outCount);
+bool getSDFreeSpace(u64 *freeBytes, u64 *totalBytes);
+/* Backup / Restore / Install */
+void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath);
+void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName);
+void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
+void backupSaveData(TitleInfo *title);
+void restoreDirectory(FS_Archive archive, const char *srcPath, const char *dstPath);
+bool restoreSaveData(TitleInfo *title);
+u64  getCIATitleID(const char *ciaPath);
+int  scanDirectory(const char *path);
+bool installCIA(const char *ciaPath, FS_MediaType dest);
+/* Delete */
+void deleteTitleCompletely(TitleInfo *title);
+void deleteTitle(TitleInfo *title);
+/* Draw */
+void drawMainMenu(void);
+void drawUI(void);
+void drawSelectedTitlesList(void);
+void drawTouchControls(void);
 void drawDialog(const char **lines, int lineCount);
 void drawDialogWithSelectedList(const char **lines, int lineCount);
-void handleInput();
-void backupSaveData(TitleInfo *title);
-void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
-void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName);
-void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath);
-void deleteTitle(TitleInfo *title);
-void deleteTitleCompletely(TitleInfo *title);
-void createDirectory(const char *path);
-
+void drawControlsOverlay(void);
+void drawFileBrowserScreen(void);
+void drawBackupScreen(void);
+void drawSysInfoScreen(void);
+void drawSettingsScreen(void);
+void drawTitleDetails(void);
+/* Input / Flows */
+void handleMainMenuInput(void);
+void handleUninstallInput(void);
+void runInstallFlow(void);
+void runBackupFlow(void);
+void handleSysInfoInput(void);
+void handleSettingsInput(void);
+/* ============================================================
+   SECTION 4: Utility Functions
+   ============================================================ */
 void createDirectory(const char *path) {
-    char tmpPath[256];
+    char tmp[256];
     char *p = NULL;
-    size_t len;
-
-    snprintf(tmpPath, sizeof(tmpPath), "%s", path);
-    len = strlen(tmpPath);
-    
-    if (tmpPath[len - 1] == '/')
-        tmpPath[len - 1] = 0;
-    
-    for (p = tmpPath + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            mkdir(tmpPath, 0777);
-            *p = '/';
-        }
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    size_t len = strlen(tmp);
+    if (tmp[len-1] == '/') tmp[len-1] = 0;
+    for (p = tmp+1; *p; p++) {
+        if (*p == '/') { *p=0; mkdir(tmp,0777); *p='/'; }
     }
-    mkdir(tmpPath, 0777);
+    mkdir(tmp, 0777);
 }
-
-void loadConfig() {
-    // Set default values
-    snprintf(config.backupPath, sizeof(config.backupPath), "%s", DEFAULT_BACKUP_PATH);
-    
-    FILE *f = fopen(CONFIG_PATH, "r");
-    if (f == NULL) {
-        // Config doesn't exist, create default
-        saveDefaultConfig();
-        return;
-    }
-    
-    char line[512];
-    while (fgets(line, sizeof(line), f)) {
-        // Remove newline
-        line[strcspn(line, "\r\n")] = 0;
-        
-        // Skip empty lines and comments
-        if (line[0] == '\0' || line[0] == '#' || line[0] == ';')
-            continue;
-        
-        // Parse key=value
-        char *equal = strchr(line, '=');
-        if (equal) {
-            *equal = '\0';
-            char *key = line;
-            char *value = equal + 1;
-            
-            // Trim whitespace
-            while (*key == ' ' || *key == '\t') key++;
-            while (*value == ' ' || *value == '\t') value++;
-            
-            if (strcmp(key, "backup_path") == 0) {
-                snprintf(config.backupPath, sizeof(config.backupPath), "%s", value);
-            }
-        }
-    }
-    
-    fclose(f);
-}
-
-void saveDefaultConfig() {
-    createDirectory("sdmc:/3ds/fast-uninstall");
-    
-    FILE *f = fopen(CONFIG_PATH, "w");
-    if (f == NULL)
-        return;
-    
-    fprintf(f, "# 3DS Fast Uninstall Configuration\n");
-    fprintf(f, "# Path where save backups will be stored\n");
-    fprintf(f, "backup_path=%s\n", DEFAULT_BACKUP_PATH);
-    
-    fclose(f);
-}
-
 void sanitizeName(char *name) {
     if (!name) return;
-
-    char *src = name;
-    char *dst = name;
-
+    char *src = name, *dst = name;
     while (*src) {
-        // Keep only printable ASCII characters (32-126)
-        // Replace others with spaces or skip them
-        if (*src >= 32 && *src <= 126) {
-            // Skip some problematic characters that might cause issues
-            if (*src != '|' && *src != '<' && *src != '>' &&
-                *src != '"' && *src != '\\' && *src != '/' &&
-                *src != ':' && *src != '*' && *src != '?') {
+        if ((unsigned char)*src >= 32 && (unsigned char)*src <= 126) {
+            if (*src!='|'&&*src!='<'&&*src!='>'&&*src!='"'&&
+                *src!='\\'&&*src!='/'&&*src!=':'&&*src!='*'&&*src!='?')
                 *dst++ = *src;
-            } else {
-                *dst++ = ' ';
-            }
-        } else if ((unsigned char)*src >= 128) {
-            // Non-ASCII character, skip it
-            // Could be part of UTF-8 sequence causing corruption
+            else *dst++ = ' ';
         }
         src++;
     }
     *dst = '\0';
-
-    // Trim trailing spaces
-    while (dst > name && *(dst-1) == ' ') {
-        *(--dst) = '\0';
-    }
-
-    // If name is empty after sanitization, set a default
-    if (name[0] == '\0') {
-        strcpy(name, "Unknown Title");
-    }
+    while (dst > name && *(dst-1)==' ') *(--dst)='\0';
+    if (name[0]=='\0') strcpy(name,"Unknown Title");
 }
-
-int compareTitlesByName(const void *a, const void *b) {
-    const TitleInfo *ta = (const TitleInfo*)a;
-    const TitleInfo *tb = (const TitleInfo*)b;
-    return strcasecmp(ta->name, tb->name);
+void formatSize(u64 size, char *buf, size_t bufSize) {
+    if (size >= (u64)1024*1024*1024)
+        snprintf(buf, bufSize, "%.2f GB", (float)size/(1024.0f*1024.0f*1024.0f));
+    else if (size >= 1024*1024)
+        snprintf(buf, bufSize, "%.2f MB", (float)size/(1024.0f*1024.0f));
+    else if (size >= 1024)
+        snprintf(buf, bufSize, "%.2f KB", (float)size/1024.0f);
+    else
+        snprintf(buf, bufSize, "%llu B", (unsigned long long)size);
 }
-
-int compareTitlesBySize(const void *a, const void *b) {
-    const TitleInfo *ta = (const TitleInfo*)a;
-    const TitleInfo *tb = (const TitleInfo*)b;
-    // Ordine decrescente: grandi prima
-    if (ta->size > tb->size) return -1;
-    if (ta->size < tb->size) return 1;
-    return 0;
+/* ============================================================
+   SECTION 5: Config Functions
+   ============================================================ */
+void loadConfig(void) {
+    snprintf(config.backupPath, sizeof(config.backupPath), "%s", DEFAULT_BACKUP_PATH);
+    config.forceBackup          = false;
+    config.skipUninstallConfirm = false;
+    config.forceRestore         = false;
+    config.skipInstallConfirm   = false;
+    config.installDest          = 0; /* SD */
+    FILE *f2 = fopen(CONFIG_PATH, "r");
+    if (!f2) { saveDefaultConfig(); return; }
+    char line[512];
+    while (fgets(line, sizeof(line), f2)) {
+        line[strcspn(line,"\r\n")] = 0;
+        if (line[0]=='\0'||line[0]=='#'||line[0]==';') continue;
+        char *eq = strchr(line,'=');
+        if (!eq) continue;
+        *eq='\0';
+        char *key=line, *val=eq+1;
+        while (*key==' '||*key=='\t') key++;
+        while (*val==' '||*val=='\t') val++;
+        if (strcmp(key,"backup_path")==0)
+            snprintf(config.backupPath,sizeof(config.backupPath),"%s",val);
+        else if (strcmp(key,"force_backup")==0)
+            config.forceBackup=(strcmp(val,"1")==0||strcmp(val,"true")==0);
+        else if (strcmp(key,"skip_uninstall_confirm")==0)
+            config.skipUninstallConfirm=(strcmp(val,"1")==0||strcmp(val,"true")==0);
+        else if (strcmp(key,"force_restore")==0)
+            config.forceRestore=(strcmp(val,"1")==0||strcmp(val,"true")==0);
+        else if (strcmp(key,"skip_install_confirm")==0)
+            config.skipInstallConfirm=(strcmp(val,"1")==0||strcmp(val,"true")==0);
+        else if (strcmp(key,"install_dest")==0)
+            config.installDest=atoi(val);
+    }
+    fclose(f2);
 }
-
-int compareTitlesByID(const void *a, const void *b) {
-    const TitleInfo *ta = (const TitleInfo*)a;
-    const TitleInfo *tb = (const TitleInfo*)b;
-    if (ta->titleID < tb->titleID) return -1;
-    if (ta->titleID > tb->titleID) return 1;
-    return 0;
+void saveConfig(void) {
+    createDirectory("sdmc:/3ds/fast-uninstall");
+    FILE *f2 = fopen(CONFIG_PATH,"w");
+    if (!f2) return;
+    fprintf(f2,"# 3DS Fast Uninstall Configuration\n");
+    fprintf(f2,"backup_path=%s\n", config.backupPath);
+    fprintf(f2,"force_backup=%d\n", config.forceBackup?1:0);
+    fprintf(f2,"skip_uninstall_confirm=%d\n", config.skipUninstallConfirm?1:0);
+    fprintf(f2,"force_restore=%d\n", config.forceRestore?1:0);
+    fprintf(f2,"skip_install_confirm=%d\n", config.skipInstallConfirm?1:0);
+    fprintf(f2,"install_dest=%d\n", config.installDest);
+    fclose(f2);
 }
-
-void sortTitles() {
-    if (titleCount <= 0) return;
-
-    if (currentSortMode == SORT_BY_NAME) {
-        qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesByName);
-    } else if (currentSortMode == SORT_BY_SIZE) {
-        qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesBySize);
-    } else {
-        qsort(titles, titleCount, sizeof(TitleInfo), compareTitlesByID);
-    }
-
-    // Reset cursor to top after sorting (but keep selections)
-    cursor = 0;
-    scrollOffset = 0;
-    needsRedraw = true;
+void saveDefaultConfig(void) {
+    createDirectory("sdmc:/3ds/fast-uninstall");
+    FILE *f2 = fopen(CONFIG_PATH,"w");
+    if (!f2) return;
+    fprintf(f2,"# 3DS Fast Uninstall Configuration\n");
+    fprintf(f2,"backup_path=%s\n", DEFAULT_BACKUP_PATH);
+    fprintf(f2,"force_backup=0\n");
+    fprintf(f2,"skip_uninstall_confirm=0\n");
+    fprintf(f2,"force_restore=0\n");
+    fprintf(f2,"skip_install_confirm=0\n");
+    fprintf(f2,"install_dest=0\n");
+    fclose(f2);
 }
-
-void updateFilteredList() {
-    filteredCount = 0;
-
-    for (int i = 0; i < titleCount; i++) {
-        u32 highID = (u32)(titles[i].titleID >> 32);
-        bool shouldShow = false;
-
-        if (currentFilterMode == FILTER_ALL) {
-            shouldShow = true;
-        } else if (currentFilterMode == FILTER_UPDATES && highID == 0x0004000E) {
-            shouldShow = true;
-        } else if (currentFilterMode == FILTER_DLC && highID == 0x0004008C) {
-            shouldShow = true;
-        }
-
-        if (shouldShow) {
-            filteredIndices[filteredCount++] = i;
-        }
+/* ============================================================
+   SECTION 6: Backup Directory Helpers
+   ============================================================ */
+void getBackupDirName(u64 titleID, const char *titleName, char *outName, size_t outSize) {
+    char safe[80];
+    strncpy(safe, titleName, 79); safe[79]='\0';
+    for (char *p=safe; *p; p++) {
+        if (*p=='/'||*p=='\\'||*p==':'||*p=='*'||*p=='?'||
+            *p=='"'||*p=='<'||*p=='>'||*p=='|'||*p=='\n'||*p=='\r')
+            *p='_';
     }
-
-    // Adjust cursor for filtered list
-    if (cursor >= filteredCount && filteredCount > 0) {
-        cursor = filteredCount - 1;
-    }
-    if (cursor < 0 && filteredCount > 0) {
-        cursor = 0;
-    }
+    /* Limit name part to 60 chars */
+    if (strlen(safe)>60) safe[60]='\0';
+    snprintf(outName, outSize, "%016llX-%s", (unsigned long long)titleID, safe);
 }
-
-void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
-    SMDH smdh;
-    AM_TitleEntry titleEntry;
-    
-    // Try to get title info
-    Result res = AM_GetTitleInfo(mediaType, 1, &titleID, &titleEntry);
-    if (R_FAILED(res)) {
-        snprintf(outName, outSize, "Unknown [%016llX]", titleID);
-        return;
-    }
-    
-    // Try to load SMDH (icon file from title archive)
-    Handle fileHandle;
-    u32 archivePath[] = {titleID & 0xFFFFFFFF, (titleID >> 32) & 0xFFFFFFFF, mediaType, 0};
-    static const u32 filePath[] = {0, 0, 2, SMDH_ICON_PATH, 0};
-    
-    FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
-    FS_Path binFilePath = {PATH_BINARY, 20, filePath};
-    
-    res = FSUSER_OpenFileDirectly(&fileHandle, ARCHIVE_SAVEDATA_AND_CONTENT, binArchPath, binFilePath, FS_OPEN_READ, 0);
-    if (R_SUCCEEDED(res)) {
-        u32 bytesRead;
-        FSFILE_Read(fileHandle, &bytesRead, 0, &smdh, sizeof(SMDH));
-        FSFILE_Close(fileHandle);
-        
-        if (bytesRead >= sizeof(u32) && smdh.magic == 0x48444D53) {  // 'SMDH' in little-endian
-            // Try to get system language first
-            u8 cfgLanguage = CFG_LANGUAGE_EN;
-            CFGU_GetSystemLanguage(&cfgLanguage);
-
-            // Try system language, then English, then Japanese, then any available
-            int tryOrder[3];
-            tryOrder[0] = (cfgLanguage < 12) ? cfgLanguage : 1;  // System language
-            tryOrder[1] = 1;  // English
-            tryOrder[2] = 0;  // Japanese
-
-            bool foundName = false;
-            for (int attempt = 0; attempt < 3 && !foundName; attempt++) {
-                int langIndex = tryOrder[attempt];
-                if (attempt > 0 && langIndex == tryOrder[0]) continue;  // Skip if same as already tried
-
-                ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[langIndex].shortDescription, outSize - 1);
-                if (units > 0) {
-                    outName[units] = '\0';
-
-                    // Check if we got actual text (not empty or just spaces)
-                    bool hasContent = false;
-                    for (int i = 0; i < units; i++) {
-                        if (outName[i] != ' ' && outName[i] != '\0') {
-                            hasContent = true;
-                            break;
-                        }
-                    }
-
-                    if (hasContent) {
-                        foundName = true;
-                        break;
-                    }
-                }
-            }
-
-            // If still no name, try all languages
-            if (!foundName) {
-                for (int i = 0; i < 12; i++) {
-                    ssize_t units = utf16_to_utf8((uint8_t*)outName, smdh.titles[i].shortDescription, outSize - 1);
-                    if (units > 0) {
-                        outName[units] = '\0';
-                        bool hasContent = false;
-                        for (int j = 0; j < units; j++) {
-                            if (outName[j] != ' ' && outName[j] != '\0') {
-                                hasContent = true;
-                                break;
-                            }
-                        }
-                        if (hasContent) {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Sanitize but keep Unicode characters (don't filter out high bytes)
-            // Only remove problematic filesystem characters
-            char *src = outName;
-            char *dst = outName;
-            while (*src) {
-                if (*src != '|' && *src != '<' && *src != '>' &&
-                    *src != '"' && *src != '\\' && *src != '/' &&
-                    *src != ':' && *src != '*' && *src != '?') {
-                    *dst++ = *src;
-                }
-                src++;
-            }
-            *dst = '\0';
-
-            // Add type indicator based on titleID with Unicode symbols
-            u32 highID = (u32)(titleID >> 32);
-            if (highID == 0x0004000E) {
-                strncat(outName, " \xE2\x86\x91", outSize - strlen(outName) - 1);  // ↑
-            } else if (highID == 0x0004008C) {
-                strncat(outName, " \xE2\x8A\x95", outSize - strlen(outName) - 1);  // ⊕
-            }
-
-            return;
+bool findBackupDir(u64 titleID, char *outDir, size_t outSize) {
+    char prefix[20];
+    snprintf(prefix, sizeof(prefix), "%016llX", (unsigned long long)titleID);
+    DIR *d = opendir(config.backupPath);
+    if (!d) return false;
+    struct dirent *entry;
+    while ((entry=readdir(d))!=NULL) {
+        if (strncmp(entry->d_name, prefix, 16)==0) {
+            snprintf(outDir, outSize, "%s/%s", config.backupPath, entry->d_name);
+            closedir(d);
+            return true;
         }
     }
-
-    // Fallback to title ID with type indicator
-    u32 highID = (u32)(titleID >> 32);
-    const char *typeStr = "";
-    if (highID == 0x0004000E) typeStr = " \xE2\x86\x91";  // ↑ for Update
-    else if (highID == 0x0004008C) typeStr = " \xE2\x8A\x85";  // ⊕ for DLC
-
-    snprintf(outName, outSize, "Title%s [%016llX]", typeStr, titleID);
+    closedir(d);
+    return false;
 }
-
-bool checkBackupExists(u64 titleID) {
+bool getBackupLastDate(u64 titleID, char *outDate, size_t outSize) {
     char backupDir[512];
-    snprintf(backupDir, sizeof(backupDir), "%s/%016llX", config.backupPath, titleID);
-
-    struct stat st;
-    return (stat(backupDir, &st) == 0 && S_ISDIR(st.st_mode));
-}
-
-u64 getTitleSize(u64 titleID, FS_MediaType mediaType) {
-    u64 size = 0;
-    Result res;
-
-    // Try to get title size from AM service
-    AM_TitleEntry entry;
-    res = AM_GetTitleInfo(mediaType, 1, &titleID, &entry);
-    if (R_SUCCEEDED(res)) {
-        // Size is in the title entry
-        size = entry.size;
-    }
-
-    // If that failed, try to calculate from filesystem
-    if (size == 0) {
-        u32 archivePath[] = {titleID & 0xFFFFFFFF, (titleID >> 32) & 0xFFFFFFFF, mediaType, 0};
-        FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
-
-        FS_Archive archive;
-        res = FSUSER_OpenArchive(&archive, ARCHIVE_SAVEDATA_AND_CONTENT, binArchPath);
-        if (R_SUCCEEDED(res)) {
-            // Archive opened, but getting exact size is complex
-            // Return approximate size (this is a fallback)
-            FSUSER_CloseArchive(archive);
-        }
-    }
-
-    return size;
-}
-
-void loadTitleIcon(TitleInfo *title) {
-    // Icon loading disabled for now due to complexity with citro2d structures
-    // TODO: Implement proper icon loading with correct memory management
-    title->iconLoaded = false;
-}
-
-void getTitleInfo(TitleInfo *title) {
-    // Get full title information
-    AM_TitleEntry titleEntry;
-    Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &titleEntry);
-
-    if (R_SUCCEEDED(res)) {
-        title->version = titleEntry.version;
-        title->size = titleEntry.size;
-    } else {
-        title->version = 0;
-        title->size = 0;
-    }
-
-    // If size is still 0, try alternative method
-    if (title->size == 0) {
-        title->size = getTitleSize(title->titleID, title->mediaType);
-    }
-
-    // Get full name (without truncation)
-    SMDH smdh;
-    Handle fileHandle;
-    u32 archivePath[] = {title->titleID & 0xFFFFFFFF, (title->titleID >> 32) & 0xFFFFFFFF, title->mediaType, 0};
-    static const u32 filePath[] = {0, 0, 2, SMDH_ICON_PATH, 0};
-
-    FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
-    FS_Path binFilePath = {PATH_BINARY, 20, filePath};
-
-    res = FSUSER_OpenFileDirectly(&fileHandle, ARCHIVE_SAVEDATA_AND_CONTENT, binArchPath, binFilePath, FS_OPEN_READ, 0);
-    if (R_SUCCEEDED(res)) {
-        u32 bytesRead;
-        FSFILE_Read(fileHandle, &bytesRead, 0, &smdh, sizeof(SMDH));
-        FSFILE_Close(fileHandle);
-
-        if (bytesRead >= sizeof(u32) && smdh.magic == 0x48444D53) {
-            // Get full name from long description
-            ssize_t units = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].longDescription, sizeof(title->fullName) - 1);
-            if (units < 0) units = 0;
-            title->fullName[units] = '\0';
-            sanitizeName(title->fullName);
-
-            // If long description is empty, use short description
-            if (title->fullName[0] == '\0' || strcmp(title->fullName, "Unknown Title") == 0) {
-                units = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, sizeof(title->fullName) - 1);
-                if (units < 0) units = 0;
-                title->fullName[units] = '\0';
-                sanitizeName(title->fullName);
-            }
-        }
-    }
-
-    // Fallback to regular name if full name not loaded
-    if (title->fullName[0] == '\0') {
-        strncpy(title->fullName, title->name, sizeof(title->fullName) - 1);
-    }
-
-    // Check if backup exists
-    title->hasBackup = checkBackupExists(title->titleID);
-}
-
-void drawLoadingScreen(int current, int total, const char *status) {
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
-    C2D_SceneBegin(top);
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-
-    // Title
-    C2D_TextParse(&text, dynamicBuf, "Loading installed titles...");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 50.0f, 80.0f, 0.5f, 0.6f, 0.6f, C2D_Color32(255, 255, 255, 255));
-
-    // Status message
-    if (status) {
-        C2D_TextParse(&text, dynamicBuf, status);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 50.0f, 105.0f, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
-    }
-
-    // Progress bar
-    if (total > 0) {
-        float progress = (float)current / (float)total;
-        float barWidth = 300.0f;
-        float barHeight = 20.0f;
-        float barX = 50.0f;
-        float barY = 130.0f;
-
-        // Background
-        C2D_DrawRectSolid(barX, barY, 0.5f, barWidth, barHeight, C2D_Color32(50, 50, 50, 255));
-
-        // Progress fill
-        float fillWidth = barWidth * progress;
-        C2D_DrawRectSolid(barX, barY, 0.5f, fillWidth, barHeight, C2D_Color32(100, 180, 255, 255));
-
-        // Border
-        C2D_DrawRectSolid(barX, barY, 0.5f, barWidth, 2, C2D_Color32(255, 255, 255, 255));
-        C2D_DrawRectSolid(barX, barY + barHeight - 2, 0.5f, barWidth, 2, C2D_Color32(255, 255, 255, 255));
-        C2D_DrawRectSolid(barX, barY, 0.5f, 2, barHeight, C2D_Color32(255, 255, 255, 255));
-        C2D_DrawRectSolid(barX + barWidth - 2, barY, 0.5f, 2, barHeight, C2D_Color32(255, 255, 255, 255));
-
-        // Progress text
-        char progressText[64];
-        snprintf(progressText, sizeof(progressText), "%d / %d", current, total);
-        C2D_TextParse(&text, dynamicBuf, progressText);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, barX + barWidth / 2 - 20, barY + 25, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
-    }
-
-    // Clear bottom screen with blue background
-    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
-    C2D_SceneBegin(bottom);
-
-    C3D_FrameEnd(0);
-}
-
-void loadTitles() {
-    titleCount = 0;
-
-    u32 titleCountSD = 0;
-    u32 titleCountNAND = 0;
-
-    // Get title counts
-    AM_GetTitleCount(MEDIATYPE_SD, &titleCountSD);
-    AM_GetTitleCount(MEDIATYPE_NAND, &titleCountNAND);
-
-    u32 totalCount = titleCountSD + titleCountNAND;
-    if (totalCount == 0) {
-        drawLoadingScreen(0, 0, "No titles found");
-        return;
-    }
-
-    drawLoadingScreen(0, totalCount, "Allocating memory...");
-
-    u64 *titleIDs = (u64*)malloc(totalCount * sizeof(u64));
-    if (titleIDs == NULL)
-        return;
-
-    u32 readCount = 0;
-
-    // Load SD titles
-    if (titleCountSD > 0) {
-        drawLoadingScreen(0, totalCount, "Loading SD titles...");
-        Result res = AM_GetTitleList(&readCount, MEDIATYPE_SD, titleCountSD, titleIDs);
-        if (R_SUCCEEDED(res)) {
-            for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
-                u64 tid = titleIDs[i];
-
-                // Update progress every 10 titles
-                if (i % 10 == 0) {
-                    char statusMsg[128];
-                    snprintf(statusMsg, sizeof(statusMsg), "Loading SD titles... (%d/%d)", i, readCount);
-                    drawLoadingScreen(i, totalCount, statusMsg);
-                }
-
-                // Skip system titles (0x00040010 and 0x00040030 range)
-                u32 highID = (u32)(tid >> 32);
-                if (highID == 0x00040010 || highID == 0x00040030)
-                    continue;
-
-                titles[titleCount].titleID = tid;
-                titles[titleCount].mediaType = MEDIATYPE_SD;
-                titles[titleCount].selected = false;
-                titles[titleCount].isValid = true;
-                titles[titleCount].iconLoaded = false;
-                titles[titleCount].version = 0;
-                titles[titleCount].hasBackup = false;
-                titles[titleCount].fullName[0] = '\0';
-                titles[titleCount].size = 0;
-                getTitleName(tid, MEDIATYPE_SD, titles[titleCount].name, sizeof(titles[titleCount].name));
-                getTitleInfo(&titles[titleCount]);
-                titleCount++;
-            }
-        }
-    }
-
-    // Load NAND titles (only user-installable ones)
-    if (titleCountNAND > 0) {
-        drawLoadingScreen(titleCountSD, totalCount, "Loading NAND titles...");
-        Result res = AM_GetTitleList(&readCount, MEDIATYPE_NAND, titleCountNAND, titleIDs);
-        if (R_SUCCEEDED(res)) {
-            for (u32 i = 0; i < readCount && titleCount < MAX_TITLES; i++) {
-                u64 tid = titleIDs[i];
-
-                // Update progress every 10 titles
-                if (i % 10 == 0) {
-                    char statusMsg[128];
-                    snprintf(statusMsg, sizeof(statusMsg), "Loading NAND titles... (%d/%d)", i, readCount);
-                    drawLoadingScreen(titleCountSD + i, totalCount, statusMsg);
-                }
-
-                // Skip system titles
-                u32 highID = (u32)(tid >> 32);
-                if (highID == 0x00040010 || highID == 0x00040030 || highID == 0x00040138)
-                    continue;
-
-                // Only show user-installed content (0x00040000 = applications, 0x0004000E = updates)
-                if (highID != 0x00040000 && highID != 0x0004000E && highID != 0x0004008C)
-                    continue;
-
-                titles[titleCount].titleID = tid;
-                titles[titleCount].mediaType = MEDIATYPE_NAND;
-                titles[titleCount].selected = false;
-                titles[titleCount].isValid = true;
-                titles[titleCount].iconLoaded = false;
-                titles[titleCount].version = 0;
-                titles[titleCount].hasBackup = false;
-                titles[titleCount].fullName[0] = '\0';
-                titles[titleCount].size = 0;
-                getTitleName(tid, MEDIATYPE_NAND, titles[titleCount].name, sizeof(titles[titleCount].name));
-                getTitleInfo(&titles[titleCount]);
-                titleCount++;
-            }
-        }
-    }
-
-    drawLoadingScreen(totalCount, totalCount, "Sorting titles...");
-
-    free(titleIDs);
-
-    // Sort titles after loading
-    sortTitles();
-
-    needsRedraw = true;  // Trigger redraw after loading titles
-}
-
-void drawUI() {
-    // Render top screen - title list
-    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
-    C2D_SceneBegin(top);
-
-    // Clear dynamic text buffer and prepare for new text
-    C2D_TextBufClear(dynamicBuf);
-
-    float y = 3.0f;
-
-    // Draw header background (white bar)
-    C2D_DrawRectSolid(0, y, 0.5f, 400, 18, C2D_Color32(255, 255, 255, 255));
-
-    // Draw header text
-    C2D_Text text;
-    C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 5.0f, y + 3, 0.5f, 0.55f, 0.55f, C2D_Color32(0, 0, 0, 255));
-
-    y += 22;
-
-    // Count selected titles
-    int selectedCount = 0;
-    for (int i = 0; i < titleCount; i++) {
-        if (titles[i].selected)
-            selectedCount++;
-    }
-
-    // Display title count with color based on count - ROSSO se oltre 300
-    const char *sortModeStr = "";
-    if (currentSortMode == SORT_BY_NAME) sortModeStr = "Name";
-    else if (currentSortMode == SORT_BY_SIZE) sortModeStr = "Size";
-    else sortModeStr = "TID";
-
-    const char *filterModeStr = "";
-    if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Upd]";
-    else if (currentFilterMode == FILTER_DLC) filterModeStr = " [DLC]";
-
-    char titleCountText[64];
-    snprintf(titleCountText, sizeof(titleCountText), "T:%d%s", titleCount, filterModeStr);
-
-    u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
-
-    C2D_TextParse(&text, dynamicBuf, titleCountText);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 5.0f, y, 0.5f, 0.48f, 0.48f, countColor);
-
-    // Selected count - centrato nella sezione centrale
-    char selectedText[64];
-    snprintf(selectedText, sizeof(selectedText), "Sel:%d", selectedCount);
-    C2D_TextParse(&text, dynamicBuf, selectedText);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 135.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(255, 255, 255, 255));
-
-    // Sort mode - a destra
-    char sortText[64];
-    snprintf(sortText, sizeof(sortText), "Sort:%s", sortModeStr);
-    C2D_TextParse(&text, dynamicBuf, sortText);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 265.0f, y, 0.5f, 0.48f, 0.48f, C2D_Color32(200, 200, 255, 255));
-
-    y += 18;
-
-    // Draw separator line
-    C2D_DrawRectSolid(2, y, 0.5f, 396, 1, C2D_Color32(255, 255, 255, 255));
-
-    y += 4;
-
-    // Update filtered list
-    updateFilteredList();
-
-    // Calculate visible range
-    int maxVisible = MAX_VISIBLE_TITLES;
-    int startIdx = scrollOffset;
-    int endIdx = scrollOffset + maxVisible;
-    if (endIdx > filteredCount)
-        endIdx = filteredCount;
-
-    // Ensure cursor is visible
-    if (cursor < scrollOffset)
-        scrollOffset = cursor;
-    if (cursor >= scrollOffset + maxVisible)
-        scrollOffset = cursor - maxVisible + 1;
-
-    startIdx = scrollOffset;
-    endIdx = scrollOffset + maxVisible;
-    if (endIdx > filteredCount)
-        endIdx = filteredCount;
-
-    // Draw each title - NUOVO LAYOUT: nome espanso a SX, TitleID allineato a DX
-    for (int i = startIdx; i < endIdx; i++) {
-        int titleIdx = filteredIndices[i];
-
-        // Draw selection highlight
-        if (i == cursor) {
-            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, C2D_Color32(255, 255, 255, 255));
-        }
-
-        u32 textColor = (i == cursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
-        u32 tidColor = (i == cursor) ? C2D_Color32(60, 60, 60, 255) : C2D_Color32(150, 150, 150, 255);
-        u32 symbolColor = (i == cursor) ? C2D_Color32(100, 100, 255, 255) : C2D_Color32(150, 180, 255, 255);
-
-        // Checkbox
-        const char *checkbox = titles[titleIdx].selected ? "[X]" : "[ ]";
-        C2D_TextParse(&text, dynamicBuf, checkbox);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 3.0f, y, 0.5f, 0.42f, 0.42f, textColor);
-
-        // Title name - senza simbolo ora, espanso fino alla colonna simbolo
-        char cleanName[256];
-        strncpy(cleanName, titles[titleIdx].name, sizeof(cleanName) - 1);
-        cleanName[sizeof(cleanName) - 1] = '\0';
-
-        // Rimuovi TUTTI i simboli dal nome (↑ e entrambe le varianti di ⊕)
-        char *arrow = strstr(cleanName, " \xE2\x86\x91");
-        if (arrow) *arrow = '\0';
-        char *plus1 = strstr(cleanName, " \xE2\x8A\x85");
-        if (plus1) *plus1 = '\0';
-        char *plus2 = strstr(cleanName, " \xE2\x8A\x95");
-        if (plus2) *plus2 = '\0';
-
-        char truncName[40];
-        int nameLen = strlen(cleanName);
-        if (nameLen > 30) {
-            // Nome troppo lungo, tronca
-            snprintf(truncName, sizeof(truncName), "%.27s...", cleanName);
-        } else {
-            snprintf(truncName, sizeof(truncName), "%s", cleanName);
-        }
-        C2D_TextParse(&text, dynamicBuf, truncName);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 28.0f, y, 0.5f, 0.40f, 0.40f, textColor);
-
-        // Type symbol in separate column (before TitleID)
-        u32 highID = (u32)(titles[titleIdx].titleID >> 32);
-        const char *symbol = "  ";  // Empty for normal titles
-        if (highID == 0x0004000E) symbol = "\xE2\x86\x91";  // ↑
-        else if (highID == 0x0004008C) symbol = "\xE2\x8A\x85";  // ⊕
-
-        C2D_TextParse(&text, dynamicBuf, symbol);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 235.0f, y, 0.5f, 0.45f, 0.45f, symbolColor);
-
-        // Title ID - allineato a DESTRA ma più vicino al simbolo
-        char tidText[32];
-        snprintf(tidText, sizeof(tidText), "%016llX", titles[titleIdx].titleID);
-        C2D_TextParse(&text, dynamicBuf, tidText);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 255.0f, y, 0.5f, 0.36f, 0.36f, tidColor);
-
-        y += 15;  // Line spacing aumentato
-    }
-}
-
-void drawSelectedTitlesList() {
-    // Render bottom screen - selected titles list
-    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
-    C2D_SceneBegin(bottom);
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-    float y = 10.0f;
-
-    // Count selected
-    int selectedCount = 0;
-    for (int i = 0; i < titleCount; i++) {
-        if (titles[i].selected)
-            selectedCount++;
-    }
-
-    // Title
-    char titleText[64];
-    snprintf(titleText, sizeof(titleText), "TITLES TO BE REMOVED (%d)", selectedCount);
-    C2D_TextParse(&text, dynamicBuf, titleText);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.55f, 0.55f, C2D_Color32(255, 100, 100, 255));
-    y += 20;
-
-    // Separator
-    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(255, 100, 100, 255));
-    y += 8;
-
-    // Draw selected titles (max 10 visible)
-    int drawn = 0;
-    int maxVisible = 10;
-
-    for (int i = 0; i < titleCount && drawn < maxVisible; i++) {
-        if (titles[i].selected) {
-            // Clean name (remove symbols)
-            char cleanName[256];
-            strncpy(cleanName, titles[i].name, sizeof(cleanName) - 1);
-            cleanName[sizeof(cleanName) - 1] = '\0';
-
-            char *arrow = strstr(cleanName, " \xE2\x86\x91");
-            if (arrow) *arrow = '\0';
-            char *plus1 = strstr(cleanName, " \xE2\x8A\x85");
-            if (plus1) *plus1 = '\0';
-            char *plus2 = strstr(cleanName, " \xE2\x8A\x95");
-            if (plus2) *plus2 = '\0';
-
-            // Truncate if too long
-            char displayName[40];
-            if (strlen(cleanName) > 35) {
-                snprintf(displayName, sizeof(displayName), "%.32s...", cleanName);
-            } else {
-                snprintf(displayName, sizeof(displayName), "%s", cleanName);
-            }
-
-            // Type indicator
-            u32 highID = (u32)(titles[i].titleID >> 32);
-            const char *typeIcon = "";
-            if (highID == 0x0004000E) typeIcon = " \xE2\x86\x91";
-            else if (highID == 0x0004008C) typeIcon = " \xE2\x8A\x85";
-
-            char fullLine[64];
-            snprintf(fullLine, sizeof(fullLine), "%s%s", displayName, typeIcon);
-
-            C2D_TextParse(&text, dynamicBuf, fullLine);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 255, 255, 255));
-
-            y += 15;
-            drawn++;
-        }
-    }
-
-    // Show "and X more..." if there are more
-    if (selectedCount > maxVisible) {
-        y += 5;
-        char moreText[64];
-        snprintf(moreText, sizeof(moreText), "...and %d more", selectedCount - maxVisible);
-        C2D_TextParse(&text, dynamicBuf, moreText);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(150, 150, 150, 255));
-    }
-}
-
-void drawTouchControls() {
-    // Render bottom screen - title details
-    C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
-    C2D_SceneBegin(bottom);
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-    float y = 10.0f;
-
-    // If no titles or invalid cursor, show basic info
-    if (filteredCount == 0 || cursor < 0 || cursor >= filteredCount) {
-        C2D_TextParse(&text, dynamicBuf, "No title selected");
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, 100.0f, 0.5f, 0.5f, 0.5f, C2D_Color32(200, 200, 200, 255));
-        return;
-    }
-
-    // Get the actual title from filtered list
-    int titleIdx = filteredIndices[cursor];
-    TitleInfo *currentTitle = &titles[titleIdx];
-
-    // Title name (next to where icon would be)
-    float textX = 15.0f;  // Spostato più a sinistra senza l'icona
-    C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, textX, y + 5, 0.5f, 0.55f, 0.55f, C2D_Color32(100, 180, 255, 255));
-    y += 20;
-
-    // Separator
-    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 10;
-
-    // Full title name (word wrap if needed)
-    C2D_TextParse(&text, dynamicBuf, "Name:");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.43f, 0.43f, C2D_Color32(150, 150, 150, 255));
-    y += 14;
-
-    C2D_TextParse(&text, dynamicBuf, currentTitle->fullName);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 255, 255, 255));
-    y += 18;
-
-    // Title ID
-    char tidStr[64];
-    snprintf(tidStr, sizeof(tidStr), "Title ID: %016llX", currentTitle->titleID);
-    C2D_TextParse(&text, dynamicBuf, tidStr);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-    y += 15;
-
-    // Version
-    char verStr[64];
-    snprintf(verStr, sizeof(verStr), "Version: v%d", currentTitle->version);
-    C2D_TextParse(&text, dynamicBuf, verStr);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-    y += 15;
-
-    // Size
-    char sizeStr[64];
-    if (currentTitle->size > 0) {
-        // Convert to MB or GB
-        if (currentTitle->size >= 1024 * 1024 * 1024) {
-            float sizeGB = (float)currentTitle->size / (1024.0f * 1024.0f * 1024.0f);
-            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f GB", sizeGB);
-        } else if (currentTitle->size >= 1024 * 1024) {
-            float sizeMB = (float)currentTitle->size / (1024.0f * 1024.0f);
-            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f MB", sizeMB);
-        } else {
-            float sizeKB = (float)currentTitle->size / 1024.0f;
-            snprintf(sizeStr, sizeof(sizeStr), "Size: %.2f KB", sizeKB);
-        }
-    } else {
-        snprintf(sizeStr, sizeof(sizeStr), "Size: Unknown");
-    }
-    C2D_TextParse(&text, dynamicBuf, sizeStr);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-    y += 15;
-
-    // Type
-    u32 highID = (u32)(currentTitle->titleID >> 32);
-    const char *typeStr = "Game/Application";
-    if (highID == 0x0004000E) typeStr = "Update \xE2\x86\x91";  // ↑
-    else if (highID == 0x0004008C) typeStr = "DLC \xE2\x8A\x95";  // ⊕
-
-    char typeFullStr[64];
-    snprintf(typeFullStr, sizeof(typeFullStr), "Type: %s", typeStr);
-    C2D_TextParse(&text, dynamicBuf, typeFullStr);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-    y += 15;
-
-    // Media Type
-    const char *mediaStr = (currentTitle->mediaType == MEDIATYPE_SD) ? "SD Card" : "NAND";
-    char mediaFullStr[64];
-    snprintf(mediaFullStr, sizeof(mediaFullStr), "Location: %s", mediaStr);
-    C2D_TextParse(&text, dynamicBuf, mediaFullStr);
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-    y += 18;
-
-    // Separator
-    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 10;
-
-    // Backup status
-    if (currentTitle->hasBackup) {
-        C2D_TextParse(&text, dynamicBuf, "Backup: YES \xE2\x9C\x93");  // ✓
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(100, 255, 100, 255));
-        y += 14;
-
-        // Show backup path
-        char backupPathStr[128];
-        snprintf(backupPathStr, sizeof(backupPathStr), "Path: %s/%016llX", config.backupPath, currentTitle->titleID);
-        C2D_TextParse(&text, dynamicBuf, backupPathStr);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.30f, 0.30f, C2D_Color32(150, 150, 150, 255));
-    } else {
-        C2D_TextParse(&text, dynamicBuf, "Backup: NO \xE2\x9C\x97");  // ✗
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 100, 100, 255));
-    }
-    y += 18;
-
-    // Separator
-    C2D_DrawRectSolid(10, y, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-    y += 10;
-
-    // Reminder per vedere i controlli
-    C2D_TextParse(&text, dynamicBuf, "Press SELECT for controls");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.40f, 0.40f, C2D_Color32(150, 200, 255, 255));
-}
-
-void drawDialog(const char **lines, int lineCount) {
-    // This function manages its own frame since it's used for modal dialogs
-    // that are displayed outside the main rendering loop during user interactions
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
-    C2D_SceneBegin(top);
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-    float y = 20.0f;
-
-    for (int i = 0; i < lineCount; i++) {
-        if (lines[i] && strlen(lines[i]) > 0) {
-            C2D_TextParse(&text, dynamicBuf, lines[i]);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
-        }
-        y += 15;
-    }
-
-    C3D_FrameEnd(0);
-}
-
-void drawDialogWithSelectedList(const char **lines, int lineCount) {
-    // Like drawDialog but also shows selected titles on bottom screen
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-
-    // Top screen - dialog
-    C2D_TargetClear(top, C2D_Color32(0, 0, 0, 255));
-    C2D_SceneBegin(top);
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-    float y = 20.0f;
-
-    for (int i = 0; i < lineCount; i++) {
-        if (lines[i] && strlen(lines[i]) > 0) {
-            C2D_TextParse(&text, dynamicBuf, lines[i]);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.45f, 0.45f, C2D_Color32(255, 255, 255, 255));
-        }
-        y += 15;
-    }
-
-    // Bottom screen - selected titles list
-    drawSelectedTitlesList();
-
-    C3D_FrameEnd(0);
-}
-
-void drawControlsOverlay() {
-    // Draw overlay on both screens with darkened background
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-
-    // Top screen - darken background and show controls
-    C2D_SceneBegin(top);
-
-    // Draw semi-transparent dark overlay
-    C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, C2D_Color32(0, 0, 0, 180));
-
-    // Draw controls box
-    float boxX = 15.0f;
-    float boxY = 15.0f;
-    float boxW = 370.0f;
-    float boxH = 195.0f;  // Ridotto perché non serve spazio per "press any button"
-
-    // Box background
-    C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
-    // Box border
-    C2D_DrawRectSolid(boxX, boxY, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-    C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.5f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-    C2D_DrawRectSolid(boxX, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
-    C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.5f, 2, boxH, C2D_Color32(100, 180, 255, 255));
-
-    C2D_TextBufClear(dynamicBuf);
-    C2D_Text text;
-    float y = boxY + 8.0f;
-
-    // Title
-    C2D_TextParse(&text, dynamicBuf, "CONTROLS");
-    C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
-    y += 18;
-
-    // Controls in table format (button - description)
-    const char* controls[][2] = {
-        {"A", "Select/Deselect"},
-        {"X", "Uninstall selected"},
-        {"", ""},
-        {"D-Pad Up/Down", "Navigate list"},
-        {"D-Pad Left/Right", "Page jump"},
-        {"", ""},
-        {"L", "Sort backward"},
-        {"R", "Sort forward"},
-        {"", "(Name/Size/TID)"},
-        {"", ""},
-        {"Y", "Filter mode"},
-        {"", "(All/Updates/DLC)"},
-        {"", ""},
-        {"SELECT", "Hide this help"},
-        {"START", "Exit app"}
-    };
-
-    for (int i = 0; i < 15; i++) {
-        if (controls[i][0][0] != '\0') {
-            // Button name (left column)
-            C2D_TextParse(&text, dynamicBuf, controls[i][0]);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(255, 200, 100, 255));
-
-            // Description (right column)
-            C2D_TextParse(&text, dynamicBuf, controls[i][1]);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-        } else if (controls[i][1][0] != '\0') {
-            // Indented continuation
-            C2D_TextParse(&text, dynamicBuf, controls[i][1]);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 140.0f, y, 0.5f, 0.35f, 0.35f, C2D_Color32(180, 180, 180, 255));
-        }
-        y += 12;
-    }
-
-
-    // Bottom screen - just darken it
-    C2D_SceneBegin(bottom);
-    C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, C2D_Color32(0, 0, 0, 180));
-
-    C3D_FrameEnd(0);
-}
-
-void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
-    Handle dirHandle;
-    FS_Path fsSrcPath = fsMakePath(PATH_ASCII, srcPath);
-
-    Result res = FSUSER_OpenDirectory(&dirHandle, archive, fsSrcPath);
-    if (R_FAILED(res))
-        return;
-
-    createDirectory(dstPath);
-
-    u32 entriesRead = 0;
-    FS_DirectoryEntry entries[32];
-
-    while (true) {
-        res = FSDIR_Read(dirHandle, &entriesRead, 32, entries);
-        if (R_FAILED(res) || entriesRead == 0)
-            break;
-
-        for (u32 i = 0; i < entriesRead; i++) {
-            char entryName[256];
-            utf16_to_utf8((uint8_t*)entryName, entries[i].name, sizeof(entryName) - 1);
-            entryName[sizeof(entryName) - 1] = '\0';
-
-            char srcFile[512];
-            char dstFile[512];
-            snprintf(srcFile, sizeof(srcFile), "%s/%s", srcPath, entryName);
-            snprintf(dstFile, sizeof(dstFile), "%s/%s", dstPath, entryName);
-
-            if (entries[i].attributes & FS_ATTRIBUTE_DIRECTORY) {
-                // Recursively copy subdirectory
-                copyDirectory(archive, srcFile, dstFile);
-            } else {
-                // Copy file
-                Handle fileHandle;
-                FS_Path fsFilePath = fsMakePath(PATH_ASCII, srcFile);
-                res = FSUSER_OpenFile(&fileHandle, archive, fsFilePath, FS_OPEN_READ, 0);
-                if (R_SUCCEEDED(res)) {
-                    u64 fileSize = 0;
-                    FSFILE_GetSize(fileHandle, &fileSize);
-
-                    if (fileSize > 0 && fileSize < MAX_FILE_SIZE) {
-                        void *buffer = malloc(fileSize);
-                        if (buffer) {
-                            u32 bytesRead = 0;
-                            res = FSFILE_Read(fileHandle, &bytesRead, 0, buffer, fileSize);
-                            if (R_SUCCEEDED(res) && bytesRead == fileSize) {
-                                FILE *outFile = fopen(dstFile, "wb");
-                                if (outFile) {
-                                    fwrite(buffer, 1, bytesRead, outFile);
-                                    fclose(outFile);
-                                }
-                            }
-                            free(buffer);
-                        }
-                    }
-                    FSFILE_Close(fileHandle);
-                }
-            }
-        }
-    }
-
-    FSDIR_Close(dirHandle);
-}
-
-void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName) {
-    char archivePath[512];
-    snprintf(archivePath, sizeof(archivePath), "%s/%s", basePath, archiveName);
-    createDirectory(archivePath);
-    copyDirectory(archive, "/", archivePath);
-}
-
-void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
-    // Create backup directory structure
-    createDirectory(backupPath);
-
-    char backupDir[512];
-    snprintf(backupDir, sizeof(backupDir), "%s/%016llX", backupPath, title->titleID);
-    createDirectory(backupDir);
-
-    // Create info file
+    if (!findBackupDir(titleID, backupDir, sizeof(backupDir))) return false;
     char infoPath[512];
     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
-    FILE *info = fopen(infoPath, "w");
+    FILE *f2 = fopen(infoPath,"r");
+    if (!f2) { snprintf(outDate,outSize,"??/??/??"); return true; }
+    char line[256];
+    while (fgets(line,sizeof(line),f2)) {
+        if (strncmp(line,"Backup Date:",12)==0) {
+            char *d2=line+12;
+            while(*d2==' ') d2++;
+            d2[strcspn(d2,"\r\n")]=0;
+            snprintf(outDate,outSize,"%s",d2);
+            fclose(f2);
+            return true;
+        }
+    }
+    fclose(f2);
+    snprintf(outDate,outSize,"unknown");
+    return true;
+}
+bool checkBackupExists(u64 titleID) {
+    char backupDir[512];
+    return findBackupDir(titleID, backupDir, sizeof(backupDir));
+}
+bool getSDFreeSpace(u64 *freeBytes, u64 *totalBytes) {
+    struct statvfs st;
+    if (statvfs("sdmc:/",&st)!=0) { *freeBytes=0; *totalBytes=0; return false; }
+    *freeBytes  = (u64)st.f_bavail * st.f_bsize;
+    *totalBytes = (u64)st.f_blocks * st.f_bsize;
+    return true;
+}
+/* ============================================================
+   SECTION 7: Sort / Filter / Title Management
+   ============================================================ */
+int compareTitlesByName(const void *a, const void *b) {
+    return strcasecmp(((TitleInfo*)a)->name, ((TitleInfo*)b)->name);
+}
+int compareTitlesBySize(const void *a, const void *b) {
+    const TitleInfo *ta=(const TitleInfo*)a, *tb=(const TitleInfo*)b;
+    if (ta->size > tb->size) return -1;
+    if (ta->size < tb->size) return  1;
+    return 0;
+}
+int compareTitlesByID(const void *a, const void *b) {
+    const TitleInfo *ta=(const TitleInfo*)a, *tb=(const TitleInfo*)b;
+    if (ta->titleID < tb->titleID) return -1;
+    if (ta->titleID > tb->titleID) return  1;
+    return 0;
+}
+void sortTitles(void) {
+    if (titleCount<=0) return;
+    if (currentSortMode==SORT_BY_NAME)
+        qsort(titles,titleCount,sizeof(TitleInfo),compareTitlesByName);
+    else if (currentSortMode==SORT_BY_SIZE)
+        qsort(titles,titleCount,sizeof(TitleInfo),compareTitlesBySize);
+    else
+        qsort(titles,titleCount,sizeof(TitleInfo),compareTitlesByID);
+    cursor=0; scrollOffset=0; needsRedraw=true;
+}
+void updateFilteredList(void) {
+    filteredCount=0;
+    for (int i=0;i<titleCount;i++) {
+        u32 hi=(u32)(titles[i].titleID>>32);
+        bool show=false;
+        if (currentFilterMode==FILTER_ALL) show=true;
+        else if (currentFilterMode==FILTER_UPDATES && hi==0x0004000E) show=true;
+        else if (currentFilterMode==FILTER_DLC    && hi==0x0004008C) show=true;
+        if (show) filteredIndices[filteredCount++]=i;
+    }
+    if (cursor>=filteredCount && filteredCount>0) cursor=filteredCount-1;
+    if (cursor<0 && filteredCount>0) cursor=0;
+}
+void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
+    SMDH smdh;
+    AM_TitleEntry te;
+    Result res=AM_GetTitleInfo(mediaType,1,&titleID,&te);
+    if (R_FAILED(res)) { snprintf(outName,outSize,"Unknown [%016llX]",(unsigned long long)titleID); return; }
+    Handle fh;
+    u32 ap[]={(u32)(titleID&0xFFFFFFFF),(u32)((titleID>>32)&0xFFFFFFFF),mediaType,0};
+    static const u32 fp[]={0,0,2,0x6E6F6369,0};
+    FS_Path ap2={PATH_BINARY,16,ap}, fp2={PATH_BINARY,20,fp};
+    res=FSUSER_OpenFileDirectly(&fh,ARCHIVE_SAVEDATA_AND_CONTENT,ap2,fp2,FS_OPEN_READ,0);
+    if (R_SUCCEEDED(res)) {
+        u32 br=0;
+        FSFILE_Read(fh,&br,0,&smdh,sizeof(SMDH));
+        FSFILE_Close(fh);
+        if (br>=sizeof(u32) && smdh.magic==0x48444D53) {
+            u8 lang=CFG_LANGUAGE_EN;
+            CFGU_GetSystemLanguage(&lang);
+            int order[3]={(lang<12)?lang:1,1,0};
+            bool found=false;
+            for (int a=0;a<3&&!found;a++) {
+                if (a>0&&order[a]==order[0]) continue;
+                ssize_t u=utf16_to_utf8((uint8_t*)outName,smdh.titles[order[a]].shortDescription,outSize-1);
+                if (u>0) { outName[u]='\0'; bool ok=false; for(int i=0;i<u;i++){if(outName[i]!=' '&&outName[i]!='\0'){ok=true;break;}} if(ok){found=true;} }
+            }
+            if (!found) {
+                for (int i=0;i<12;i++) {
+                    ssize_t u=utf16_to_utf8((uint8_t*)outName,smdh.titles[i].shortDescription,outSize-1);
+                    if (u>0){outName[u]='\0';bool ok=false;for(int j=0;j<u;j++){if(outName[j]!=' '&&outName[j]!='\0'){ok=true;break;}}if(ok)break;}
+                }
+            }
+            /* strip filesystem-unsafe chars */
+            char *s=outName,*d=outName;
+            while(*s){if(*s!='|'&&*s!='<'&&*s!='>'&&*s!='"'&&*s!='\\'&&*s!='/'&&*s!=':'&&*s!='*'&&*s!='?')*d++=*s;s++;}*d='\0';
+            return;
+        }
+    }
+    u32 hi=(u32)(titleID>>32);
+    const char *t="";
+    if (hi==0x0004000E) t=" Upd"; else if (hi==0x0004008C) t=" DLC";
+    snprintf(outName,outSize,"Title%s [%016llX]",t,(unsigned long long)titleID);
+}
+u64 getTitleSize(u64 titleID, FS_MediaType mediaType) {
+    u64 sz=0; AM_TitleEntry e;
+    if (R_SUCCEEDED(AM_GetTitleInfo(mediaType,1,&titleID,&e))) sz=e.size;
+    return sz;
+}
+void loadTitleIcon(TitleInfo *title) { title->iconLoaded=false; }
+void getTitleInfo(TitleInfo *title) {
+    AM_TitleEntry te;
+    if (R_SUCCEEDED(AM_GetTitleInfo(title->mediaType,1,&title->titleID,&te))) {
+        title->version=te.version; title->size=te.size;
+    } else { title->version=0; title->size=0; }
+    if (title->size==0) title->size=getTitleSize(title->titleID,title->mediaType);
+    SMDH smdh; Handle fh;
+    u32 ap[]={(u32)(title->titleID&0xFFFFFFFF),(u32)((title->titleID>>32)&0xFFFFFFFF),title->mediaType,0};
+    static const u32 fp[]={0,0,2,0x6E6F6369,0};
+    FS_Path ap2={PATH_BINARY,16,ap},fp2={PATH_BINARY,20,fp};
+    Result res=FSUSER_OpenFileDirectly(&fh,ARCHIVE_SAVEDATA_AND_CONTENT,ap2,fp2,FS_OPEN_READ,0);
+    if (R_SUCCEEDED(res)) {
+        u32 br=0; FSFILE_Read(fh,&br,0,&smdh,sizeof(SMDH)); FSFILE_Close(fh);
+        if (br>=sizeof(u32)&&smdh.magic==0x48444D53) {
+            ssize_t u=utf16_to_utf8((uint8_t*)title->fullName,smdh.titles[LANGUAGE_ENGLISH].longDescription,sizeof(title->fullName)-1);
+            if (u<0) u=0; title->fullName[u]='\0'; sanitizeName(title->fullName);
+            if (title->fullName[0]=='\0'||strcmp(title->fullName,"Unknown Title")==0) {
+                u=utf16_to_utf8((uint8_t*)title->fullName,smdh.titles[LANGUAGE_ENGLISH].shortDescription,sizeof(title->fullName)-1);
+                if (u<0) u=0; title->fullName[u]='\0'; sanitizeName(title->fullName);
+            }
+        }
+    }
+    if (title->fullName[0]=='\0') strncpy(title->fullName,title->name,sizeof(title->fullName)-1);
+    title->hasBackup=checkBackupExists(title->titleID);
+}
+void drawLoadingScreen(int current, int total, const char *status) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top,C2D_Color32(0,0,0,255)); C2D_SceneBegin(top);
+    C2D_TextBufClear(dynamicBuf); C2D_Text t;
+    C2D_TextParse(&t,dynamicBuf,"Loading titles..."); C2D_TextOptimize(&t);
+    C2D_DrawText(&t,C2D_WithColor,50,80,0.5f,0.6f,0.6f,C2D_Color32(255,255,255,255));
+    if (status) {
+        C2D_TextParse(&t,dynamicBuf,status); C2D_TextOptimize(&t);
+        C2D_DrawText(&t,C2D_WithColor,50,105,0.5f,0.4f,0.4f,C2D_Color32(200,200,200,255));
+    }
+    if (total>0) {
+        float p=(float)current/total, bw=300,bh=20,bx=50,by=130;
+        C2D_DrawRectSolid(bx,by,0.5f,bw,bh,C2D_Color32(50,50,50,255));
+        C2D_DrawRectSolid(bx,by,0.5f,bw*p,bh,C2D_Color32(100,180,255,255));
+        C2D_DrawRectSolid(bx,by,0.5f,bw,2,C2D_Color32(255,255,255,255));
+        C2D_DrawRectSolid(bx,by+bh-2,0.5f,bw,2,C2D_Color32(255,255,255,255));
+        C2D_DrawRectSolid(bx,by,0.5f,2,bh,C2D_Color32(255,255,255,255));
+        C2D_DrawRectSolid(bx+bw-2,by,0.5f,2,bh,C2D_Color32(255,255,255,255));
+        char pt[64]; snprintf(pt,sizeof(pt),"%d / %d",current,total);
+        C2D_TextParse(&t,dynamicBuf,pt); C2D_TextOptimize(&t);
+        C2D_DrawText(&t,C2D_WithColor,bx+bw/2-20,by+25,0.5f,0.45f,0.45f,C2D_Color32(255,255,255,255));
+    }
+    C2D_TargetClear(bottom,C2D_Color32(20,20,30,255)); C2D_SceneBegin(bottom);
+    C3D_FrameEnd(0);
+}
+void loadTitles(void) {
+    titleCount=0;
+    u32 cntSD=0,cntNAND=0;
+    AM_GetTitleCount(MEDIATYPE_SD,&cntSD);
+    AM_GetTitleCount(MEDIATYPE_NAND,&cntNAND);
+    u32 total=cntSD+cntNAND;
+    if (total==0){drawLoadingScreen(0,0,"No titles found");return;}
+    drawLoadingScreen(0,total,"Allocating memory...");
+    u64 *ids=(u64*)malloc(total*sizeof(u64));
+    if (!ids) return;
+    u32 rc=0;
+    if (cntSD>0) {
+        drawLoadingScreen(0,total,"Loading SD titles...");
+        if (R_SUCCEEDED(AM_GetTitleList(&rc,MEDIATYPE_SD,cntSD,ids))) {
+            for (u32 i=0;i<rc&&titleCount<MAX_TITLES;i++) {
+                if (i%10==0){char s[128];snprintf(s,sizeof(s),"SD %d/%d",i,rc);drawLoadingScreen(i,total,s);}
+                u64 tid=ids[i]; u32 hi=(u32)(tid>>32);
+                if (hi==0x00040010||hi==0x00040030) continue;
+                titles[titleCount].titleID=tid; titles[titleCount].mediaType=MEDIATYPE_SD;
+                titles[titleCount].selected=false; titles[titleCount].isValid=true;
+                titles[titleCount].iconLoaded=false; titles[titleCount].version=0;
+                titles[titleCount].hasBackup=false; titles[titleCount].fullName[0]='\0'; titles[titleCount].size=0;
+                getTitleName(tid,MEDIATYPE_SD,titles[titleCount].name,sizeof(titles[titleCount].name));
+                getTitleInfo(&titles[titleCount]); titleCount++;
+            }
+        }
+    }
+    if (cntNAND>0) {
+        drawLoadingScreen(cntSD,total,"Loading NAND titles...");
+        if (R_SUCCEEDED(AM_GetTitleList(&rc,MEDIATYPE_NAND,cntNAND,ids))) {
+            for (u32 i=0;i<rc&&titleCount<MAX_TITLES;i++) {
+                if (i%10==0){char s[128];snprintf(s,sizeof(s),"NAND %d/%d",i,rc);drawLoadingScreen(cntSD+i,total,s);}
+                u64 tid=ids[i]; u32 hi=(u32)(tid>>32);
+                if (hi==0x00040010||hi==0x00040030||hi==0x00040138) continue;
+                if (hi!=0x00040000&&hi!=0x0004000E&&hi!=0x0004008C) continue;
+                titles[titleCount].titleID=tid; titles[titleCount].mediaType=MEDIATYPE_NAND;
+                titles[titleCount].selected=false; titles[titleCount].isValid=true;
+                titles[titleCount].iconLoaded=false; titles[titleCount].version=0;
+                titles[titleCount].hasBackup=false; titles[titleCount].fullName[0]='\0'; titles[titleCount].size=0;
+                getTitleName(tid,MEDIATYPE_NAND,titles[titleCount].name,sizeof(titles[titleCount].name));
+                getTitleInfo(&titles[titleCount]); titleCount++;
+            }
+        }
+    }
+    free(ids);
+    drawLoadingScreen(total,total,"Sorting...");
+    sortTitles(); needsRedraw=true;
+}
+void findRelatedTitles(u64 baseTitleID, int selfIdx, int *outIdx, int *outCount) {
+    u32 uid=(u32)(baseTitleID&0xFFFFFFFF);
+    *outCount=0;
+    for (int i=0;i<titleCount;i++) {
+        if (i==selfIdx) continue;
+        if ((u32)(titles[i].titleID&0xFFFFFFFF)==uid && titles[i].titleID!=baseTitleID && titles[i].isValid) {
+            outIdx[(*outCount)++]=i;
+            if (*outCount>=20) break;
+        }
+    }
+}
+/* ============================================================
+   SECTION 8: Backup / Restore / Install
+   ============================================================ */
+void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
+    Handle dh; FS_Path fsp=fsMakePath(PATH_ASCII,srcPath);
+    if (R_FAILED(FSUSER_OpenDirectory(&dh,archive,fsp))) return;
+    createDirectory(dstPath);
+    FS_DirectoryEntry ent[32]; u32 er=0;
+    while (true) {
+        if (R_FAILED(FSDIR_Read(dh,&er,32,ent))||er==0) break;
+        for (u32 i=0;i<er;i++) {
+            char nm[256]; utf16_to_utf8((uint8_t*)nm,ent[i].name,255); nm[255]='\0';
+            char sf[512],df[512];
+            snprintf(sf,sizeof(sf),"%s/%s",srcPath,nm);
+            snprintf(df,sizeof(df),"%s/%s",dstPath,nm);
+            if (ent[i].attributes&FS_ATTRIBUTE_DIRECTORY) { copyDirectory(archive,sf,df); }
+            else {
+                Handle fh; FS_Path fp2=fsMakePath(PATH_ASCII,sf);
+                if (R_SUCCEEDED(FSUSER_OpenFile(&fh,archive,fp2,FS_OPEN_READ,0))) {
+                    u64 fsz=0; FSFILE_GetSize(fh,&fsz);
+                    if (fsz>0&&fsz<MAX_FILE_SIZE) {
+                        void *buf=malloc(fsz);
+                        if (buf) {
+                            u32 br=0;
+                            if (R_SUCCEEDED(FSFILE_Read(fh,&br,0,buf,fsz))&&br==fsz) {
+                                FILE *out=fopen(df,"wb");
+                                if (out){fwrite(buf,1,br,out);fclose(out);}
+                            }
+                            free(buf);
+                        }
+                    }
+                    FSFILE_Close(fh);
+                }
+            }
+        }
+    }
+    FSDIR_Close(dh);
+}
+void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName) {
+    char p[512]; snprintf(p,sizeof(p),"%s/%s",basePath,archiveName);
+    createDirectory(p); copyDirectory(archive,"/",p);
+}
+void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
+    createDirectory(backupPath);
+    /* Build new-format dir name: TitleID-Name */
+    char dirName[320];
+    char cleanName[80]; strncpy(cleanName,title->name,79); cleanName[79]='\0';
+    /* strip type suffixes */
+    char *p1=strstr(cleanName," Upd"); if(p1)*p1='\0';
+    char *p2=strstr(cleanName," DLC"); if(p2)*p2='\0';
+    getBackupDirName(title->titleID, cleanName, dirName, sizeof(dirName));
+    char backupDir[512];
+    snprintf(backupDir,sizeof(backupDir),"%s/%s",backupPath,dirName);
+    createDirectory(backupDir);
+    /* Timestamp */
+    time_t now=time(NULL); struct tm *tm2=localtime(&now);
+    char dateBuf[32]="??/??/?? ??:??";
+    if (tm2) snprintf(dateBuf,sizeof(dateBuf),"%02d/%02d/%04d %02d:%02d",
+        tm2->tm_mday,tm2->tm_mon+1,tm2->tm_year+1900,tm2->tm_hour,tm2->tm_min);
+    char infoPath[512]; snprintf(infoPath,sizeof(infoPath),"%s/backup_info.txt",backupDir);
+    FILE *info=fopen(infoPath,"w");
     if (info) {
-        fprintf(info, "Title ID: %016llX\n", title->titleID);
-        fprintf(info, "Title Name: %s\n", title->name);
-        fprintf(info, "Media Type: %s\n", title->mediaType == MEDIATYPE_SD ? "SD" : "NAND");
-        fprintf(info, "Backup Path: %s\n", backupPath);
-        fprintf(info, "\nBackup includes all available save types:\n");
-        fprintf(info, "- User Save Data (if present)\n");
-        fprintf(info, "- ExtData (if present)\n");
-        fprintf(info, "- Boss ExtData (if present)\n");
+        fprintf(info,"Title ID: %016llX\n",(unsigned long long)title->titleID);
+        fprintf(info,"Title Name: %s\n",title->name);
+        fprintf(info,"Media Type: %s\n",title->mediaType==MEDIATYPE_SD?"SD":"NAND");
+        fprintf(info,"Backup Date: %s\n",dateBuf);
+        fprintf(info,"Backup Path: %s\n",backupPath);
         fclose(info);
     }
-
-    u32 archivePath[] = {title->titleID & 0xFFFFFFFF, (title->titleID >> 32) & 0xFFFFFFFF, title->mediaType, 0};
-    FS_Path binArchPath = {PATH_BINARY, 16, archivePath};
-
-    // 1. Backup User Save Data
-    FS_Archive saveArchive;
-    Result res = FSUSER_OpenArchive(&saveArchive, ARCHIVE_USER_SAVEDATA, binArchPath);
-    if (R_SUCCEEDED(res)) {
-        backupArchive(saveArchive, backupDir, "savedata");
-        FSUSER_CloseArchive(saveArchive);
+    u32 ap[]={(u32)(title->titleID&0xFFFFFFFF),(u32)((title->titleID>>32)&0xFFFFFFFF),title->mediaType,0};
+    FS_Path bap={PATH_BINARY,16,ap};
+    FS_Archive sa;
+    if (R_SUCCEEDED(FSUSER_OpenArchive(&sa,ARCHIVE_USER_SAVEDATA,bap))) {
+        backupArchive(sa,backupDir,"savedata"); FSUSER_CloseArchive(sa);
     }
-
-    // 2. Backup ExtData
-    // Get the correct ExtData ID from the system
-    u64 extdataID = 0;
-    res = AM_GetTitleExtDataId(&extdataID, title->mediaType, title->titleID);
-
-    if (R_SUCCEEDED(res) && extdataID != 0) {
-        // Create binary path for ExtData archive
-        // Format: {u8 mediatype, u8 unknown, u16 reserved, u64 saveid}
-        FS_ExtSaveDataInfo extInfo = {
-            .mediaType = title->mediaType,
-            .unknown = 0,
-            .reserved1 = 0,
-            .saveId = extdataID,
-            .reserved2 = 0
-        };
-
-        FS_Path extPath = {PATH_BINARY, sizeof(FS_ExtSaveDataInfo), &extInfo};
-
-        FS_Archive extArchive;
-        res = FSUSER_OpenArchive(&extArchive, ARCHIVE_EXTDATA, extPath);
-        if (R_SUCCEEDED(res)) {
-            backupArchive(extArchive, backupDir, "extdata");
-            FSUSER_CloseArchive(extArchive);
+    u64 extID=0;
+    if (R_SUCCEEDED(AM_GetTitleExtDataId(&extID,title->mediaType,title->titleID)) && extID!=0) {
+        FS_ExtSaveDataInfo ei={.mediaType=title->mediaType,.unknown=0,.reserved1=0,.saveId=extID,.reserved2=0};
+        FS_Path ep={PATH_BINARY,sizeof(FS_ExtSaveDataInfo),&ei};
+        FS_Archive ea;
+        if (R_SUCCEEDED(FSUSER_OpenArchive(&ea,ARCHIVE_EXTDATA,ep))) {
+            backupArchive(ea,backupDir,"extdata"); FSUSER_CloseArchive(ea);
         }
-
-        // 3. Backup Boss ExtData (for SpotPass data)
-        res = FSUSER_OpenArchive(&extArchive, ARCHIVE_BOSS_EXTDATA, extPath);
-        if (R_SUCCEEDED(res)) {
-            backupArchive(extArchive, backupDir, "boss_extdata");
-            FSUSER_CloseArchive(extArchive);
+        if (R_SUCCEEDED(FSUSER_OpenArchive(&ea,ARCHIVE_BOSS_EXTDATA,ep))) {
+            backupArchive(ea,backupDir,"boss_extdata"); FSUSER_CloseArchive(ea);
         }
     }
+    title->hasBackup=true;
 }
-
 void backupSaveData(TitleInfo *title) {
-    backupSaveDataToPath(title, config.backupPath);
+    backupSaveDataToPath(title,config.backupPath);
 }
-
-void deleteTitleCompletely(TitleInfo *title) {
-    // Delete ExtData first (if exists)
-    u64 extdataID = 0;
-    Result res = AM_GetTitleExtDataId(&extdataID, title->mediaType, title->titleID);
-
-    if (R_SUCCEEDED(res) && extdataID != 0) {
-        FS_ExtSaveDataInfo extInfo = {
-            .mediaType = title->mediaType,
-            .unknown = 0,
-            .reserved1 = 0,
-            .saveId = extdataID,
-            .reserved2 = 0
-        };
-
-        // Try to delete regular ExtData
-        FSUSER_DeleteExtSaveData(extInfo);
-
-        // Try to delete Boss ExtData (SpotPass)
-        FS_Archive bossArchive;
-        FS_Path extPath = {PATH_BINARY, sizeof(FS_ExtSaveDataInfo), &extInfo};
-        if (R_SUCCEEDED(FSUSER_OpenArchive(&bossArchive, ARCHIVE_BOSS_EXTDATA, extPath))) {
-            FSUSER_CloseArchive(bossArchive);
-            // Boss extdata is deleted automatically with title or can be cleaned separately
-        }
-    }
-
-    // Delete the main title (this removes the title, save data, and most content)
-    AM_DeleteTitle(title->mediaType, title->titleID);
-}
-
-void deleteTitle(TitleInfo *title) {
-    // Perform complete deletion
-    deleteTitleCompletely(title);
-
-    // Verify deletion by checking if title still exists
-    AM_TitleEntry titleEntry;
-    Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &titleEntry);
-
-    // If title not found, deletion was successful
-    if (R_FAILED(res) || res == 0xC8A04478) {
-        title->isValid = false;
-
-        const char *successLines[] = {
-            "",
-            "Successfully deleted:",
-            title->name,
-            "",
-            "All associated data removed:",
-            "  - Title application",
-            "  - Save data",
-            "  - ExtData (if present)",
-            "  - Boss ExtData (if present)",
-            "",
-            "Press A to continue..."
-        };
-        drawDialog(successLines, 11);
-    } else {
-        const char *failLines[] = {
-            "",
-            "Failed to delete:",
-            title->name,
-            "Title may still be present on system.",
-            "",
-            "Press A to continue..."
-        };
-        drawDialog(failLines, 6);
-    }
-
-    while (aptMainLoop()) {
-        hidScanInput();
-        u32 kDown = hidKeysDown();
-
-        if (kDown & KEY_A)
-            break;
-    }
-}
-
-void handleInput() {
-    // Input già scannerizzato nel main loop
-    u32 kDown = hidKeysDown();
-    u32 kHeld = hidKeysHeld();
-
-    static u32 scrollDelayTimer = 0;
-    static bool canScroll = true;
-
-    if (filteredCount == 0)
-        return;
-
-    // Sistema di scroll migliorato: richiede rilascio completo del tasto prima del prossimo movimento
-    // Se nessun tasto direzionale è premuto, resetta il timer e abilita lo scroll
-    if (!(kHeld & KEY_DUP) && !(kHeld & KEY_DDOWN)) {
-        scrollDelayTimer = 0;
-        canScroll = true;
-    }
-
-    // Navigation UP con controllo preciso
-    if (kDown & KEY_DUP) {
-        // Prima pressione: movimento immediato
-        if (cursor > 0) {
-            cursor--;
-            needsRedraw = true;
-            canScroll = false;  // Disabilita scroll continuo
-            scrollDelayTimer = 0;
-        }
-    } else if (kHeld & KEY_DUP && canScroll) {
-        // Tasto tenuto premuto: aspetta molto prima di iniziare scroll continuo
-        scrollDelayTimer++;
-        if (scrollDelayTimer > 90) {  // ~1.5 secondi di delay
-            // Ora permetti scroll continuo ma MOLTO lento
-            if (scrollDelayTimer % 25 == 0) {  // 1 movimento ogni ~0.4 secondi
-                if (cursor > 0) {
-                    cursor--;
-                    needsRedraw = true;
+void restoreDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
+    DIR *d=opendir(srcPath); if (!d) return;
+    struct dirent *ent;
+    while ((ent=readdir(d))!=NULL) {
+        if (strcmp(ent->d_name,".")==0||strcmp(ent->d_name,"..")==0) continue;
+        char sf[512],df[512];
+        snprintf(sf,sizeof(sf),"%s/%s",srcPath,ent->d_name);
+        snprintf(df,sizeof(df),"%s/%s",dstPath,ent->d_name);
+        struct stat st2; stat(sf,&st2);
+        if (S_ISDIR(st2.st_mode)) {
+            FS_Path fp2=fsMakePath(PATH_ASCII,df);
+            FSUSER_CreateDirectory(archive,fp2,0);
+            restoreDirectory(archive,sf,df);
+        } else {
+            FILE *inf=fopen(sf,"rb"); if (!inf) continue;
+            fseek(inf,0,SEEK_END); long fsz=ftell(inf); fseek(inf,0,SEEK_SET);
+            if (fsz>0&&fsz<MAX_FILE_SIZE) {
+                void *buf=malloc(fsz);
+                if (buf) {
+                    if (fread(buf,1,fsz,inf)==(size_t)fsz) {
+                        FS_Path fp2=fsMakePath(PATH_ASCII,df); Handle fh2;
+                        if (R_SUCCEEDED(FSUSER_OpenFile(&fh2,archive,fp2,FS_OPEN_WRITE|FS_OPEN_CREATE,0))) {
+                            u32 bw=0; FSFILE_Write(fh2,&bw,0,buf,fsz,FS_WRITE_FLUSH); FSFILE_Close(fh2);
+                        }
+                    }
+                    free(buf);
                 }
             }
+            fclose(inf);
         }
     }
+    closedir(d);
+}
+bool restoreSaveData(TitleInfo *title) {
+    char backupDir[512];
+    if (!findBackupDir(title->titleID,backupDir,sizeof(backupDir))) return false;
+    char savedataPath[512]; snprintf(savedataPath,sizeof(savedataPath),"%s/savedata",backupDir);
+    struct stat st2; if (stat(savedataPath,&st2)!=0) return false;
+    u32 ap[]={(u32)(title->titleID&0xFFFFFFFF),(u32)((title->titleID>>32)&0xFFFFFFFF),title->mediaType,0};
+    FS_Path bap={PATH_BINARY,16,ap};
+    FS_Archive sa;
+    Result res=FSUSER_OpenArchive(&sa,ARCHIVE_USER_SAVEDATA,bap);
+    if (R_FAILED(res)) return false;
+    restoreDirectory(sa,savedataPath,"/");
+    FSUSER_CloseArchive(sa);
+    return true;
+}
+u64 getCIATitleID(const char *ciaPath) {
+    FILE *f2=fopen(ciaPath,"rb"); if (!f2) return 0;
+    u32 hdrSz=0; fread(&hdrSz,4,1,f2);
+    fseek(f2,8,SEEK_SET);
+    u32 certSz=0,tikSz=0,tmdSz=0;
+    fread(&certSz,4,1,f2); fread(&tikSz,4,1,f2); fread(&tmdSz,4,1,f2);
+    if (tmdSz<0x200){fclose(f2);return 0;}
+    u32 tmdOff=ALIGN64(hdrSz)+ALIGN64(certSz)+ALIGN64(tikSz);
+    fseek(f2,tmdOff,SEEK_SET);
+    u32 sigType=0; fread(&sigType,4,1,f2);
+    u32 sigSz=0x100,padSz=0x3C;
+    if (sigType==0x00010003){sigSz=0x200;}
+    else if (sigType==0x00010005){sigSz=0x3C;padSz=0x40;}
+    u32 bodyOff=tmdOff+4+sigSz+padSz;
+    fseek(f2,bodyOff+0x4C,SEEK_SET);
+    u8 tb[8]={0}; fread(tb,8,1,f2); fclose(f2);
+    u64 tid=0; for(int i=0;i<8;i++) tid=(tid<<8)|tb[i];
+    return tid;
+}
+int scanDirectory(const char *path) {
+    fileCount=0;
+    snprintf(currentPath,sizeof(currentPath),"%s",path);
+    /* Add ".." entry if not root */
+    if (strcmp(path,"sdmc:/")!=0) {
+        strcpy(fileEntries[0].name,".."); fileEntries[0].isDir=true;
+        fileEntries[0].isCIA=false; fileEntries[0].size=0; fileCount=1;
+    }
+    DIR *d=opendir(path); if (!d) return fileCount;
+    struct dirent *ent;
+    /* collect dirs */
+    while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
+        if (strcmp(ent->d_name,".")==0||strcmp(ent->d_name,"..")==0) continue;
+        if (ent->d_type!=DT_DIR) continue;
+        strncpy(fileEntries[fileCount].name,ent->d_name,255);
+        fileEntries[fileCount].name[255]='\0';
+        fileEntries[fileCount].isDir=true; fileEntries[fileCount].isCIA=false;
+        fileEntries[fileCount].size=0; fileCount++;
+    }
+    rewinddir(d);
+    /* collect .cia files */
+    while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
+        if (ent->d_type==DT_DIR) continue;
+        const char *ext=strrchr(ent->d_name,'.');
+        if (!ext||strcasecmp(ext,".cia")!=0) continue;
+        strncpy(fileEntries[fileCount].name,ent->d_name,255);
+        fileEntries[fileCount].name[255]='\0';
+        fileEntries[fileCount].isDir=false; fileEntries[fileCount].isCIA=true;
+        /* get file size */
+        char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
+        struct stat st2; fileEntries[fileCount].size=(stat(fp2,&st2)==0)?(u64)st2.st_size:0;
+        fileCount++;
+    }
+    closedir(d);
+    return fileCount;
+}
+bool installCIA(const char *ciaPath, FS_MediaType dest) {
+    FILE *f2=fopen(ciaPath,"rb"); if (!f2) return false;
+    fseek(f2,0,SEEK_END); long fsize=ftell(f2); fseek(f2,0,SEEK_SET);
+    if (fsize<=0){fclose(f2);return false;}
+    Handle cia;
+    if (R_FAILED(AM_StartCiaInstall(dest,&cia))){fclose(f2);return false;}
+    u8 *buf=(u8*)malloc(CHUNK_SIZE); if (!buf){AM_CancelCIAInstall(cia);fclose(f2);return false;}
+    long done=0; bool ok=true;
+    while (done<fsize) {
+        int toRead=(int)((fsize-done>CHUNK_SIZE)?CHUNK_SIZE:fsize-done);
+        int br=(int)fread(buf,1,toRead,f2);
+        if (br<=0){ok=false;break;}
+        u32 bw=0;
+        if (R_FAILED(FSFILE_Write(cia,&bw,done,buf,br,FS_WRITE_FLUSH))){ok=false;break;}
+        done+=br;
+        /* progress display */
+        {
+            C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            C2D_TargetClear(top,C2D_Color32(0,0,0,255)); C2D_SceneBegin(top);
+            C2D_TextBufClear(dynamicBuf); C2D_Text t;
+            C2D_TextParse(&t,dynamicBuf,"Installing..."); C2D_TextOptimize(&t);
+            C2D_DrawText(&t,C2D_WithColor,10,20,0.5f,0.55f,0.55f,C2D_Color32(255,255,255,255));
+            char nb[256]; int nameStart=(int)(strlen(ciaPath)-1);
+            while(nameStart>0&&ciaPath[nameStart-1]!='/'&&ciaPath[nameStart-1]!=':') nameStart--;
+            snprintf(nb,sizeof(nb),"%.50s",&ciaPath[nameStart]);
+            C2D_TextParse(&t,dynamicBuf,nb); C2D_TextOptimize(&t);
+            C2D_DrawText(&t,C2D_WithColor,10,40,0.5f,0.42f,0.42f,C2D_Color32(200,200,200,255));
+            float p=(float)done/fsize,bw2=300,bh=20,bx=50,by=80;
+            C2D_DrawRectSolid(bx,by,0.5f,bw2,bh,C2D_Color32(50,50,50,255));
+            C2D_DrawRectSolid(bx,by,0.5f,bw2*p,bh,C2D_Color32(100,200,100,255));
+            C2D_DrawRectSolid(bx,by,0.5f,bw2,2,C2D_Color32(255,255,255,255));
+            C2D_DrawRectSolid(bx,by+bh-2,0.5f,bw2,2,C2D_Color32(255,255,255,255));
+            char ps[64]; char szDone[32],szTotal[32];
+            formatSize(done,szDone,sizeof(szDone)); formatSize(fsize,szTotal,sizeof(szTotal));
+            snprintf(ps,sizeof(ps),"%s / %s",szDone,szTotal);
+            C2D_TextParse(&t,dynamicBuf,ps); C2D_TextOptimize(&t);
+            C2D_DrawText(&t,C2D_WithColor,bx+60,by+25,0.5f,0.42f,0.42f,C2D_Color32(255,255,255,255));
+            C2D_TargetClear(bottom,C2D_Color32(20,20,30,255)); C2D_SceneBegin(bottom);
+            C3D_FrameEnd(0);
+        }
+    }
+    free(buf); fclose(f2);
+    if (!ok){AM_CancelCIAInstall(cia);return false;}
+    return R_SUCCEEDED(AM_FinishCiaInstall(cia));
+}
+void deleteTitleCompletely(TitleInfo *title) {
+    u64 extID=0;
+    Result res=AM_GetTitleExtDataId(&extID,title->mediaType,title->titleID);
+    if (R_SUCCEEDED(res)&&extID!=0) {
+        FS_ExtSaveDataInfo ei={.mediaType=title->mediaType,.unknown=0,.reserved1=0,.saveId=extID,.reserved2=0};
+        FSUSER_DeleteExtSaveData(ei);
+        FS_Archive ba; FS_Path ep={PATH_BINARY,sizeof(FS_ExtSaveDataInfo),&ei};
+        if (R_SUCCEEDED(FSUSER_OpenArchive(&ba,ARCHIVE_BOSS_EXTDATA,ep))) FSUSER_CloseArchive(ba);
+    }
+    AM_DeleteTitle(title->mediaType,title->titleID);
+}
+void deleteTitle(TitleInfo *title) {
+    deleteTitleCompletely(title);
+    AM_TitleEntry te;
+    Result res=AM_GetTitleInfo(title->mediaType,1,&title->titleID,&te);
+    if (R_FAILED(res)||res==0xC8A04478) {
+        title->isValid=false;
+        const char *sl[]={""," Successfully deleted:",title->name,"","All data removed.","","Press A to continue..."};
+        drawDialog(sl,7);
+    } else {
+        const char *fl[]={""," Failed to delete:",title->name,"","Title may still be present.","","Press A to continue..."};
+        drawDialog(fl,7);
+    }
+    while (aptMainLoop()){hidScanInput();if(hidKeysDown()&KEY_A)break;}
+}
 
-    // Navigation DOWN con controllo preciso
-    if (kDown & KEY_DDOWN) {
-        // Prima pressione: movimento immediato
+/* ============================================================
+   SECTION 9: Draw Functions
+   ============================================================ */
+
+/* Color palette */
+#define CLR_BG        C2D_Color32(20,20,30,255)
+#define CLR_HEADER    C2D_Color32(40,60,100,255)
+#define CLR_SELECTED  C2D_Color32(60,100,180,255)
+#define CLR_WHITE     C2D_Color32(255,255,255,255)
+#define CLR_GRAY      C2D_Color32(160,160,160,255)
+#define CLR_RED       C2D_Color32(220,60,60,255)
+#define CLR_GREEN     C2D_Color32(60,200,60,255)
+#define CLR_YELLOW    C2D_Color32(255,220,60,255)
+#define CLR_CYAN      C2D_Color32(100,220,255,255)
+#define CLR_BACKUP_OK C2D_Color32(255,200,50,255)
+
+/* Helper: draw text via dynamic buffer (buffer must be cleared by caller) */
+static void dt(float x, float y, float z, float s, u32 c, const char *str) {
+    C2D_Text t;
+    C2D_TextParse(&t, dynamicBuf, str);
+    C2D_TextOptimize(&t);
+    C2D_DrawText(&t, C2D_WithColor, x, y, z, s, s, c);
+}
+
+/* Internal: render dialog box content on current scene (top).
+   Caller must have called C2D_SceneBegin(top) and C2D_TextBufClear. */
+static void _renderDialogBox(const char **lines, int lineCount) {
+    float bh = (float)lineCount * 20.0f + 30.0f;
+    if (bh < 60.0f) bh = 60.0f;
+    float bw = 340.0f;
+    float bx = (400.0f - bw) / 2.0f;
+    float by = (240.0f - bh) / 2.0f;
+    C2D_DrawRectSolid(bx,       by,        0.5f, bw, bh, C2D_Color32(10,10,20,245));
+    C2D_DrawRectSolid(bx,       by,        0.5f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,       by+bh-2,   0.5f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,       by,        0.5f, 2,  bh, CLR_WHITE);
+    C2D_DrawRectSolid(bx+bw-2,  by,        0.5f, 2,  bh, CLR_WHITE);
+    for (int i = 0; i < lineCount; i++) {
+        if (lines[i] && lines[i][0])
+            dt(bx + 12.0f, by + 12.0f + (float)i * 20.0f, 0.5f, 0.44f, CLR_WHITE, lines[i]);
+    }
+}
+
+/* Internal: render selected-titles list on current scene (bottom).
+   Caller must have called C2D_SceneBegin(bottom). */
+static void _renderSelectedList(void) {
+    int selCount = 0;
+    for (int i = 0; i < titleCount; i++)
+        if (titles[i].selected && titles[i].isValid) selCount++;
+    char hdr[64];
+    snprintf(hdr, sizeof(hdr), "TITOLI SELEZIONATI (%d)", selCount);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_RED);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, hdr);
+    int shown = 0;
+    for (int i = 0; i < titleCount && shown < 10; i++) {
+        if (!titles[i].selected || !titles[i].isValid) continue;
+        u32 hi = (u32)(titles[i].titleID >> 32);
+        const char *sym = (hi == 0x0004000E) ? "^" : (hi == 0x0004008C) ? "+" : " ";
+        char shortName[30]; strncpy(shortName, titles[i].name, 28); shortName[28] = '\0';
+        char line[48]; snprintf(line, sizeof(line), "%s %s", sym, shortName);
+        dt(4, 22.0f + (float)shown * 20.0f, 0.5f, 0.40f, CLR_WHITE, line);
+        shown++;
+    }
+    if (selCount > 10) {
+        char more[32]; snprintf(more, sizeof(more), "...e altri %d", selCount - 10);
+        dt(4, 22.0f + 10.0f * 20.0f, 0.5f, 0.40f, CLR_GRAY, more);
+    }
+}
+
+/* ---- Public draw functions ---- */
+
+/* drawDialog: blocking context — manages its own C3D frame.
+   Draws dialog box on top, clears bottom. */
+void drawDialog(const char **lines, int lineCount) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG);    C2D_SceneBegin(top);
+    _renderDialogBox(lines, lineCount);
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    C3D_FrameEnd(0);
+}
+
+/* drawSelectedTitlesList: standalone — manages its own C3D frame. */
+void drawSelectedTitlesList(void) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG);    C2D_SceneBegin(top);
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    _renderSelectedList();
+    C3D_FrameEnd(0);
+}
+
+/* drawDialogWithSelectedList: blocking context — manages its own C3D frame.
+   Dialog on top, selected list on bottom. */
+void drawDialogWithSelectedList(const char **lines, int lineCount) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG);    C2D_SceneBegin(top);
+    _renderDialogBox(lines, lineCount);
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    _renderSelectedList();
+    C3D_FrameEnd(0);
+}
+
+/* drawControlsOverlay: called from main loop frame (NO C3D_FrameBegin/End here).
+   MUST be the only draw call for this frame — replaces drawUI entirely. */
+void drawControlsOverlay(void) {
+    C2D_TextBufClear(dynamicBuf);
+    /* Top overlay */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    float bw = 300.0f, bh = 210.0f;
+    float bx = (400.0f - bw) / 2.0f, by = (240.0f - bh) / 2.0f;
+    C2D_DrawRectSolid(bx,      by,        0.5f, bw, bh, C2D_Color32(10,10,20,230));
+    C2D_DrawRectSolid(bx,      by,        0.5f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by+bh-2,   0.5f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by,        0.5f, 2,  bh, CLR_WHITE);
+    C2D_DrawRectSolid(bx+bw-2, by,        0.5f, 2,  bh, CLR_WHITE);
+    dt(bx+8, by+6, 0.5f, 0.46f, CLR_CYAN, "=== COMANDI ===");
+    static const char *ctrl[] = {
+        "Su/Giu    : Naviga lista",
+        "Sx/Dx     : Pagina -/+",
+        "A         : Seleziona titolo",
+        "X         : Esegui disinstallazione",
+        "L / R     : Cambia ordinamento",
+        "Y         : Cambia filtro",
+        "B         : Torna al menu principale",
+        "SELECT    : Mostra/nascondi comandi"
+    };
+    for (int i = 0; i < 8; i++)
+        dt(bx+8, by+26.0f + (float)i*13.0f, 0.5f, 0.38f, CLR_WHITE, ctrl[i]);
+    /* Bottom overlay */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    float bbw = 280.0f, bbh = 110.0f;
+    float bbx = (320.0f - bbw) / 2.0f, bby = (240.0f - bbh) / 2.0f;
+    C2D_DrawRectSolid(bbx,       bby,        0.5f, bbw, bbh, C2D_Color32(10,10,20,230));
+    C2D_DrawRectSolid(bbx,       bby,        0.5f, bbw, 2,   CLR_WHITE);
+    C2D_DrawRectSolid(bbx,       bby+bbh-2,  0.5f, bbw, 2,   CLR_WHITE);
+    C2D_DrawRectSolid(bbx,       bby,        0.5f, 2,   bbh, CLR_WHITE);
+    C2D_DrawRectSolid(bbx+bbw-2, bby,        0.5f, 2,   bbh, CLR_WHITE);
+    dt(bbx+8, bby+8,  0.5f, 0.40f, CLR_CYAN,  "Touch screen");
+    dt(bbx+8, bby+28, 0.5f, 0.38f, CLR_GRAY,  "Dettagli titolo selezionato");
+    dt(bbx+8, bby+48, 0.5f, 0.38f, CLR_GRAY,  "visibili nella schermata");
+    dt(bbx+8, bby+68, 0.5f, 0.38f, CLR_GRAY,  "inferiore durante navigazione.");
+    dt(bbx+8, bby+88, 0.5f, 0.38f, CLR_WHITE, "Rilascia SELECT per tornare.");
+}
+
+/* drawTouchControls: draws title details on bottom screen.
+   Called from drawUI (NO frame management, NO TextBufClear). */
+void drawTouchControls(void) {
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    if (filteredCount == 0) {
+        dt(8, 110, 0.5f, 0.44f, CLR_GRAY, "Nessun titolo da mostrare.");
+        return;
+    }
+    int idx = filteredIndices[cursor];
+    TitleInfo *ti = &titles[idx];
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "DETTAGLI TITOLO");
+    /* Name */
+    char nm[46]; strncpy(nm, ti->fullName[0] ? ti->fullName : ti->name, 44); nm[44] = '\0';
+    dt(4, 22, 0.5f, 0.40f, CLR_WHITE, nm);
+    /* TitleID */
+    char tid[32]; snprintf(tid, sizeof(tid), "ID: %016llX", (unsigned long long)ti->titleID);
+    dt(4, 42, 0.5f, 0.36f, CLR_GRAY, tid);
+    /* Version + Size */
+    char ver[16]; snprintf(ver, sizeof(ver), "v%u", ti->version);
+    char sz[24];  formatSize(ti->size, sz, sizeof(sz));
+    char vs[48];  snprintf(vs, sizeof(vs), "%s   %s", ver, sz);
+    dt(4, 60, 0.5f, 0.36f, CLR_GRAY, vs);
+    /* Type + Location */
+    u32 hi = (u32)(ti->titleID >> 32);
+    const char *type = (hi == 0x0004000E) ? "Update" : (hi == 0x0004008C) ? "DLC" : "Gioco";
+    const char *loc  = (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND";
+    char tl[32]; snprintf(tl, sizeof(tl), "%s  |  %s", type, loc);
+    dt(4, 78, 0.5f, 0.38f, CLR_CYAN, tl);
+    /* Backup */
+    if (ti->hasBackup) {
+        char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
+        char bk[64]; snprintf(bk, sizeof(bk), "Backup: SI [%s]", dateBuf);
+        dt(4, 96, 0.5f, 0.36f, CLR_GREEN, bk);
+    } else {
+        dt(4, 96, 0.5f, 0.36f, CLR_RED, "Backup: NO");
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "[SELECT = Comandi]");
+}
+
+/* drawMainMenu: called from main loop — NO C3D frame management. */
+void drawMainMenu(void) {
+    C2D_TextBufClear(dynamicBuf);
+    /* Top screen */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(8, 4, 0.5f, 0.50f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
+    static const char *items[] = {
+        "[A] Installa CIA",
+        "[B] Backup Salvataggi",
+        "[U] Disinstalla Titoli",
+        "[I] Info Sistema",
+        "[S] Impostazioni"
+    };
+    for (int i = 0; i < 5; i++) {
+        float y = 60.0f + (float)i * 30.0f;
+        if (i == menuCursor)
+            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 24, CLR_SELECTED);
+        dt(30, y, 0.5f, 0.50f, (i == menuCursor) ? CLR_WHITE : CLR_GRAY, items[i]);
+        if (i == menuCursor)
+            dt(12, y, 0.5f, 0.50f, CLR_WHITE, ">");
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "START = Esci");
+    /* Bottom screen */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    static const char *descLine1[] = {
+        "Installa file CIA dalla SD card.",
+        "Crea backup dei salvataggi",
+        "Disinstalla titoli installati",
+        "Visualizza info sui titoli",
+        "Configura le opzioni"
+    };
+    static const char *descLine2[] = {
+        "Supporto SD e NAND.",
+        "per i titoli installati.",
+        "con backup opzionale.",
+        "installati (giochi, DLC, update).",
+        "dell'applicazione."
+    };
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Descrizione");
+    dt(8, 30, 0.5f, 0.44f, CLR_WHITE, descLine1[menuCursor]);
+    dt(8, 52, 0.5f, 0.40f, CLR_GRAY,  descLine2[menuCursor]);
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A = Seleziona   START = Esci");
+}
+
+/* drawUI: uninstall list — called from main loop, NO C3D frame management. */
+void drawUI(void) {
+    C2D_TextBufClear(dynamicBuf);
+    /* Top screen */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(4, 4, 0.5f, 0.46f, CLR_WHITE, "Disinstalla");
+    /* Info bar */
+    int selCount = 0;
+    for (int i = 0; i < titleCount; i++)
+        if (titles[i].selected && titles[i].isValid) selCount++;
+    static const char *sortNames[]   = { "Nome", "Size", "ID" };
+    static const char *filterNames[] = { "Tutti", "Upd", "DLC" };
+    char info[80];
+    snprintf(info, sizeof(info), "T:%d  Sel:%d  Sort:%s  [%s]",
+             filteredCount, selCount,
+             sortNames[currentSortMode], filterNames[currentFilterMode]);
+    dt(4, 24, 0.5f, 0.38f, CLR_GRAY, info);
+    /* Title list */
+    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+        int fi = scrollOffset + i;
+        if (fi >= filteredCount) break;
+        int idx = filteredIndices[fi];
+        TitleInfo *ti = &titles[idx];
+        float y = 38.0f + (float)i * 14.5f;
+        bool isCursor = (fi == cursor);
+        if (isCursor)
+            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
+        /* Checkbox */
+        u32 txtColor = ti->selected ? CLR_YELLOW : (isCursor ? CLR_WHITE : CLR_GRAY);
+        dt(3, y, 0.5f, 0.38f, txtColor, ti->selected ? "[X]" : "[ ]");
+        /* Name (truncated) */
+        const char *srcName = ti->name[0] ? ti->name : "Unknown";
+        char nm[32]; strncpy(nm, srcName, 28); nm[28] = '\0';
+        if (strlen(srcName) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
+        dt(28, y, 0.5f, 0.38f, txtColor, nm);
+        /* Type symbol */
+        u32 hi = (u32)(ti->titleID >> 32);
+        if      (hi == 0x0004000E) dt(235, y, 0.5f, 0.38f, CLR_CYAN,  "^");
+        else if (hi == 0x0004008C) dt(235, y, 0.5f, 0.38f, CLR_GREEN, "+");
+        /* Short TitleID (low 32 bit) */
+        char shortID[12];
+        snprintf(shortID, sizeof(shortID), "%08lX", (unsigned long)(ti->titleID & 0xFFFFFFFF));
+        dt(248, y, 0.5f, 0.34f, CLR_GRAY, shortID);
+    }
+    /* Scroll counter */
+    if (filteredCount > MAX_VISIBLE_TITLES) {
+        char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", cursor + 1, filteredCount);
+        dt(340, 225, 0.5f, 0.34f, CLR_GRAY, sc);
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.33f, CLR_WHITE, "A=Sel  X=Esegui  L/R=Sort  Y=Filt  B=Menu  SEL=Help");
+    /* Bottom screen via sub-function (no TextBufClear here) */
+    drawTouchControls();
+}
+
+/* ---- SOON stubs ---- */
+static void _drawSoon(const char *feature) {
+    /* NO C3D frame mgmt — works both inside blocking loops and main loop frames */
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(8, 4, 0.5f, 0.50f, CLR_WHITE, feature);
+    dt(110, 95, 0.5f, 0.65f, CLR_YELLOW, "PROSSIMAMENTE");
+    dt(80, 135, 0.5f, 0.44f, CLR_GRAY, "Funzionalita' in sviluppo (v2.0).");
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "B / START = Torna al menu");
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    dt(8, 108, 0.5f, 0.44f, CLR_GRAY, "Versione 2.0 in arrivo!");
+}
+
+void drawFileBrowserScreen(void) { _drawSoon("Installa CIA"); }
+void drawBackupScreen(void)      { _drawSoon("Backup Salvataggi"); }
+void drawSysInfoScreen(void)     { _drawSoon("Info Sistema"); }
+void drawSettingsScreen(void)    { _drawSoon("Impostazioni"); }
+void drawTitleDetails(void)      { _drawSoon("Dettagli Titolo"); }
+
+/* ============================================================
+   SECTION 10: Input / Flow Handlers
+   ============================================================ */
+
+void handleMainMenuInput(void) {
+    u32 keys = hidKeysDown();
+    if (keys & KEY_DOWN) menuCursor = (menuCursor + 1) % 5;
+    if (keys & KEY_UP)   menuCursor = (menuCursor + 4) % 5;
+    if (keys & KEY_A) {
+        switch (menuCursor) {
+            case 0: /* Install CIA */
+                appState = APP_INSTALL;
+                break;
+            case 1: /* Backup */
+                if (titleCount == 0) loadTitles();
+                appState = APP_BACKUP;
+                break;
+            case 2: /* Uninstall */
+                if (titleCount == 0) loadTitles();
+                updateFilteredList();
+                cursor = 0; scrollOffset = 0;
+                appState = APP_UNINSTALL;
+                break;
+            case 3: /* SysInfo */
+                if (titleCount == 0) loadTitles();
+                sysInfoMode = SYSINFO_OVERVIEW;
+                sysInfoCursor = 0;
+                appState = APP_SYSINFO;
+                break;
+            case 4: /* Settings */
+                settingsCursor = 0;
+                appState = APP_SETTINGS;
+                break;
+        }
+    }
+}
+
+/* handleUninstallInput: navigation only (KEY_X handled in main loop as blocking flow). */
+void handleUninstallInput(void) {
+    u32 keys = hidKeysDown();
+    /* Navigation */
+    if (keys & KEY_DOWN) {
         if (cursor < filteredCount - 1) {
             cursor++;
-            needsRedraw = true;
-            canScroll = false;  // Disabilita scroll continuo
-            scrollDelayTimer = 0;
-        }
-    } else if (kHeld & KEY_DDOWN && canScroll) {
-        // Tasto tenuto premuto: aspetta molto prima di iniziare scroll continuo
-        scrollDelayTimer++;
-        if (scrollDelayTimer > 90) {  // ~1.5 secondi di delay
-            // Ora permetti scroll continuo ma MOLTO lento
-            if (scrollDelayTimer % 25 == 0) {  // 1 movimento ogni ~0.4 secondi
-                if (cursor < filteredCount - 1) {
-                    cursor++;
-                    needsRedraw = true;
-                }
-            }
+            if (cursor >= scrollOffset + MAX_VISIBLE_TITLES)
+                scrollOffset = cursor - MAX_VISIBLE_TITLES + 1;
         }
     }
-
-    // Toggle selection - use filtered index
-    if (kDown & KEY_A) {
-        if (cursor >= 0 && cursor < filteredCount) {
-            int titleIdx = filteredIndices[cursor];
-            titles[titleIdx].selected = !titles[titleIdx].selected;
-            needsRedraw = true;
+    if (keys & KEY_UP) {
+        if (cursor > 0) {
+            cursor--;
+            if (cursor < scrollOffset) scrollOffset = cursor;
         }
     }
-
-    // Show controls overlay while SELECT is held
-    if (kHeld & KEY_SELECT) {
-        drawControlsOverlay();
-        // No need to wait - overlay shows as long as button is held
+    if (keys & KEY_RIGHT) {
+        cursor += MAX_VISIBLE_TITLES;
+        if (cursor >= filteredCount) cursor = (filteredCount > 0) ? filteredCount - 1 : 0;
+        if (cursor >= scrollOffset + MAX_VISIBLE_TITLES)
+            scrollOffset = cursor - MAX_VISIBLE_TITLES + 1;
     }
-
-    // Cycle sort mode with L/R buttons
-    if (kDown & KEY_L) {
-        // Cycle backward: Name <- Size <- TitleID <- Name
-        if (currentSortMode == SORT_BY_NAME) {
-            currentSortMode = SORT_BY_TITLEID;
-        } else if (currentSortMode == SORT_BY_SIZE) {
-            currentSortMode = SORT_BY_NAME;
-        } else {
-            currentSortMode = SORT_BY_SIZE;
-        }
-        sortTitles();
-        needsRedraw = true;
-    }
-
-    if (kDown & KEY_R) {
-        // Cycle forward: Name -> Size -> TitleID -> Name
-        if (currentSortMode == SORT_BY_NAME) {
-            currentSortMode = SORT_BY_SIZE;
-        } else if (currentSortMode == SORT_BY_SIZE) {
-            currentSortMode = SORT_BY_TITLEID;
-        } else {
-            currentSortMode = SORT_BY_NAME;
-        }
-        sortTitles();
-        needsRedraw = true;
-    }
-
-    // Cycle filter mode with Y button
-    if (kDown & KEY_Y) {
-        if (currentFilterMode == FILTER_ALL) {
-            currentFilterMode = FILTER_UPDATES;
-        } else if (currentFilterMode == FILTER_UPDATES) {
-            currentFilterMode = FILTER_DLC;
-        } else {
-            currentFilterMode = FILTER_ALL;
-        }
-
-        // Reset cursor when changing filter
-        cursor = 0;
-        scrollOffset = 0;
-        needsRedraw = true;
-    }
-
-    // Fast scroll with LEFT/RIGHT (page up/down)
-    if (kDown & KEY_DLEFT) {
-        // Scroll up one page
+    if (keys & KEY_LEFT) {
         cursor -= MAX_VISIBLE_TITLES;
         if (cursor < 0) cursor = 0;
-        needsRedraw = true;
+        if (cursor < scrollOffset) scrollOffset = cursor;
+    }
+    /* Sort */
+    if (keys & KEY_L) {
+        currentSortMode = (SortMode)((currentSortMode + 2) % 3);
+        sortTitles(); updateFilteredList();
+    }
+    if (keys & KEY_R) {
+        currentSortMode = (SortMode)((currentSortMode + 1) % 3);
+        sortTitles(); updateFilteredList();
+    }
+    /* Filter */
+    if (keys & KEY_Y) {
+        currentFilterMode = (FilterMode)((currentFilterMode + 1) % 3);
+        updateFilteredList();
+    }
+    /* Select / deselect */
+    if ((keys & KEY_A) && filteredCount > 0)
+        titles[filteredIndices[cursor]].selected ^= true;
+    /* Back to menu */
+    if (keys & KEY_B) {
+        for (int i = 0; i < titleCount; i++) titles[i].selected = false;
+        appState = APP_MAIN_MENU;
+    }
+    /* NOTE: KEY_X is intercepted in main() before C3D_FrameBegin to avoid nested frames. */
+}
+
+/* _runUninstallDeleteFlow: blocking flow triggered by KEY_X in uninstall screen.
+   Called from main loop BEFORE C3D_FrameBegin — manages own frames via
+   drawDialogWithSelectedList / drawDialog / deleteTitle. */
+static void _runUninstallDeleteFlow(void) {
+    /* Step 1: count selected */
+    int selectedCount = 0;
+    for (int i = 0; i < titleCount; i++)
+        if (titles[i].selected && titles[i].isValid) selectedCount++;
+
+    if (selectedCount == 0) {
+        const char *msg[] = { "", "  Nessun titolo selezionato.", "",
+                              "  Seleziona almeno un titolo con A.", "",
+                              "  Premi A per continuare." };
+        drawDialog(msg, 6);
+        while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+        return;
     }
 
-    if (kDown & KEY_DRIGHT) {
-        // Scroll down one page
-        cursor += MAX_VISIBLE_TITLES;
-        if (cursor >= filteredCount) cursor = filteredCount - 1;
-        needsRedraw = true;
-    }
-
-    // Uninstall selected
-    if (kDown & KEY_X) {
-        int selectedCount = 0;
-        for (int i = 0; i < titleCount; i++) {
-            if (titles[i].selected)
-                selectedCount++;
-        }
-
-        if (selectedCount == 0) {
-            const char *noSelLines[] = {
-                "",
-                "No titles selected!",
-                "",
-                "Press A to continue..."
-            };
-            drawDialog(noSelLines, 4);
-
-            while (aptMainLoop()) {
-                hidScanInput();
-                u32 kDown2 = hidKeysDown();
-                if (kDown2 & KEY_A)
-                    break;
+    /* Step 3: find related titles (DLC/Update) for selected base titles */
+    int pendingRelated[MAX_TITLES];
+    int pendingCount = 0;
+    for (int i = 0; i < titleCount; i++) {
+        if (!titles[i].selected || !titles[i].isValid) continue;
+        if ((u32)(titles[i].titleID >> 32) != 0x00040000) continue;
+        int relIdx[20]; int relCount = 0;
+        findRelatedTitles(titles[i].titleID, i, relIdx, &relCount);
+        for (int r = 0; r < relCount; r++) {
+            int ri = relIdx[r];
+            if (!titles[ri].selected && titles[ri].isValid) {
+                bool dup = false;
+                for (int p = 0; p < pendingCount; p++)
+                    if (pendingRelated[p] == ri) { dup = true; break; }
+                if (!dup && pendingCount < MAX_TITLES) pendingRelated[pendingCount++] = ri;
             }
-            return;
         }
-
-        // Ask for backup confirmation
-        char countMsg[64];
-        snprintf(countMsg, sizeof(countMsg), "You are about to uninstall %d title(s).", selectedCount);
-        const char *backupLines[] = {
-            "",
-            countMsg,
-            "",
-            "Do you want to backup save data?",
-            "",
-            "  A: Yes, backup saves",
-            "  B: No, skip backup",
-            "  START: Cancel"
-        };
-        drawDialogWithSelectedList(backupLines, 8);
-
-        bool backupSaves = false;
-        bool cancelled = false;
-
+    }
+    if (pendingCount > 0) {
+        char relMsg[64];
+        snprintf(relMsg, sizeof(relMsg), "  Trovati %d titoli correlati (DLC/Update).", pendingCount);
+        const char *dl[] = { "", relMsg, "", "  A=Includi  B=Salta  START=Annulla" };
+        bool addRelated = false, cancelAll = false;
         while (aptMainLoop()) {
-            hidScanInput();
-            u32 kDown2 = hidKeysDown();
-
-            if (kDown2 & KEY_A) {
-                backupSaves = true;
-                break;
-            }
-            if (kDown2 & KEY_B) {
-                backupSaves = false;
-                break;
-            }
-            if (kDown2 & KEY_START) {
-                cancelled = true;
-                break;
-            }
+            drawDialogWithSelectedList(dl, 4);
+            hidScanInput(); u32 k = hidKeysDown();
+            if (k & KEY_A)     { addRelated = true;  break; }
+            if (k & KEY_B)     { break; }
+            if (k & KEY_START) { cancelAll  = true;  break; }
         }
-
-        if (cancelled)
+        if (cancelAll) {
+            for (int i = 0; i < titleCount; i++) titles[i].selected = false;
             return;
+        }
+        if (addRelated) {
+            for (int p = 0; p < pendingCount; p++) titles[pendingRelated[p]].selected = true;
+            selectedCount += pendingCount;
+        }
+    }
 
-        // Ask about backup path if backing up
-        char selectedBackupPath[256];
-        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", config.backupPath);
-
-        if (backupSaves) {
-            char pathMsg[300];
-            snprintf(pathMsg, sizeof(pathMsg), "Current path: %s", config.backupPath);
-            const char *pathLines[] = {
-                "",
-                "Backup Path Selection",
-                "",
-                pathMsg,
-                "",
-                "Do you want to change the backup path?",
-                "",
-                "  A: Use current path",
-                "  Y: Choose alternative path",
-                "  START: Cancel"
-            };
-            drawDialogWithSelectedList(pathLines, 10);
-
-            bool useDefault = true;
-
-            while (aptMainLoop()) {
-                hidScanInput();
-                u32 kDown2b = hidKeysDown();
-
-                if (kDown2b & KEY_A) {
-                    useDefault = true;
-                    break;
-                }
-                if (kDown2b & KEY_Y) {
-                    useDefault = false;
-                    break;
-                }
-                if (kDown2b & KEY_START) {
-                    cancelled = true;
-                    break;
-                }
-            }
-
-            if (cancelled)
+    /* Step 4: backup? */
+    bool doBackup = false;
+    char chosenPath[256];
+    snprintf(chosenPath, sizeof(chosenPath), "%s", config.backupPath);
+    if (config.forceBackup) {
+        doBackup = true;
+    } else {
+        const char *bkDl[] = { "", "  Eseguire backup salvataggi?", "",
+                               "  A=Si   B=No   START=Annulla" };
+        while (aptMainLoop()) {
+            drawDialogWithSelectedList(bkDl, 4);
+            hidScanInput(); u32 k = hidKeysDown();
+            if (k & KEY_A)     { doBackup = true; break; }
+            if (k & KEY_B)     { break; }
+            if (k & KEY_START) {
+                for (int i = 0; i < titleCount; i++) titles[i].selected = false;
                 return;
-
-            if (!useDefault) {
-                // Show alternative backup paths
-                int pathCursor = 0;
-
-                // Find current path in list or default to 0
-                for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
-                    if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) {
-                        pathCursor = i;
-                        break;
-                    }
-                }
-
-                while (aptMainLoop()) {
-                    hidScanInput();
-                    u32 kDown2c = hidKeysDown();
-
-                    if (kDown2c & KEY_DUP) {
-                        if (pathCursor > 0)
-                            pathCursor--;
-                    }
-                    if (kDown2c & KEY_DDOWN) {
-                        if (pathCursor < NUM_BACKUP_PATHS - 1)
-                            pathCursor++;
-                    }
-                    if (kDown2c & KEY_A) {
-                        snprintf(selectedBackupPath, sizeof(selectedBackupPath), "%s", BACKUP_PATH_OPTIONS[pathCursor]);
-                        break;
-                    }
-                    if (kDown2c & KEY_B) {
-                        cancelled = true;
-                        break;
-                    }
-
-                    // Draw path selection dialog
-                    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-                    C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
-                    C2D_SceneBegin(top);
-
-                    C2D_TextBufClear(dynamicBuf);
-                    C2D_Text text;
-                    float y = 20.0f;
-
-                    C2D_TextParse(&text, dynamicBuf, "Select Backup Path");
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
-                    y += 20;
-
-                    C2D_TextParse(&text, dynamicBuf, "Use D-Pad to select, A to confirm");
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
-                    y += 25;
-
-                    for (int i = 0; i < NUM_BACKUP_PATHS; i++) {
-                        if (i == pathCursor) {
-                            C2D_DrawRectSolid(5, y - 2, 0.5f, 390, 14, C2D_Color32(255, 255, 255, 255));
-                        }
-                        C2D_TextParse(&text, dynamicBuf, BACKUP_PATH_OPTIONS[i]);
-                        C2D_TextOptimize(&text);
-                        u32 textColor = (i == pathCursor) ? C2D_Color32(0, 0, 0, 255) : C2D_Color32(255, 255, 255, 255);
-                        C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.35f, 0.35f, textColor);
-                        y += 16;
-                    }
-
-                    y += 10;
-                    C2D_TextParse(&text, dynamicBuf, "  B: Cancel");
-                    C2D_TextOptimize(&text);
-                    C2D_DrawText(&text, C2D_WithColor, 10.0f, y, 0.5f, 0.4f, 0.4f, C2D_Color32(200, 200, 200, 255));
-
-                    C3D_FrameEnd(0);
-                }
-
-                if (cancelled)
-                    return;
             }
         }
+    }
 
-        // Final confirmation
-        char uninstallMsg[64];
-        char backupMsg[64];
-        snprintf(uninstallMsg, sizeof(uninstallMsg), "Uninstall %d title(s)?", selectedCount);
-        snprintf(backupMsg, sizeof(backupMsg), "Backup saves: %s", backupSaves ? "YES" : "NO");
-
-        char pathInfoMsg[300] = "";
-        if (backupSaves) {
-            snprintf(pathInfoMsg, sizeof(pathInfoMsg), "Backup path: %s", selectedBackupPath);
-        }
-
-        const char *confirmLines[9] = {
-            "",
-            "Final confirmation:",
-            "",
-            uninstallMsg,
-            backupMsg,
-            pathInfoMsg,
-            "",
-            "  A: Confirm",
-            "  B: Cancel"
-        };
-        drawDialogWithSelectedList(confirmLines, 9);
-
-        bool confirmed = false;
-
+    /* Step 5: choose backup path */
+    if (doBackup) {
+        char pathLine[80];
+        snprintf(pathLine, sizeof(pathLine), "  %.46s", config.backupPath);
+        const char *pd[] = { "", pathLine, "", "  A=Usa default   Y=Scegli altro" };
+        bool choosePath = false;
         while (aptMainLoop()) {
-            hidScanInput();
-            u32 kDown3 = hidKeysDown();
-
-            if (kDown3 & KEY_A) {
-                confirmed = true;
-                break;
-            }
-            if (kDown3 & KEY_B) {
-                break;
+            drawDialogWithSelectedList(pd, 4);
+            hidScanInput(); u32 k = hidKeysDown();
+            if (k & KEY_A) { break; }
+            if (k & KEY_Y) { choosePath = true; break; }
+        }
+        if (choosePath) {
+            int pidx = 0;
+            for (int i = 0; i < (int)NUM_BACKUP_PATHS; i++)
+                if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) { pidx = i; break; }
+            while (aptMainLoop()) {
+                char pl[64]; snprintf(pl, sizeof(pl), "  %.52s", BACKUP_PATH_OPTIONS[pidx]);
+                const char *ppd[] = { "  Seleziona cartella backup:", pl,
+                                      "", "  Su/Giu=Cambia   A=Conferma   B=Annulla" };
+                drawDialogWithSelectedList(ppd, 4);
+                hidScanInput(); u32 k = hidKeysDown();
+                if (k & KEY_DOWN) pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS;
+                if (k & KEY_UP)   pidx = (pidx + (int)NUM_BACKUP_PATHS - 1) % (int)NUM_BACKUP_PATHS;
+                if (k & KEY_A)  { snprintf(chosenPath, sizeof(chosenPath), "%s", BACKUP_PATH_OPTIONS[pidx]); break; }
+                if (k & KEY_B)  { break; }
             }
         }
+    }
 
-        if (!confirmed)
+    /* Step 6: confirm */
+    if (!config.skipUninstallConfirm) {
+        char cntMsg[64]; snprintf(cntMsg, sizeof(cntMsg), "  Cancella %d titoli?", selectedCount);
+        char bkMsg[64];
+        if (doBackup) snprintf(bkMsg, sizeof(bkMsg), "  Backup in: %.36s", chosenPath);
+        else          snprintf(bkMsg, sizeof(bkMsg), "  Nessun backup.");
+        const char *cfDl[] = { "", cntMsg, bkMsg, "", "  A=Conferma   B=Annulla" };
+        bool confirmed = false;
+        while (aptMainLoop()) {
+            drawDialogWithSelectedList(cfDl, 5);
+            hidScanInput(); u32 k = hidKeysDown();
+            if (k & KEY_A) { confirmed = true; break; }
+            if (k & KEY_B) {
+                for (int i = 0; i < titleCount; i++) titles[i].selected = false;
+                return;
+            }
+        }
+        if (!confirmed) {
+            for (int i = 0; i < titleCount; i++) titles[i].selected = false;
             return;
-
-        // Process deletions - show processing screen
-        const char *processingLines[] = {
-            "",
-            "Processing...",
-            ""
-        };
-        drawDialog(processingLines, 3);
-
-        for (int i = 0; i < titleCount; i++) {
-            if (titles[i].selected && titles[i].isValid) {
-                char statusLines[5][256];
-                snprintf(statusLines[0], 256, "Processing: %s", titles[i].name);
-
-                const char *statusPtrs[5] = {
-                    "",
-                    statusLines[0],
-                    "",
-                    "",
-                    ""
-                };
-
-                if (backupSaves) {
-                    snprintf(statusLines[2], 256, "  Backing up save data to:");
-                    snprintf(statusLines[3], 256, "  %s", selectedBackupPath);
-                    statusPtrs[2] = statusLines[2];
-                    statusPtrs[3] = statusLines[3];
-                    drawDialog(statusPtrs, 5);
-                    backupSaveDataToPath(&titles[i], selectedBackupPath);
-                }
-
-                snprintf(statusLines[4], 256, "  Deleting title...");
-                statusPtrs[4] = statusLines[4];
-                drawDialog(statusPtrs, 5);
-
-                deleteTitle(&titles[i]);
-            }
         }
+    }
 
-        // Reload titles
-        const char *reloadLines[] = {
-            "",
-            "Reloading title list...",
-            ""
-        };
-        drawDialog(reloadLines, 3);
+    /* Step 7: execute backup + delete */
+    for (int i = 0; i < titleCount; i++) {
+        if (!titles[i].selected || !titles[i].isValid) continue;
+        if (doBackup) backupSaveDataToPath(&titles[i], chosenPath);
+        deleteTitle(&titles[i]); /* has its own dialog + wait loop */
+    }
 
-        loadTitles();
-        cursor = 0;
-        scrollOffset = 0;
-        needsRedraw = true;
+    /* Step 8: invalidate title list, return to menu */
+    titleCount = 0;
+    cursor = 0; scrollOffset = 0;
+    for (int i = 0; i < MAX_TITLES; i++) titles[i].selected = false;
+    appState = APP_MAIN_MENU;
+}
+
+/* runInstallFlow: blocking stub — shows SOON screen, manages own frames. */
+void runInstallFlow(void) {
+    while (aptMainLoop()) {
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        drawFileBrowserScreen(); /* = _drawSoon */
+        C3D_FrameEnd(0);
+        hidScanInput();
+        u32 k = hidKeysDown();
+        if ((k & KEY_B) || (k & KEY_START)) return;
     }
 }
 
+/* runBackupFlow: blocking stub — shows SOON screen, manages own frames. */
+void runBackupFlow(void) {
+    while (aptMainLoop()) {
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        drawBackupScreen(); /* = _drawSoon */
+        C3D_FrameEnd(0);
+        hidScanInput();
+        u32 k = hidKeysDown();
+        if ((k & KEY_B) || (k & KEY_START)) return;
+    }
+}
 
-int main(int argc, char **argv) {
-    // Initialize graphics
+/* handleSysInfoInput: stub, B/START returns to menu. */
+void handleSysInfoInput(void) {
+    u32 keys = hidKeysDown();
+    if ((keys & KEY_B) || (keys & KEY_START)) appState = APP_MAIN_MENU;
+}
+
+/* handleSettingsInput: stub, B/START saves and returns. */
+void handleSettingsInput(void) {
+    u32 keys = hidKeysDown();
+    if ((keys & KEY_B) || (keys & KEY_START)) {
+        saveConfig();
+        appState = APP_MAIN_MENU;
+    }
+}
+
+/* ============================================================
+   SECTION 11: main()
+   ============================================================ */
+int main(void) {
+    /* Graphics init */
     gfxInitDefault();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
-
-    // Create render targets for top and bottom screens
-    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    top    = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-
-    // Create text buffer for dynamic text rendering
-    // 4096 bytes is sufficient for ~100 text objects (average 40 bytes each)
-    // Increase if experiencing text rendering issues with long strings
     dynamicBuf = C2D_TextBufNew(4096);
-
-    // Initialize services
+    /* 3DS services */
     amInit();
     fsInit();
-
-    // Load configuration
+    cfguInit();
+    /* Config — title list stays empty (lazy load) */
     loadConfig();
 
-    // Load titles with progress bar
-    loadTitles();
-
-    // Initial draw - both screens in one frame
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    drawUI();
-    drawTouchControls();
-    C3D_FrameEnd(0);
-    needsRedraw = false;
-
-    // Main loop
     bool running = true;
     while (aptMainLoop() && running) {
-        // Gestione sleep mode: aptMainLoop() ritorna false durante sleep
-        // e riprende quando il 3DS si sveglia
-
         hidScanInput();
-        u32 kDown = hidKeysDown();
-        u32 kHeld = hidKeysHeld();
+        u32 keys = hidKeysDown();
 
-        // Check for exit before drawing/handling
-        if (kDown & KEY_START) {
+        /* Global exit (main menu only) */
+        if (appState == APP_MAIN_MENU && (keys & KEY_START)) {
             running = false;
             break;
         }
 
-        handleInput();
+        /* --- Blocking flows: entered BEFORE opening a C3D frame --- */
 
-        // Renderizza sempre un frame per evitare crash durante sleep/wake
-        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-
-        bool isSelectHeld = (kHeld & KEY_SELECT);
-
-        // Rendering condizionale per evitare flickering
-        if (isSelectHeld) {
-            // Modalità overlay: disegna tutto manualmente senza chiamare drawUI()
-            // TOP SCREEN
-            C2D_TargetClear(top, C2D_Color32(20, 20, 30, 255));
-            C2D_SceneBegin(top);
-            C2D_TextBufClear(dynamicBuf);
-
-            // Disegna UI base
-            float uiY = 3.0f;
-            C2D_DrawRectSolid(0, uiY, 0.5f, 400, 18, C2D_Color32(255, 255, 255, 255));
-            C2D_Text text;
-            C2D_TextParse(&text, dynamicBuf, " 3DS Fast Uninstall");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, 5.0f, uiY + 3, 0.5f, 0.55f, 0.55f, C2D_Color32(0, 0, 0, 255));
-            uiY += 22;
-
-            int selectedCount = 0;
-            for (int i = 0; i < titleCount; i++) {
-                if (titles[i].selected) selectedCount++;
-            }
-
-            const char *sortModeStr = "";
-            if (currentSortMode == SORT_BY_NAME) sortModeStr = "Name";
-            else if (currentSortMode == SORT_BY_SIZE) sortModeStr = "Size";
-            else sortModeStr = "TID";
-
-            const char *filterModeStr = "";
-            if (currentFilterMode == FILTER_UPDATES) filterModeStr = " [Upd]";
-            else if (currentFilterMode == FILTER_DLC) filterModeStr = " [DLC]";
-
-            char titleCountText[64];
-            snprintf(titleCountText, sizeof(titleCountText), "T:%d%s", titleCount, filterModeStr);
-            u32 countColor = (titleCount > 300) ? C2D_Color32(255, 80, 80, 255) : C2D_Color32(100, 255, 100, 255);
-
-            char statsText[128];
-            snprintf(statsText, sizeof(statsText), "%-12s Sel:%-4d Sort:%-6s", titleCountText, selectedCount, sortModeStr);
-            C2D_TextParse(&text, dynamicBuf, statsText);
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, 10.0f, uiY, 0.5f, 0.43f, 0.43f, countColor);
-            uiY += 16;
-
-            C2D_DrawRectSolid(0, uiY, 0.5f, 400, 1, C2D_Color32(100, 100, 150, 255));
-            uiY += 3;
-
-            // Disegna i titoli
-            for (int i = 0; i < MAX_VISIBLE_TITLES && (scrollOffset + i) < filteredCount; i++) {
-                int titleIdx = filteredIndices[scrollOffset + i];
-                TitleInfo *title = &titles[titleIdx];
-                bool isSelected = (scrollOffset + i == cursor);
-                u32 bgColor = isSelected ? C2D_Color32(50, 100, 200, 255) : C2D_Color32(0, 0, 0, 0);
-                if (bgColor != 0)
-                    C2D_DrawRectSolid(0, uiY - 1, 0.5f, 400, 16, bgColor);
-
-                u32 textColor = title->selected ? C2D_Color32(100, 255, 100, 255) : C2D_Color32(220, 220, 220, 255);
-                char displayText[128];
-                const char *prefix = title->selected ? "> " : "  ";
-                snprintf(displayText, sizeof(displayText), "%s%s", prefix, title->name);
-                C2D_TextParse(&text, dynamicBuf, displayText);
-                C2D_TextOptimize(&text);
-                C2D_DrawText(&text, C2D_WithColor, 10.0f, uiY, 0.5f, 0.42f, 0.42f, textColor);
-                uiY += 16;
-            }
-
-            // Ora disegna l'overlay dei controlli sopra
-            C2D_DrawRectSolid(0, 0, 0.6f, 400, 240, C2D_Color32(0, 0, 0, 180));
-
-            float boxX = 15.0f;
-            float boxY = 15.0f;
-            float boxW = 370.0f;
-            float boxH = 210.0f;
-
-            C2D_DrawRectSolid(boxX, boxY, 0.7f, boxW, boxH, C2D_Color32(30, 30, 40, 255));
-            C2D_DrawRectSolid(boxX, boxY, 0.7f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX, boxY + boxH - 2, 0.7f, boxW, 2, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX, boxY, 0.7f, 2, boxH, C2D_Color32(100, 180, 255, 255));
-            C2D_DrawRectSolid(boxX + boxW - 2, boxY, 0.7f, 2, boxH, C2D_Color32(100, 180, 255, 255));
-
-            float overlayY = boxY + 8.0f;
-            C2D_TextParse(&text, dynamicBuf, "CONTROLS");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 145.0f, overlayY, 0.7f, 0.5f, 0.5f, C2D_Color32(100, 180, 255, 255));
-            overlayY += 18;
-
-            C2D_TextParse(&text, dynamicBuf, "A: Select/Deselect");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "X: Uninstall selected");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "D-Pad Up/Down: Navigate");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "D-Pad Left/Right: Page jump");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "L/R: Sort (Name/Size/TID)");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "Y: Filter (All/Updates/DLC)");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.38f, 0.38f, C2D_Color32(220, 220, 220, 255));
-            overlayY += 18;
-
-            C2D_TextParse(&text, dynamicBuf, "SELECT: Release to hide");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
-            overlayY += 13;
-
-            C2D_TextParse(&text, dynamicBuf, "START: Exit app");
-            C2D_TextOptimize(&text);
-            C2D_DrawText(&text, C2D_WithColor, boxX + 15.0f, overlayY, 0.7f, 0.40f, 0.40f, C2D_Color32(255, 200, 100, 255));
-
-            // BOTTOM SCREEN - disegna i dettagli + overlay scuro
-            C2D_TargetClear(bottom, C2D_Color32(20, 20, 30, 255));
-            C2D_SceneBegin(bottom);
-
-            // Renderizza i dettagli del titolo
-            C2D_TextBufClear(dynamicBuf);
-            float bottomY = 10.0f;
-
-            if (filteredCount > 0 && cursor >= 0 && cursor < filteredCount) {
-                int titleIdx = filteredIndices[cursor];
-                TitleInfo *currentTitle = &titles[titleIdx];
-
-                float textX = 15.0f;
-                C2D_TextParse(&text, dynamicBuf, "TITLE DETAILS");
-                C2D_TextOptimize(&text);
-                C2D_DrawText(&text, C2D_WithColor, textX, bottomY + 5, 0.5f, 0.55f, 0.55f, C2D_Color32(100, 180, 255, 255));
-                bottomY += 20;
-
-                C2D_DrawRectSolid(10, bottomY, 0.5f, 300, 1, C2D_Color32(100, 100, 150, 255));
-                bottomY += 10;
-
-                C2D_TextParse(&text, dynamicBuf, "Name:");
-                C2D_TextOptimize(&text);
-                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.43f, 0.43f, C2D_Color32(150, 150, 150, 255));
-                bottomY += 14;
-
-                C2D_TextParse(&text, dynamicBuf, currentTitle->fullName);
-                C2D_TextOptimize(&text);
-                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.40f, 0.40f, C2D_Color32(255, 255, 255, 255));
-                bottomY += 18;
-
-                char tidStr[64];
-                snprintf(tidStr, sizeof(tidStr), "Title ID: %016llX", currentTitle->titleID);
-                C2D_TextParse(&text, dynamicBuf, tidStr);
-                C2D_TextOptimize(&text);
-                C2D_DrawText(&text, C2D_WithColor, 10.0f, bottomY, 0.5f, 0.38f, 0.38f, C2D_Color32(200, 200, 200, 255));
-            }
-
-            // Overlay scuro sopra
-            C2D_DrawRectSolid(0, 0, 0.9f, 320, 240, C2D_Color32(0, 0, 0, 180));
-        } else {
-            // Modalità normale: usa le funzioni standard
-            drawUI();
-            drawTouchControls();
+        if (appState == APP_INSTALL) {
+            runInstallFlow();
+            appState = APP_MAIN_MENU;
+            continue;
+        }
+        if (appState == APP_BACKUP) {
+            runBackupFlow();
+            appState = APP_MAIN_MENU;
+            continue;
+        }
+        /* KEY_X uninstall flow: blocking, must run outside C3D frame */
+        if (appState == APP_UNINSTALL && (keys & KEY_X)) {
+            _runUninstallDeleteFlow();
+            continue;
         }
 
-        needsRedraw = false;
+        /* --- Frame-by-frame flows --- */
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        switch (appState) {
+            case APP_MAIN_MENU:
+                handleMainMenuInput();
+                drawMainMenu();
+                break;
+            case APP_UNINSTALL:
+                handleUninstallInput();
+                if (appState == APP_UNINSTALL) {
+                    /* SELECT overlay replaces the list draw for this frame */
+                    if (hidKeysHeld() & KEY_SELECT)
+                        drawControlsOverlay();
+                    else
+                        drawUI();
+                } else {
+                    /* handleUninstallInput set appState=APP_MAIN_MENU (KEY_B) */
+                    drawMainMenu();
+                }
+                break;
+            case APP_SYSINFO:
+                handleSysInfoInput();
+                if (appState == APP_SYSINFO) drawSysInfoScreen();
+                else drawMainMenu();
+                break;
+            case APP_SETTINGS:
+                handleSettingsInput();
+                if (appState == APP_SETTINGS) drawSettingsScreen();
+                else drawMainMenu();
+                break;
+            default:
+                drawMainMenu();
+                break;
+        }
         C3D_FrameEnd(0);
-
-        // Piccola pausa per evitare consumo eccessivo CPU
-        // gspWaitForVBlank() è già chiamato internamente da C3D_FrameEnd
     }
 
-    // Cleanup
+    /* Cleanup */
     C2D_TextBufDelete(dynamicBuf);
     C2D_Fini();
     C3D_Fini();
+    cfguExit();
     fsExit();
     amExit();
     gfxExit();
-
     return 0;
 }
+
