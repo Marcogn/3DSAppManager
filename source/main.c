@@ -1405,32 +1405,27 @@ void drawSettingsScreen(void) {
         "Skip Install Confirm:",
         "Backup Folder:"
     };
-    /* Build value strings */
-    char pathBuf[32];
-    const char *pFull = config.backupPath;
-    int plen = (int)strlen(pFull);
-    if (plen > 22) snprintf(pathBuf, sizeof(pathBuf), "...%s", pFull + plen - 19);
-    else           snprintf(pathBuf, sizeof(pathBuf), "%s", pFull);
-
+    /* Build value strings — booleans only; path shown on bottom screen */
     const char *values[5] = {
         config.forceBackup          ? "ON"   : "OFF",
         config.skipUninstallConfirm ? "ON"   : "OFF",
         config.forceRestore         ? "ON"   : "OFF",
         config.skipInstallConfirm   ? "ON"   : "OFF",
-        pathBuf
+        "<see bottom>"
     };
 
     for (int i = 0; i < 5; i++) {
         float y = 38.0f + (float)i * 32.0f;
         if (i == settingsCursor)
-            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 24, CLR_SELECTED);
+            C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 26, CLR_SELECTED);
         if (i == settingsCursor)
-            dt(12, y, 0.5f, 0.54f, CLR_WHITE, ">");
-        dt(28, y, 0.5f, 0.42f, (i == settingsCursor) ? CLR_WHITE : CLR_GRAY, labels[i]);
-        dt(258, y, 0.5f, 0.54f, CLR_CYAN, values[i]);
+            dt(12, y + 2, 0.5f, 0.50f, CLR_WHITE, ">");
+        dt(28, y + 2, 0.5f, 0.50f, (i == settingsCursor) ? CLR_WHITE : CLR_GRAY, labels[i]);
+        if (i < 4)
+            dt(260, y + 2, 0.5f, 0.50f, CLR_CYAN, values[i]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R=Change  L=Change  B/START=Save & Back");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L=Change  DX/SX=Change  B/START=Salva & Esci");
 
     /* Bottom screen: contextual description */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
@@ -1442,11 +1437,19 @@ void drawSettingsScreen(void) {
         { "Skip confirmation before",        "uninstalling titles.",                "Recommended: OFF (always confirm)." },
         { "Auto-restore save data",          "after each successful CIA install.",  "Use only with up-to-date backups." },
         { "Skip confirmation before",        "installing CIA files.",               "Recommended: OFF (always confirm)." },
-        { "Folder for save backups.",        "Use L/R to cycle through",           "5 available destinations." }
+        { "Folder for save backups.",        "Use Left/Right or L/R to cycle",     "through 5 available destinations." }
     };
-    dt(8, 28, 0.5f, 0.52f, CLR_WHITE, desc[settingsCursor][0]);
-    dt(8, 48, 0.5f, 0.52f, CLR_GRAY,  desc[settingsCursor][1]);
-    dt(8, 68, 0.5f, 0.54f, CLR_CYAN,  desc[settingsCursor][2]);
+    if (settingsCursor == 4) {
+        /* Show full path on bottom screen */
+        dt(8, 28, 0.5f, 0.52f, CLR_WHITE, "Current path:");
+        dt(8, 46, 0.5f, 0.44f, CLR_CYAN,  config.backupPath);
+        dt(8, 66, 0.5f, 0.50f, CLR_GRAY,  desc[4][1]);
+        dt(8, 84, 0.5f, 0.50f, CLR_GRAY,  desc[4][2]);
+    } else {
+        dt(8, 28, 0.5f, 0.52f, CLR_WHITE, desc[settingsCursor][0]);
+        dt(8, 48, 0.5f, 0.52f, CLR_GRAY,  desc[settingsCursor][1]);
+        dt(8, 68, 0.5f, 0.54f, CLR_CYAN,  desc[settingsCursor][2]);
+    }
 
     C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 206, 0.5f, 0.54f, CLR_GREEN, "Changes saved in real time.");
@@ -2260,7 +2263,7 @@ void handleSettingsInput(void) {
 
     bool changed = false;
 
-    if ((keys & KEY_A) || (keys & KEY_RIGHT)) {
+    if ((keys & KEY_A) || (keys & KEY_RIGHT) || (keys & KEY_R)) {
         if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
         else if (settingsCursor == 4) {
             pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS;
@@ -2268,7 +2271,7 @@ void handleSettingsInput(void) {
             changed = true;
         }
     }
-    if (keys & KEY_LEFT) {
+    if ((keys & KEY_LEFT) || (keys & KEY_L)) {
         if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
         else if (settingsCursor == 4) {
             pidx = (pidx + (int)NUM_BACKUP_PATHS - 1) % (int)NUM_BACKUP_PATHS;
