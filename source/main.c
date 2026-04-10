@@ -1135,7 +1135,87 @@ static void _drawSoon(const char *feature) {
     dt(8, 108, 0.5f, 0.44f, CLR_GRAY, "Versione 2.0 in arrivo!");
 }
 
-void drawFileBrowserScreen(void) { _drawSoon("Installa CIA"); }
+/* drawFileBrowserScreen: file browser for CIA install.
+   Called from runInstallFlow — NO C3D frame management here. */
+void drawFileBrowserScreen(void) {
+    C2D_TextBufClear(dynamicBuf);
+    /* Top screen */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Installa CIA");
+    /* Path (show tail if long) */
+    const char *dispPath = currentPath;
+    char pathBuf[52];
+    int plen = (int)strlen(currentPath);
+    if (plen > 44) {
+        snprintf(pathBuf, sizeof(pathBuf), "...%s", currentPath + plen - 40);
+        dispPath = pathBuf;
+    }
+    dt(4, 24, 0.5f, 0.34f, CLR_GRAY, dispPath);
+    /* File list */
+    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+        int fi = fileScrollOffset + i;
+        if (fi >= fileCount) break;
+        float y = 38.0f + (float)i * 14.5f;
+        bool isCursor = (fi == fileCursor);
+        if (isCursor)
+            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
+        FileEntry *fe = &fileEntries[fi];
+        if (fe->isDir) {
+            char dirLine[52];
+            snprintf(dirLine, sizeof(dirLine), "[DIR] %s/", fe->name);
+            if (strlen(dirLine) > 46) { dirLine[43]='.'; dirLine[44]='.'; dirLine[45]='.'; dirLine[46]='\0'; }
+            dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_CYAN, dirLine);
+        } else {
+            char szBuf[16]; formatSize(fe->size, szBuf, sizeof(szBuf));
+            char nm[28]; strncpy(nm, fe->name, 26); nm[26]='\0';
+            if (strlen(fe->name) > 26) { nm[23]='.'; nm[24]='.'; nm[25]='.'; nm[26]='\0'; }
+            char ciaLine[56]; snprintf(ciaLine, sizeof(ciaLine), "%-26s  [%s]", nm, szBuf);
+            dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_GRAY, ciaLine);
+        }
+    }
+    /* Scroll counter */
+    if (fileCount > MAX_VISIBLE_TITLES) {
+        char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", fileCursor+1, fileCount);
+        dt(340, 225, 0.5f, 0.34f, CLR_GRAY, sc);
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.32f, CLR_WHITE, "A=Entra/Installa  Y=Tutto  B=Su/Menu  START=Annulla");
+    /* Bottom screen: info file selezionato */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Info");
+    if (fileCount > 0 && fileCursor < fileCount) {
+        FileEntry *fe = &fileEntries[fileCursor];
+        if (fe->isDir) {
+            if (strcmp(fe->name, "..") == 0) {
+                dt(8, 26, 0.5f, 0.40f, CLR_CYAN, "Torna alla cartella superiore");
+            } else {
+                char dline[48]; snprintf(dline, sizeof(dline), "Cartella: %.30s", fe->name);
+                dt(8, 26, 0.5f, 0.40f, CLR_CYAN, dline);
+            }
+        } else {
+            char fullCIAPath[512];
+            snprintf(fullCIAPath, sizeof(fullCIAPath), "%s/%s", currentPath, fe->name);
+            u64 tid = getCIATitleID(fullCIAPath);
+            char tidStr[36];
+            if (tid) snprintf(tidStr, sizeof(tidStr), "ID: %016llX", (unsigned long long)tid);
+            else     snprintf(tidStr, sizeof(tidStr), "ID: N/D");
+            dt(8, 26, 0.5f, 0.36f, CLR_WHITE, tidStr);
+            char szBuf[24]; formatSize(fe->size, szBuf, sizeof(szBuf));
+            char szLine[36]; snprintf(szLine, sizeof(szLine), "Dim: %s", szBuf);
+            dt(8, 46, 0.5f, 0.36f, CLR_GRAY, szLine);
+        }
+    } else {
+        dt(8, 50, 0.5f, 0.40f, CLR_GRAY, "Cartella vuota");
+    }
+    const char *destStr = (config.installDest == 0) ? "Dest: SD" : "Dest: NAND";
+    C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 206, 0.5f, 0.40f, CLR_CYAN, destStr);
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "(Dest in Impostazioni)");
+}
+
 void drawBackupScreen(void)      { _drawSoon("Backup Salvataggi"); }
 void drawSysInfoScreen(void)     { _drawSoon("Info Sistema"); }
 void drawSettingsScreen(void)    { _drawSoon("Impostazioni"); }
@@ -1377,15 +1457,233 @@ static void _runUninstallDeleteFlow(void) {
     appState = APP_MAIN_MENU;
 }
 
-/* runInstallFlow: blocking stub — shows SOON screen, manages own frames. */
+/* _goUpDir: navigate to parent directory, updating globals. */
+static void _goUpDir(void) {
+    if (strcmp(currentPath, "sdmc:/") == 0) return;
+    char parent[512];
+    strncpy(parent, currentPath, sizeof(parent) - 1);
+    parent[sizeof(parent) - 1] = '\0';
+    char *lastSlash = strrchr(parent, '/');
+    if (lastSlash != NULL) {
+        *lastSlash = '\0';
+        if (strlen(parent) <= 5) /* "sdmc:" or less → root */
+            strncpy(parent, "sdmc:/", sizeof(parent) - 1);
+    } else {
+        strncpy(parent, "sdmc:/", sizeof(parent) - 1);
+    }
+    scanDirectory(parent);
+    fileCursor = 0; fileScrollOffset = 0;
+}
+
+/* _installFolderCIAs: installa tutti i .cia presenti in folderPath.
+   Mostra barra di progresso via installCIA, poi un dialog riassuntivo.
+   Restituisce numero di file installati con successo. */
+static int _installFolderCIAs(const char *folderPath) {
+    /* Collect CIA paths with opendir to avoid clobbering fileEntries[] */
+    char ciaPaths[64][512]; /* max 64 CIA per cartella */
+    int ciaCount = 0;
+    DIR *d = opendir(folderPath);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL && ciaCount < 64) {
+            if (ent->d_type == DT_DIR) continue;
+            const char *ext = strrchr(ent->d_name, '.');
+            if (!ext || strcasecmp(ext, ".cia") != 0) continue;
+            snprintf(ciaPaths[ciaCount], 512, "%s/%s", folderPath, ent->d_name);
+            ciaCount++;
+        }
+        closedir(d);
+    }
+    if (ciaCount == 0) return 0;
+    FS_MediaType dest = (config.installDest == 0) ? MEDIATYPE_SD : MEDIATYPE_NAND;
+    int installed = 0, failed = 0;
+    for (int i = 0; i < ciaCount; i++) {
+        if (installCIA(ciaPaths[i], dest)) installed++; else failed++;
+    }
+    char resMsg[64]; snprintf(resMsg, sizeof(resMsg), "  Installati: %d   Falliti: %d", installed, failed);
+    const char *resDl[] = { "", "  Installazione batch completata.", resMsg, "", "  A=Continua" };
+    drawDialog(resDl, 5);
+    while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+    return installed;
+}
+
+/* runInstallFlow: blocking CIA install flow — manages own C3D frames. */
 void runInstallFlow(void) {
+    scanDirectory("sdmc:/");
+    fileCursor = 0; fileScrollOffset = 0;
+
     while (aptMainLoop()) {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        drawFileBrowserScreen(); /* = _drawSoon */
+        drawFileBrowserScreen();
         C3D_FrameEnd(0);
         hidScanInput();
         u32 k = hidKeysDown();
-        if ((k & KEY_B) || (k & KEY_START)) return;
+
+        if (k & KEY_START) return;
+
+        /* Navigation */
+        if (k & KEY_DOWN) {
+            if (fileCursor < fileCount - 1) {
+                fileCursor++;
+                if (fileCursor >= fileScrollOffset + MAX_VISIBLE_TITLES)
+                    fileScrollOffset = fileCursor - MAX_VISIBLE_TITLES + 1;
+            }
+        }
+        if (k & KEY_UP) {
+            if (fileCursor > 0) {
+                fileCursor--;
+                if (fileCursor < fileScrollOffset) fileScrollOffset = fileCursor;
+            }
+        }
+
+        /* B: go up or exit */
+        if (k & KEY_B) {
+            if (strcmp(currentPath, "sdmc:/") == 0) return;
+            _goUpDir();
+            continue;
+        }
+
+        /* Y: install all CIA in current directory */
+        if (k & KEY_Y) {
+            int ciaInDir = 0;
+            for (int i = 0; i < fileCount; i++)
+                if (!fileEntries[i].isDir && fileEntries[i].isCIA) ciaInDir++;
+            if (ciaInDir == 0) {
+                const char *msg[] = { "", "  Nessun file CIA in questa cartella.", "", "  A=Continua" };
+                drawDialog(msg, 4);
+                while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                continue;
+            }
+            if (!config.skipInstallConfirm) {
+                char cntMsg[52]; snprintf(cntMsg, sizeof(cntMsg), "  Installare %d file CIA?", ciaInDir);
+                const char *destLbl = (config.installDest == 0) ? "  Destinazione: SD" : "  Destinazione: NAND";
+                const char *cfDl[] = { "", cntMsg, (char*)destLbl, "", "  A=Si   B=No" };
+                bool confirmed = false;
+                while (aptMainLoop()) {
+                    drawDialog(cfDl, 5);
+                    hidScanInput(); u32 ck = hidKeysDown();
+                    if (ck & KEY_A) { confirmed = true; break; }
+                    if (ck & KEY_B) break;
+                }
+                if (!confirmed) continue;
+            }
+            char savedPath[512]; strncpy(savedPath, currentPath, sizeof(savedPath)-1);
+            _installFolderCIAs(savedPath);
+            return;
+        }
+
+        /* A: enter dir or install CIA */
+        if (k & KEY_A) {
+            if (fileCount == 0) continue;
+            FileEntry *fe = &fileEntries[fileCursor];
+
+            if (fe->isDir) {
+                if (strcmp(fe->name, "..") == 0) {
+                    /* Same as B */
+                    if (strcmp(currentPath, "sdmc:/") == 0) return;
+                    _goUpDir();
+                } else {
+                    /* Dir action dialog */
+                    char newPath[512];
+                    if (strcmp(currentPath, "sdmc:/") == 0)
+                        snprintf(newPath, sizeof(newPath), "sdmc:/%s", fe->name);
+                    else
+                        snprintf(newPath, sizeof(newPath), "%s/%s", currentPath, fe->name);
+                    char dirMsg[52]; snprintf(dirMsg, sizeof(dirMsg), "  %.40s", fe->name);
+                    const char *dirDl[] = { "", dirMsg, "", "  A=Entra   Y=Installa tutti .cia   B=Annulla" };
+                    int dirAction = 0;
+                    while (aptMainLoop()) {
+                        drawDialog(dirDl, 4);
+                        hidScanInput(); u32 dk = hidKeysDown();
+                        if (dk & KEY_A) { dirAction = 1; break; }
+                        if (dk & KEY_Y) { dirAction = 2; break; }
+                        if (dk & KEY_B) break;
+                    }
+                    if (dirAction == 1) {
+                        scanDirectory(newPath);
+                        fileCursor = 0; fileScrollOffset = 0;
+                    } else if (dirAction == 2) {
+                        _installFolderCIAs(newPath);
+                        return;
+                    }
+                }
+            } else if (fe->isCIA) {
+                /* Install single CIA */
+                char ciaPath[512];
+                if (strcmp(currentPath, "sdmc:/") == 0)
+                    snprintf(ciaPath, sizeof(ciaPath), "sdmc:/%s", fe->name);
+                else
+                    snprintf(ciaPath, sizeof(ciaPath), "%s/%s", currentPath, fe->name);
+
+                u64 tid = getCIATitleID(ciaPath);
+                FS_MediaType dest = (config.installDest == 0) ? MEDIATYPE_SD : MEDIATYPE_NAND;
+
+                if (!config.skipInstallConfirm) {
+                    char tidStr[36];
+                    if (tid) snprintf(tidStr, sizeof(tidStr), "  ID: %016llX", (unsigned long long)tid);
+                    else     snprintf(tidStr, sizeof(tidStr), "  ID: N/D");
+                    char fnShort[40]; strncpy(fnShort, fe->name, 38); fnShort[38]='\0';
+                    char fileMsg[44]; snprintf(fileMsg, sizeof(fileMsg), "  %.38s", fnShort);
+                    const char *destLbl = (dest == MEDIATYPE_SD) ? "  Dest: SD" : "  Dest: NAND";
+                    const char *cfDl[] = { "  Installare?", fileMsg, tidStr, (char*)destLbl, "", "  A=Si   B=No" };
+                    bool confirmed = false;
+                    while (aptMainLoop()) {
+                        drawDialog(cfDl, 6);
+                        hidScanInput(); u32 ck = hidKeysDown();
+                        if (ck & KEY_A) { confirmed = true; break; }
+                        if (ck & KEY_B) break;
+                    }
+                    if (!confirmed) continue;
+                }
+
+                bool ok = installCIA(ciaPath, dest); /* installCIA manages its own C3D frames */
+
+                if (ok) {
+                    char fn2[42]; strncpy(fn2, fe->name, 40); fn2[40]='\0';
+                    char okMsg[48]; snprintf(okMsg, sizeof(okMsg), "  %.40s", fn2);
+                    const char *okDl[] = { "  Installazione completata!", okMsg, "", "  A=Continua" };
+                    drawDialog(okDl, 4);
+                    while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+
+                    /* Check for existing backup to restore */
+                    if (tid != 0) {
+                        char backupDir[512];
+                        if (findBackupDir(tid, backupDir, sizeof(backupDir))) {
+                            TitleInfo tmp;
+                            memset(&tmp, 0, sizeof(tmp));
+                            tmp.titleID = tid; tmp.mediaType = dest;
+                            getTitleName(tid, dest, tmp.name, sizeof(tmp.name));
+                            if (config.forceRestore) {
+                                restoreSaveData(&tmp);
+                                const char *rDl[] = { "", "  Salvataggio ripristinato", "  automaticamente.", "", "  A=OK" };
+                                drawDialog(rDl, 5);
+                                while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                            } else {
+                                const char *askDl[] = { "", "  Trovato backup per questo titolo.", "  Ripristinare il salvataggio?", "", "  A=Si   B=No" };
+                                bool doRestore = false;
+                                while (aptMainLoop()) {
+                                    drawDialog(askDl, 5);
+                                    hidScanInput(); u32 rk = hidKeysDown();
+                                    if (rk & KEY_A) { doRestore = true; break; }
+                                    if (rk & KEY_B) break;
+                                }
+                                if (doRestore) {
+                                    restoreSaveData(&tmp);
+                                    const char *rDl[] = { "", "  Salvataggio ripristinato.", "", "  A=OK" };
+                                    drawDialog(rDl, 4);
+                                    while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                                }
+                            }
+                        }
+                    }
+                    /* Stay in browser after single install (user may install more) */
+                } else {
+                    const char *errDl[] = { "", "  Errore durante l'installazione.", "  Verifica che il file CIA sia valido.", "", "  A=Continua" };
+                    drawDialog(errDl, 5);
+                    while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                }
+            }
+        }
     }
 }
 
