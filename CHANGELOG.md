@@ -1,6 +1,31 @@
 # Changelog
 
-:## v1.0.5 - Documentation overhaul (2026-04-10)
+## v1.0.6 – UI/UX polish (2026-04-10)
+
+### UI – Main menu
+- Removed `[A]`, `[B]`, `[U]`, `[I]`, `[S]` abbreviations from menu items (prep for v3 5-button UI).
+
+### INSTALL – File browser
+- Max visible rows reduced from 13 to 12 (`FILE_BROWSER_VISIBLE`): last row at y=204 no longer bleeds under the hint bar at y=222. This fixed the misleading "truncated list" appearance.
+- File name expanded from 28 to 44 characters, filling space before the badge symbol.
+- **Directory cursor stack**: cursor position is saved before entering a folder and restored on B/`..` exit. Stack depth max 12 levels (`DIR_STACK_MAX`).
+
+### BACKUP – Save data list
+- Added **TitleID column** (right-aligned `%016llX` at x=292, scale 0.38f) matching Uninstall layout.
+- **DLC and Update titles filtered out**: `buildBackupList()` excludes titles with high-word `0x0004000E` (Updates) and `0x0004008C` (DLC) — they share the base game's save archive and have no standalone user save data. Introduced `backupIndices[]` / `backupTitleCount` globals.
+- Column layout unified with Uninstall: checkbox x=3, name x=25 (32 chars), symbol x=240, TitleID x=292.
+
+### UNINSTALL – Column layout overhaul
+- New uniform 3-column layout:
+  - Name: x=25, 32 chars, scale 0.38f (was x=28, 28 chars)
+  - Symbol `^`/`+`: x=240 (was x=220 — visually dead-centre)
+  - TitleID: right-aligned at x=292 (`396 − 16×6.5`), scale 0.38f (was x=300 at 0.40f — clipped off screen)
+- **Coloured sort/filter bar**: sort name is yellow when ≠ `Name`, filter name is yellow when ≠ `All`. Bar rendered as 5 separate `dt()` calls with proportional x-positioning (6.5px/char at scale 0.44f).
+
+### SYSTEMINFO – Sublist navigation
+- Added `KEY_RIGHT` / `KEY_LEFT` page-jump in the Games/Updates/DLC sublists (same behaviour as Uninstall and Backup).
+
+
 
 ### Documentation
 - **README.md**: Complete rewrite to cover all v2 features (Install, Backup, Uninstall, SysInfo, Settings). Added controls tables for every screen, screen layout ASCII diagrams, Settings table, backup structure, FAQ and safety notes.

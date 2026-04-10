@@ -39,6 +39,8 @@ typedef struct {
 #define SMDH_ICON_PATH    0x6E6F6369
 #define MAX_FILE_SIZE     (100 * 1024 * 1024)
 #define MAX_VISIBLE_TITLES 13
+#define FILE_BROWSER_VISIBLE 12  /* install screen has 36px header → only 12 rows fit cleanly */
+#define DIR_STACK_MAX  12        /* max folder nesting depth for cursor restore */
 #define MAX_FILES         256
 #define CHUNK_SIZE        0x10000
 #define ALIGN64(x)        (((u32)(x) + 63) & ~63U)
@@ -133,6 +135,13 @@ static char currentPath[512];
 /* Backup flow */
 static int backupCursor      = 0;
 static int backupScrollOffset = 0;
+/* Backup filtered list (excludes DLC/Updates — no standalone save data) */
+static int backupIndices[MAX_TITLES];
+static int backupTitleCount  = 0;
+/* File browser directory cursor stack (cursor restored when going up) */
+static int dirCursorStack[DIR_STACK_MAX];
+static int dirScrollStack[DIR_STACK_MAX];
+static int dirStackDepth = 0;
 /* System Info */
 static SysInfoMode sysInfoMode         = SYSINFO_OVERVIEW;
 static int sysInfoCursor               = 0;
@@ -339,7 +348,7 @@ bool getBackupLastDate(u64 titleID, char *outDate, size_t outSize) {
     char infoPath[512];
     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
     FILE *f2 = fopen(infoPath,"r");
-    if (!f2) { snprintf(outDate,outSize,"??/??/??"); return true; }
+    if (!f2) { snprintf(outDate,outSize,"??/??/?? ??:??"); return true; }
     char line[256];
     while (fgets(line,sizeof(line),f2)) {
         if (strncmp(line,"Backup Date:",12)==0) {
@@ -1050,11 +1059,11 @@ void drawMainMenu(void) {
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     dt(8, 4, 0.5f, 0.54f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
     static const char *items[] = {
-        "[A] Install CIA",
-        "[B] Backup Saves",
-        "[U] Uninstall Titles",
-        "[I] System Info",
-        "[S] Settings"
+        "Install CIA",
+        "Backup Saves",
+        "Uninstall Titles",
+        "System Info",
+        "Settings"
     };
     for (int i = 0; i < 5; i++) {
         float y = 60.0f + (float)i * 30.0f;
@@ -1086,7 +1095,7 @@ void drawMainMenu(void) {
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Description");
     dt(8, 30, 0.5f, 0.54f, CLR_WHITE, descLine1[menuCursor]);
     dt(8, 52, 0.5f, 0.52f, CLR_GRAY,  descLine2[menuCursor]);
-    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A = Select   START = Exit");
 }
 
@@ -1103,11 +1112,22 @@ void drawUI(void) {
         if (titles[i].selected && titles[i].isValid) selCount++;
     static const char *sortNames[]   = { "Name", "Size", "ID" };
     static const char *filterNames[] = { "All", "Upd", "DLC" };
-    char info[80];
-    snprintf(info, sizeof(info), "T:%d  Sel:%d  Sort:%s  [%s]",
-             filteredCount, selCount,
-             sortNames[currentSortMode], filterNames[currentFilterMode]);
-    dt(4, 24, 0.5f, 0.44f, CLR_GRAY, info);
+    /* Info bar: static prefix in gray, sort name and filter in color when non-default */
+    char infoP1[36];
+    snprintf(infoP1, sizeof(infoP1), "T:%d  Sel:%d  Sort:", filteredCount, selCount);
+    float xi  = 4.0f + (float)strlen(infoP1) * 6.5f;
+    const char *sn = sortNames[currentSortMode];
+    float xi2 = xi  + (float)strlen(sn) * 6.5f;
+    float xi3 = xi2 + 3.0f * 6.5f; /* "  [" */
+    const char *fn = filterNames[currentFilterMode];
+    float xi4 = xi3 + (float)strlen(fn) * 6.5f;
+    u32 sortClr = (currentSortMode  != SORT_BY_NAME) ? CLR_YELLOW : CLR_GRAY;
+    u32 filtClr = (currentFilterMode != FILTER_ALL)  ? CLR_YELLOW : CLR_GRAY;
+    dt(4,   24, 0.5f, 0.44f, CLR_GRAY, infoP1);
+    dt(xi,  24, 0.5f, 0.44f, sortClr,  sn);
+    dt(xi2, 24, 0.5f, 0.44f, CLR_GRAY, "  [");
+    dt(xi3, 24, 0.5f, 0.44f, filtClr,  fn);
+    dt(xi4, 24, 0.5f, 0.44f, CLR_GRAY, "]");
     /* Title list */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
         int fi = scrollOffset + i;
@@ -1121,20 +1141,19 @@ void drawUI(void) {
         /* Checkbox */
         u32 txtColor = ti->selected ? CLR_YELLOW : (isCursor ? CLR_WHITE : CLR_GRAY);
         dt(3, y, 0.5f, 0.38f, txtColor, ti->selected ? "[X]" : "[ ]");
-        /* Name (truncated) */
+        /* Name — 32 chars, x=25 */
         const char *srcName = ti->name[0] ? ti->name : "Unknown";
-        char nm[32]; strncpy(nm, srcName, 28); nm[28] = '\0';
-        if (strlen(srcName) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
-        dt(28, y, 0.5f, 0.38f, txtColor, nm);
-        /* Type symbol */
+        char nm[35]; strncpy(nm, srcName, 32); nm[32] = '\0';
+        if (strlen(srcName) > 32) { nm[29]='.'; nm[30]='.'; nm[31]='.'; nm[32]='\0'; }
+        dt(25, y, 0.5f, 0.38f, txtColor, nm);
+        /* Type symbol — x=240 (right of title, left of TitleID) */
         u32 hi = (u32)(ti->titleID >> 32);
-        if      (hi == 0x0004000E) dt(220, y, 0.5f, 0.44f, CLR_CYAN,  "^");
-        else if (hi == 0x0004008C) dt(220, y, 0.5f, 0.44f, CLR_GREEN, "+");
-        /* Full TitleID right-aligned — ~6.0px per char at scale 0.40f */
+        if      (hi == 0x0004000E) dt(240, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+        else if (hi == 0x0004008C) dt(240, y, 0.5f, 0.44f, CLR_GREEN, "+");
+        /* Full TitleID right-aligned — 6.5px/char at 0.38f → 104px → x=292 */
         char fullID[20];
         snprintf(fullID, sizeof(fullID), "%016llX", (unsigned long long)ti->titleID);
-        float tidX = 396.0f - 16.0f * 6.0f; /* 16 hex chars × 6px = 96px */
-        dt(tidX, y, 0.5f, 0.40f, CLR_GRAY, fullID);
+        dt(292.0f, y, 0.5f, 0.38f, CLR_GRAY, fullID);
     }
     /* Scroll counter */
     if (filteredCount > MAX_VISIBLE_TITLES) {
@@ -1158,8 +1177,6 @@ static void _drawSoon(const char *feature) {
     dt(80, 135, 0.5f, 0.54f, CLR_GRAY, "Feature under development (v2.0).");
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B / START = Back to menu");
-    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
-    dt(8, 108, 0.5f, 0.54f, CLR_GRAY, "Version 2.0 coming!");
 }
 
 /* drawFileBrowserScreen: file browser for CIA install.
@@ -1179,8 +1196,8 @@ void drawFileBrowserScreen(void) {
         dispPath = pathBuf;
     }
     dt(4, 22, 0.5f, 0.40f, CLR_GRAY, dispPath);
-    /* File list — starts at y=40 to leave clean gap after header */
-    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+    /* File list — starts at y=40; max FILE_BROWSER_VISIBLE=12 rows to stay above hint bar */
+    for (int i = 0; i < FILE_BROWSER_VISIBLE; i++) {
         int fi = fileScrollOffset + i;
         if (fi >= fileCount) break;
         float y = 40.0f + (float)i * 14.5f;
@@ -1194,9 +1211,9 @@ void drawFileBrowserScreen(void) {
             if (strlen(dirLine) > 46) { dirLine[43]='.'; dirLine[44]='.'; dirLine[45]='.'; dirLine[46]='\0'; }
             dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_CYAN, dirLine);
         } else {
-            /* Name (left) — truncated to 28 chars */
-            char nm[30]; strncpy(nm, fe->name, 28); nm[28]='\0';
-            if (strlen(fe->name) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
+            /* Name (left) — expanded to 44 chars for maximum title visibility */
+            char nm[46]; strncpy(nm, fe->name, 44); nm[44]='\0';
+            if (strlen(fe->name) > 44) { nm[41]='.'; nm[42]='.'; nm[43]='.'; nm[44]='\0'; }
             dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_GRAY, nm);
             /* Type badge — closer to size, gives more room for filename */
             u32 hi = (u32)(fe->titleID >> 32);
@@ -1253,7 +1270,7 @@ void drawFileBrowserScreen(void) {
     dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "All installs go to SD card");
 }
 
-/* drawBackupScreen: list of ALL titles with backup status.
+/* drawBackupScreen: list of backup-eligible titles (base games only — DLC/Updates excluded).
    Called from runBackupFlow — NO C3D frame management. */
 void drawBackupScreen(void) {
     C2D_TextBufClear(dynamicBuf);
@@ -1261,40 +1278,44 @@ void drawBackupScreen(void) {
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     int selCount = 0;
-    for (int i = 0; i < titleCount; i++)
-        if (titles[i].selected) selCount++;
+    for (int i = 0; i < backupTitleCount; i++)
+        if (titles[backupIndices[i]].selected) selCount++;
     char hdr[56]; snprintf(hdr, sizeof(hdr), "Save Backups   Sel:%d", selCount);
     dt(4, 4, 0.5f, 0.54f, CLR_WHITE, hdr);
-    /* Title list — direct index into titles[], NOT filteredIndices[] */
+    /* Title list — indexed via backupIndices[], same 3-column layout as Uninstall */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
-        int ti = backupScrollOffset + i;
-        if (ti >= titleCount) break;
-        TitleInfo *t2 = &titles[ti];
+        int bi = backupScrollOffset + i;
+        if (bi >= backupTitleCount) break;
+        TitleInfo *t2 = &titles[backupIndices[bi]];
         float y = 38.0f + (float)i * 14.5f;
-        bool isCursor = (ti == backupCursor);
+        bool isCursor = (bi == backupCursor);
         if (isCursor)
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
-        /* Checkbox — selection takes priority over backup indicator */
+        /* Checkbox — [X] selected, [*] has backup, [ ] none */
         const char *cb; u32 cbColor;
         if (t2->selected)        { cb = "[X]"; cbColor = CLR_YELLOW; }
         else if (t2->hasBackup)  { cb = "[*]"; cbColor = CLR_BACKUP_OK; }
         else                     { cb = "[ ]"; cbColor = isCursor ? CLR_WHITE : CLR_GRAY; }
         dt(3, y, 0.5f, 0.38f, cbColor, cb);
-        /* Name — 28 chars max (same as Uninstall) */
+        /* Name — 32 chars, x=25 (uniform with Uninstall) */
         const char *srcName = t2->name[0] ? t2->name : "Unknown";
-        char nm[30]; strncpy(nm, srcName, 28); nm[28] = '\0';
-        if (strlen(srcName) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
+        char nm[35]; strncpy(nm, srcName, 32); nm[32] = '\0';
+        if (strlen(srcName) > 32) { nm[29]='.'; nm[30]='.'; nm[31]='.'; nm[32]='\0'; }
         u32 nameColor = t2->selected ? CLR_YELLOW : (isCursor ? CLR_WHITE : CLR_GRAY);
-        dt(28, y, 0.5f, 0.38f, nameColor, nm);
-        /* Type badge — same symbols as Uninstall (^/+) at consistent position */
+        dt(25, y, 0.5f, 0.38f, nameColor, nm);
+        /* Type symbol — x=240 (base games only, but keep for consistency if ever shown) */
         u32 hi = (u32)(t2->titleID >> 32);
-        if      (hi == 0x0004000E) dt(220, y, 0.5f, 0.44f, CLR_CYAN,  "^");
-        else if (hi == 0x0004008C) dt(220, y, 0.5f, 0.44f, CLR_GREEN, "+");
+        if      (hi == 0x0004000E) dt(240, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+        else if (hi == 0x0004008C) dt(240, y, 0.5f, 0.44f, CLR_GREEN, "+");
+        /* Full TitleID right-aligned — 6.5px/char at 0.38f → x=292 */
+        char tidBuf[20];
+        snprintf(tidBuf, sizeof(tidBuf), "%016llX", (unsigned long long)t2->titleID);
+        dt(292.0f, y, 0.5f, 0.38f, CLR_GRAY, tidBuf);
     }
     /* Scroll counter */
-    if (titleCount > MAX_VISIBLE_TITLES) {
-        char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", backupCursor+1, titleCount);
-        dt(352, 225, 0.5f, 0.52f, CLR_GRAY, sc);
+    if (backupTitleCount > MAX_VISIBLE_TITLES) {
+        char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", backupCursor+1, backupTitleCount);
+        dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Sel  X=Backup Sel  Y=Backup All  B=Menu");
@@ -1302,8 +1323,8 @@ void drawBackupScreen(void) {
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Info");
-    if (backupCursor < titleCount) {
-        TitleInfo *ti = &titles[backupCursor];
+    if (backupCursor < backupTitleCount) {
+        TitleInfo *ti = &titles[backupIndices[backupCursor]];
         char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
         dt(4, 22, 0.5f, 0.52f, CLR_WHITE, nm2);
         char tidStr[32]; snprintf(tidStr, sizeof(tidStr), "%016llX", (unsigned long long)ti->titleID);
@@ -1676,8 +1697,7 @@ static void _runUninstallDeleteFlow(void) {
 
     if (selectedCount == 0) {
         const char *msg[] = { "", "  No title selected.", "",
-                              "  Select at least one title with A.", "",
-                              "  Press A to continue." };
+                              "  Select at least one title with A.", "", "  Press A to continue." };
         drawDialog(msg, 6);
         while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
         return;
@@ -1826,7 +1846,14 @@ static void _goUpDir(void) {
         strncpy(parent, "sdmc:/", sizeof(parent) - 1);
     }
     scanDirectory(parent);
-    fileCursor = 0; fileScrollOffset = 0;
+    /* Restore cursor position from stack (or reset to top if stack empty) */
+    if (dirStackDepth > 0) {
+        dirStackDepth--;
+        fileCursor      = dirCursorStack[dirStackDepth];
+        fileScrollOffset = dirScrollStack[dirStackDepth];
+    } else {
+        fileCursor = 0; fileScrollOffset = 0;
+    }
 }
 
 /* _installFolderCIAs: install all .cia files in folderPath.
@@ -1906,10 +1933,25 @@ static int _installFolderCIAs(const char *folderPath) {
     return installed;
 }
 
+/* buildBackupList: fills backupIndices[] with indices of titles that can have save data.
+   DLC (0x0004008C) and Updates (0x0004000E) are excluded — they share the base game's
+   save archives and have no standalone user save data. */
+static void buildBackupList(void) {
+    backupTitleCount = 0;
+    for (int i = 0; i < titleCount; i++) {
+        if (!titles[i].isValid) continue;
+        u32 hi = (u32)(titles[i].titleID >> 32);
+        if (hi == 0x0004000E || hi == 0x0004008C) continue; /* skip Updates and DLC */
+        if (backupTitleCount < MAX_TITLES)
+            backupIndices[backupTitleCount++] = i;
+    }
+}
+
 /* runInstallFlow: blocking CIA install flow — manages own C3D frames. */
 void runInstallFlow(void) {
     scanDirectory("sdmc:/");
     fileCursor = 0; fileScrollOffset = 0;
+    dirStackDepth = 0; /* reset cursor-restore stack for a fresh browse session */
 
     while (aptMainLoop()) {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
@@ -1924,8 +1966,8 @@ void runInstallFlow(void) {
         if (k & KEY_DOWN) {
             if (fileCursor < fileCount - 1) {
                 fileCursor++;
-                if (fileCursor >= fileScrollOffset + MAX_VISIBLE_TITLES)
-                    fileScrollOffset = fileCursor - MAX_VISIBLE_TITLES + 1;
+                if (fileCursor >= fileScrollOffset + FILE_BROWSER_VISIBLE)
+                    fileScrollOffset = fileCursor - FILE_BROWSER_VISIBLE + 1;
             }
         }
         if (k & KEY_UP) {
@@ -1936,14 +1978,14 @@ void runInstallFlow(void) {
         }
         /* Page navigation — DX/SX (same as Uninstall & Backup) */
         if (k & KEY_RIGHT) {
-            fileCursor += MAX_VISIBLE_TITLES;
+            fileCursor += FILE_BROWSER_VISIBLE;
             if (fileCursor >= fileCount) fileCursor = fileCount - 1;
             if (fileCursor < 0) fileCursor = 0;
-            if (fileCursor >= fileScrollOffset + MAX_VISIBLE_TITLES)
-                fileScrollOffset = fileCursor - MAX_VISIBLE_TITLES + 1;
+            if (fileCursor >= fileScrollOffset + FILE_BROWSER_VISIBLE)
+                fileScrollOffset = fileCursor - FILE_BROWSER_VISIBLE + 1;
         }
         if (k & KEY_LEFT) {
-            fileCursor -= MAX_VISIBLE_TITLES;
+            fileCursor -= FILE_BROWSER_VISIBLE;
             if (fileCursor < 0) fileCursor = 0;
             if (fileCursor < fileScrollOffset) fileScrollOffset = fileCursor;
         }
@@ -1994,7 +2036,12 @@ void runInstallFlow(void) {
                     if (strcmp(currentPath, "sdmc:/") == 0) return;
                     _goUpDir();
                 } else {
-                    /* Enter directory directly — no confirmation dialog */
+                    /* Enter directory — push current cursor onto stack, reset to top */
+                    if (dirStackDepth < DIR_STACK_MAX) {
+                        dirCursorStack[dirStackDepth] = fileCursor;
+                        dirScrollStack[dirStackDepth] = fileScrollOffset;
+                        dirStackDepth++;
+                    }
                     char newPath[512];
                     if (strcmp(currentPath, "sdmc:/") == 0)
                         snprintf(newPath, sizeof(newPath), "sdmc:/%s", fe->name);
@@ -2084,9 +2131,9 @@ void runInstallFlow(void) {
 }
 
 /* runBackupFlow: blocking backup flow — manages own C3D frames.
-   Pre-condition: titleCount > 0. */
+   Pre-condition: titleCount > 0 and buildBackupList() already called. */
 void runBackupFlow(void) {
-    for (int i = 0; i < titleCount; i++) titles[i].selected = false;
+    for (int i = 0; i < backupTitleCount; i++) titles[backupIndices[i]].selected = false;
     backupCursor = 0; backupScrollOffset = 0;
 
     while (aptMainLoop()) {
@@ -2100,7 +2147,7 @@ void runBackupFlow(void) {
 
         /* Navigation */
         if (k & KEY_DOWN) {
-            if (backupCursor < titleCount - 1) {
+            if (backupCursor < backupTitleCount - 1) {
                 backupCursor++;
                 if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
                     backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
@@ -2114,7 +2161,7 @@ void runBackupFlow(void) {
         }
         if (k & KEY_RIGHT) {
             backupCursor += MAX_VISIBLE_TITLES;
-            if (backupCursor >= titleCount) backupCursor = (titleCount > 0) ? titleCount - 1 : 0;
+            if (backupCursor >= backupTitleCount) backupCursor = (backupTitleCount > 0) ? backupTitleCount - 1 : 0;
             if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
                 backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
         }
@@ -2126,13 +2173,13 @@ void runBackupFlow(void) {
 
         /* Select / deselect current title */
         if (k & KEY_A)
-            titles[backupCursor].selected ^= true;
+            titles[backupIndices[backupCursor]].selected ^= true;
 
         /* KEY_X — backup selected titles */
         if (k & KEY_X) {
             int selCount = 0;
-            for (int i = 0; i < titleCount; i++)
-                if (titles[i].selected && titles[i].isValid) selCount++;
+            for (int i = 0; i < backupTitleCount; i++)
+                if (titles[backupIndices[i]].selected && titles[backupIndices[i]].isValid) selCount++;
             if (selCount == 0) {
                 const char *msg[] = { "", "  No title selected.", "  Select titles with A.", "", "  Press A to continue." };
                 drawDialog(msg, 5);
@@ -2150,11 +2197,12 @@ void runBackupFlow(void) {
             }
             if (!confirmed) continue;
             int done = 0;
-            for (int i = 0; i < titleCount; i++) {
-                if (!titles[i].selected || !titles[i].isValid) continue;
-                drawLoadingScreen(done, selCount, titles[i].name); /* manages own frame */
-                backupSaveData(&titles[i]);
-                titles[i].hasBackup = true;
+            for (int i = 0; i < backupTitleCount; i++) {
+                TitleInfo *ti = &titles[backupIndices[i]];
+                if (!ti->selected || !ti->isValid) continue;
+                drawLoadingScreen(done, selCount, ti->name);
+                backupSaveData(ti);
+                ti->hasBackup = true;
                 done++;
             }
             char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
@@ -2164,11 +2212,9 @@ void runBackupFlow(void) {
             return;
         }
 
-        /* KEY_Y — backup ALL valid titles */
+        /* KEY_Y — backup ALL eligible titles (base games only) */
         if (k & KEY_Y) {
-            int validCount = 0;
-            for (int i = 0; i < titleCount; i++)
-                if (titles[i].isValid) validCount++;
+            int validCount = backupTitleCount;
             char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup ALL titles (%d)?", validCount);
             const char *cfDl[] = { "", cntMsg, "  This may take a while.", "", "  A=Yes   B=No" };
             bool confirmed = false;
@@ -2180,11 +2226,12 @@ void runBackupFlow(void) {
             }
             if (!confirmed) continue;
             int done = 0;
-            for (int i = 0; i < titleCount; i++) {
-                if (!titles[i].isValid) continue;
-                drawLoadingScreen(done, validCount, titles[i].name); /* manages own frame */
-                backupSaveData(&titles[i]);
-                titles[i].hasBackup = true;
+            for (int i = 0; i < backupTitleCount; i++) {
+                TitleInfo *ti = &titles[backupIndices[i]];
+                if (!ti->isValid) continue;
+                drawLoadingScreen(done, validCount, ti->name);
+                backupSaveData(ti);
+                ti->hasBackup = true;
                 done++;
             }
             char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
@@ -2233,6 +2280,20 @@ void handleSysInfoInput(void) {
                 if (sysInfoSubCursor < sysInfoSubScrollOffset)
                     sysInfoSubScrollOffset = sysInfoSubCursor;
             }
+        }
+        /* Fast page navigation with L/R pad */
+        if (keys & KEY_RIGHT) {
+            sysInfoSubCursor += MAX_VISIBLE_TITLES;
+            if (sysInfoSubCursor >= sysInfoSubCount)
+                sysInfoSubCursor = (sysInfoSubCount > 0) ? sysInfoSubCount - 1 : 0;
+            if (sysInfoSubCursor >= sysInfoSubScrollOffset + MAX_VISIBLE_TITLES)
+                sysInfoSubScrollOffset = sysInfoSubCursor - MAX_VISIBLE_TITLES + 1;
+        }
+        if (keys & KEY_LEFT) {
+            sysInfoSubCursor -= MAX_VISIBLE_TITLES;
+            if (sysInfoSubCursor < 0) sysInfoSubCursor = 0;
+            if (sysInfoSubCursor < sysInfoSubScrollOffset)
+                sysInfoSubScrollOffset = sysInfoSubCursor;
         }
         if (keys & KEY_B) {
             /* Restore overview cursor to the category we came from */
@@ -2385,6 +2446,10 @@ int main(void) {
                 updateFilteredList();
                 cursor = 0; scrollOffset = 0;
             }
+            if (appState == APP_BACKUP) {
+                buildBackupList();
+                backupCursor = 0; backupScrollOffset = 0;
+            }
             /* No 'continue' — fall through so the first frame is rendered immediately */
         }
 
@@ -2396,6 +2461,7 @@ int main(void) {
             continue;
         }
         if (appState == APP_BACKUP) {
+            buildBackupList(); /* ensure list reflects current titles */
             runBackupFlow();
             appState = APP_MAIN_MENU;
             continue;
