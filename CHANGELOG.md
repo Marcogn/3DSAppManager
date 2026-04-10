@@ -1,6 +1,30 @@
 # Changelog
 
-## v1.0.1 - UI Improvements (2026-02-05)
+## v1.0.2 - Bug fixes & UX polish (2026-04-10)
+
+### Bug fix
+- **Install: file .cia non trovati** — `scanDirectory()` usava `rewinddir()` che su
+  CTRU/FAT32 non riposiziona il puntatore. La seconda passata (ricerca .cia) si
+  eseguiva su un iteratore esaurito e restituiva zero file. Fix: due `opendir()`
+  distinte, una per cartelle e una per i .cia, eliminano la dipendenza da
+  `rewinddir()`. Risolto anche il double-slash (`sdmc:/ + / + name`) nelle chiamate
+  `stat()` tramite macro `MKFP`.
+
+### Miglioramenti UI
+- **Backup: navigazione DX/SX per pagina** — `KEY_RIGHT`/`KEY_LEFT` ora avanzano/
+  indietreggiano di `MAX_VISIBLE_TITLES` posizioni nel flusso Backup, identico al
+  comportamento già presente in Uninstall.
+- **Uninstall: TitleID completo nella lista** — mostrati tutti i 16 caratteri hex
+  (`%016llX`) invece dei soli 32 bit bassi (`%08lX`). Scala ridotta a 0.40f per
+  contenere il testo; simbolo tipo (^/+) spostato a x=220 per fare spazio.
+- **SysInfo sublist: dimensione allineata a destra** — il campo `[size]` è ora
+  disegnato con `x = 396 - strlen * 5.4px` così si allinea sempre al bordo destro
+  indipendentemente dalla lunghezza del nome titolo.
+- **Settings: descrizioni senza frasi spezzate** — le prime quattro voci avevano
+  la descrizione tagliata a metà frase (es. "Auto backup before" / "uninstalling
+  (no prompt)"). Riscritte come frasi complete e autonome su ogni riga.
+
+
 
 Improved user interface clarity and screen management.
 
