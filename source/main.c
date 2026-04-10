@@ -94,6 +94,7 @@ typedef struct {
     bool isDir;
     bool isCIA;
     u64  size;
+    u64  titleID; /* CIA title ID cached at scan time (0 for dirs or unreadable) */
 } FileEntry;
 /* Alternative backup paths */
 static const char *BACKUP_PATH_OPTIONS[] = {
@@ -774,6 +775,7 @@ int scanDirectory(const char *path) {
             fileEntries[fileCount].isDir=false; fileEntries[fileCount].isCIA=true;
             struct stat st2;
             fileEntries[fileCount].size=(stat(fp2,&st2)==0)?(u64)st2.st_size:0;
+            fileEntries[fileCount].titleID=getCIATitleID(fp2);
             fileCount++;
         }
         closedir(d);
@@ -1191,11 +1193,19 @@ void drawFileBrowserScreen(void) {
             if (strlen(dirLine) > 46) { dirLine[43]='.'; dirLine[44]='.'; dirLine[45]='.'; dirLine[46]='\0'; }
             dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_CYAN, dirLine);
         } else {
+            /* Name (left) — truncated to 28 chars */
+            char nm[30]; strncpy(nm, fe->name, 28); nm[28]='\0';
+            if (strlen(fe->name) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
+            dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_GRAY, nm);
+            /* Type badge — same symbols as Uninstall list */
+            u32 hi = (u32)(fe->titleID >> 32);
+            if      (hi == 0x0004000E) dt(206, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+            else if (hi == 0x0004008C) dt(206, y, 0.5f, 0.44f, CLR_GREEN, "+");
+            /* Size right-aligned (~5.7px per char at scale 0.38f) */
             char szBuf[16]; formatSize(fe->size, szBuf, sizeof(szBuf));
-            char nm[28]; strncpy(nm, fe->name, 26); nm[26]='\0';
-            if (strlen(fe->name) > 26) { nm[23]='.'; nm[24]='.'; nm[25]='.'; nm[26]='\0'; }
-            char ciaLine[56]; snprintf(ciaLine, sizeof(ciaLine), "%-26s  [%s]", nm, szBuf);
-            dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_GRAY, ciaLine);
+            char szLine[20]; snprintf(szLine, sizeof(szLine), "[%s]", szBuf);
+            float szX = 396.0f - (float)strlen(szLine) * 5.7f;
+            dt(szX, y, 0.5f, 0.38f, CLR_GRAY, szLine);
         }
     }
     /* Scroll counter */
@@ -1204,7 +1214,7 @@ void drawFileBrowserScreen(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Enter/Install  Y=All  B=Up/Menu  START=Cancel");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Enter/Install Y=All B=Up DX/SX=Page");
     /* Bottom screen: info file selezionato */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1219,9 +1229,7 @@ void drawFileBrowserScreen(void) {
                 dt(8, 26, 0.5f, 0.52f, CLR_CYAN, dline);
             }
         } else {
-            char fullCIAPath[512];
-            snprintf(fullCIAPath, sizeof(fullCIAPath), "%s/%s", currentPath, fe->name);
-            u64 tid = getCIATitleID(fullCIAPath);
+            u64 tid = fe->titleID; /* cached at scan time — no file re-read */
             char tidStr[36];
             if (tid) snprintf(tidStr, sizeof(tidStr), "ID: %016llX", (unsigned long long)tid);
             else     snprintf(tidStr, sizeof(tidStr), "ID: N/A");
@@ -1229,6 +1237,13 @@ void drawFileBrowserScreen(void) {
             char szBuf[24]; formatSize(fe->size, szBuf, sizeof(szBuf));
             char szLine[36]; snprintf(szLine, sizeof(szLine), "Size: %s", szBuf);
             dt(8, 46, 0.5f, 0.54f, CLR_GRAY, szLine);
+            /* Type indicator */
+            u32 hi2 = (u32)(tid >> 32);
+            const char *typeStr = (hi2 == 0x0004000E) ? "Type: Update  [^]" :
+                                  (hi2 == 0x0004008C) ? "Type: DLC     [+]" : "Type: Game";
+            u32 typeClr = (hi2 == 0x0004000E) ? CLR_CYAN :
+                          (hi2 == 0x0004008C) ? CLR_GREEN : CLR_GRAY;
+            dt(8, 64, 0.5f, 0.52f, typeClr, typeStr);
         }
     } else {
         dt(8, 50, 0.5f, 0.52f, CLR_GRAY, "Empty folder");
@@ -1917,6 +1932,19 @@ void runInstallFlow(void) {
                 fileCursor--;
                 if (fileCursor < fileScrollOffset) fileScrollOffset = fileCursor;
             }
+        }
+        /* Page navigation — DX/SX (same as Uninstall & Backup) */
+        if (k & KEY_RIGHT) {
+            fileCursor += MAX_VISIBLE_TITLES;
+            if (fileCursor >= fileCount) fileCursor = fileCount - 1;
+            if (fileCursor < 0) fileCursor = 0;
+            if (fileCursor >= fileScrollOffset + MAX_VISIBLE_TITLES)
+                fileScrollOffset = fileCursor - MAX_VISIBLE_TITLES + 1;
+        }
+        if (k & KEY_LEFT) {
+            fileCursor -= MAX_VISIBLE_TITLES;
+            if (fileCursor < 0) fileCursor = 0;
+            if (fileCursor < fileScrollOffset) fileScrollOffset = fileCursor;
         }
 
         /* B: go up or exit */
