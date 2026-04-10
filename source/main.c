@@ -723,51 +723,63 @@ u64 getCIATitleID(const char *ciaPath) {
 int scanDirectory(const char *path) {
     fileCount=0;
     snprintf(currentPath,sizeof(currentPath),"%s",path);
+    int plen=(int)strlen(path);
     /* Add ".." entry if not root */
     if (strcmp(path,"sdmc:/")!=0) {
         strcpy(fileEntries[0].name,".."); fileEntries[0].isDir=true;
         fileEntries[0].isCIA=false; fileEntries[0].size=0; fileCount=1;
     }
-    DIR *d=opendir(path); if (!d) return fileCount;
-    struct dirent *ent;
-    /* collect dirs — usa stat() come fallback se d_type non affidabile (FAT32) */
-    while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
-        if (strcmp(ent->d_name,".")==0||strcmp(ent->d_name,"..")==0) continue;
-        bool isDir=false;
-        if (ent->d_type==DT_DIR) { isDir=true; }
-        else if (ent->d_type==DT_UNKNOWN) {
-            char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
-            struct stat st2;
-            if (stat(fp2,&st2)==0 && S_ISDIR(st2.st_mode)) isDir=true;
+    /* Build full path helper: avoid double-slash when base ends with '/' */
+#define MKFP(fp,base,name) \
+    do { int _l=(int)strlen(base); \
+         if (_l>0&&(base)[_l-1]=='/') snprintf(fp,sizeof(fp),"%s%s",base,name); \
+         else snprintf(fp,sizeof(fp),"%s/%s",base,name); } while(0)
+
+    /* Pass 1: directories (separate opendir — avoid rewinddir issues on CTRU) */
+    DIR *d=opendir(path);
+    if (d) {
+        struct dirent *ent;
+        while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
+            if (strcmp(ent->d_name,".")==0||strcmp(ent->d_name,"..")==0) continue;
+            bool isDir=(ent->d_type==DT_DIR);
+            if (!isDir) {
+                char fp2[512]; MKFP(fp2,path,ent->d_name);
+                struct stat st2;
+                if (stat(fp2,&st2)==0&&S_ISDIR(st2.st_mode)) isDir=true;
+            }
+            if (!isDir) continue;
+            strncpy(fileEntries[fileCount].name,ent->d_name,255);
+            fileEntries[fileCount].name[255]='\0';
+            fileEntries[fileCount].isDir=true; fileEntries[fileCount].isCIA=false;
+            fileEntries[fileCount].size=0; fileCount++;
         }
-        if (!isDir) continue;
-        strncpy(fileEntries[fileCount].name,ent->d_name,255);
-        fileEntries[fileCount].name[255]='\0';
-        fileEntries[fileCount].isDir=true; fileEntries[fileCount].isCIA=false;
-        fileEntries[fileCount].size=0; fileCount++;
+        closedir(d);
     }
-    rewinddir(d);
-    /* collect .cia files — usa stat() come fallback per escludere dir */
-    while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
-        bool isDir=false;
-        if (ent->d_type==DT_DIR) { isDir=true; }
-        else if (ent->d_type==DT_UNKNOWN) {
-            char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
+    /* Pass 2: .cia files (new opendir to avoid rewinddir unreliability) */
+    d=opendir(path);
+    if (d) {
+        struct dirent *ent;
+        while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
+            char fp2[512]; MKFP(fp2,path,ent->d_name);
+            bool isDir=(ent->d_type==DT_DIR);
+            if (!isDir) {
+                struct stat st2;
+                if (stat(fp2,&st2)==0&&S_ISDIR(st2.st_mode)) isDir=true;
+            }
+            if (isDir) continue;
+            const char *ext=strrchr(ent->d_name,'.');
+            if (!ext||strcasecmp(ext,".cia")!=0) continue;
+            strncpy(fileEntries[fileCount].name,ent->d_name,255);
+            fileEntries[fileCount].name[255]='\0';
+            fileEntries[fileCount].isDir=false; fileEntries[fileCount].isCIA=true;
             struct stat st2;
-            if (stat(fp2,&st2)==0 && S_ISDIR(st2.st_mode)) isDir=true;
+            fileEntries[fileCount].size=(stat(fp2,&st2)==0)?(u64)st2.st_size:0;
+            fileCount++;
         }
-        if (isDir) continue;
-        const char *ext=strrchr(ent->d_name,'.');
-        if (!ext||strcasecmp(ext,".cia")!=0) continue;
-        strncpy(fileEntries[fileCount].name,ent->d_name,255);
-        fileEntries[fileCount].name[255]='\0';
-        fileEntries[fileCount].isDir=false; fileEntries[fileCount].isCIA=true;
-        /* get file size */
-        char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
-        struct stat st2; fileEntries[fileCount].size=(stat(fp2,&st2)==0)?(u64)st2.st_size:0;
-        fileCount++;
+        closedir(d);
     }
-    closedir(d);
+#undef MKFP
+    (void)plen;
     return fileCount;
 }
 bool installCIA(const char *ciaPath, FS_MediaType dest) {
