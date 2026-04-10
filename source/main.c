@@ -1216,7 +1216,78 @@ void drawFileBrowserScreen(void) {
     dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "(Dest in Impostazioni)");
 }
 
-void drawBackupScreen(void)      { _drawSoon("Backup Salvataggi"); }
+/* drawBackupScreen: list of ALL titles with backup status.
+   Called from runBackupFlow — NO C3D frame management. */
+void drawBackupScreen(void) {
+    C2D_TextBufClear(dynamicBuf);
+    /* Top screen */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    int selCount = 0;
+    for (int i = 0; i < titleCount; i++)
+        if (titles[i].selected) selCount++;
+    char hdr[56]; snprintf(hdr, sizeof(hdr), "Backup Salvataggi   Sel:%d", selCount);
+    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, hdr);
+    /* Title list — direct index into titles[], NOT filteredIndices[] */
+    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+        int ti = backupScrollOffset + i;
+        if (ti >= titleCount) break;
+        TitleInfo *t2 = &titles[ti];
+        float y = 38.0f + (float)i * 14.5f;
+        bool isCursor = (ti == backupCursor);
+        if (isCursor)
+            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
+        /* Checkbox — selection takes priority over backup indicator */
+        const char *cb; u32 cbColor;
+        if (t2->selected)        { cb = "[X]"; cbColor = CLR_YELLOW; }
+        else if (t2->hasBackup)  { cb = "[*]"; cbColor = CLR_BACKUP_OK; }
+        else                     { cb = "[ ]"; cbColor = isCursor ? CLR_WHITE : CLR_GRAY; }
+        dt(3, y, 0.5f, 0.38f, cbColor, cb);
+        /* Name */
+        const char *srcName = t2->name[0] ? t2->name : "Unknown";
+        char nm[36]; strncpy(nm, srcName, 34); nm[34] = '\0';
+        if (strlen(srcName) > 34) { nm[31]='.'; nm[32]='.'; nm[33]='.'; nm[34]='\0'; }
+        u32 nameColor = t2->selected ? CLR_YELLOW : (isCursor ? CLR_WHITE : CLR_GRAY);
+        dt(28, y, 0.5f, 0.38f, nameColor, nm);
+        /* Type tag */
+        u32 hi = (u32)(t2->titleID >> 32);
+        if      (hi == 0x0004000E) dt(340, y, 0.5f, 0.34f, CLR_CYAN,  "Upd");
+        else if (hi == 0x0004008C) dt(340, y, 0.5f, 0.34f, CLR_GREEN, "DLC");
+    }
+    /* Scroll counter */
+    if (titleCount > MAX_VISIBLE_TITLES) {
+        char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", backupCursor+1, titleCount);
+        dt(352, 225, 0.5f, 0.34f, CLR_GRAY, sc);
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.34f, CLR_WHITE, "A=Sel  X=Backup Sel  Y=Backup Tutti  B=Menu");
+    /* Bottom screen: details for backupCursor title */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Info Titolo");
+    if (backupCursor < titleCount) {
+        TitleInfo *ti = &titles[backupCursor];
+        char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
+        dt(4, 22, 0.5f, 0.40f, CLR_WHITE, nm2);
+        char tidStr[32]; snprintf(tidStr, sizeof(tidStr), "%016llX", (unsigned long long)ti->titleID);
+        dt(4, 42, 0.5f, 0.33f, CLR_GRAY, tidStr);
+        char szBuf[24]; formatSize(ti->size, szBuf, sizeof(szBuf));
+        char locLine[36];
+        snprintf(locLine, sizeof(locLine), "%s  |  %s", szBuf,
+                 (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND");
+        dt(4, 60, 0.5f, 0.34f, CLR_GRAY, locLine);
+        /* Backup status — only 1 file read per frame (cursor item only) */
+        if (ti->hasBackup) {
+            char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
+            char bkLine[52]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
+            dt(4, 80, 0.5f, 0.36f, CLR_GREEN, bkLine);
+        } else {
+            dt(4, 80, 0.5f, 0.36f, CLR_RED, "Nessun backup");
+        }
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.33f, CLR_GRAY, "X=Backup sel   Y=Backup tutti");
+}
 void drawSysInfoScreen(void)     { _drawSoon("Info Sistema"); }
 void drawSettingsScreen(void)    { _drawSoon("Impostazioni"); }
 void drawTitleDetails(void)      { _drawSoon("Dettagli Titolo"); }
@@ -1687,15 +1758,105 @@ void runInstallFlow(void) {
     }
 }
 
-/* runBackupFlow: blocking stub — shows SOON screen, manages own frames. */
+/* runBackupFlow: blocking backup flow — manages own C3D frames.
+   Pre-condition: titleCount > 0. */
 void runBackupFlow(void) {
+    for (int i = 0; i < titleCount; i++) titles[i].selected = false;
+    backupCursor = 0; backupScrollOffset = 0;
+
     while (aptMainLoop()) {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        drawBackupScreen(); /* = _drawSoon */
+        drawBackupScreen();
         C3D_FrameEnd(0);
         hidScanInput();
         u32 k = hidKeysDown();
+
         if ((k & KEY_B) || (k & KEY_START)) return;
+
+        /* Navigation */
+        if (k & KEY_DOWN) {
+            if (backupCursor < titleCount - 1) {
+                backupCursor++;
+                if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
+                    backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
+            }
+        }
+        if (k & KEY_UP) {
+            if (backupCursor > 0) {
+                backupCursor--;
+                if (backupCursor < backupScrollOffset) backupScrollOffset = backupCursor;
+            }
+        }
+
+        /* Select / deselect current title */
+        if (k & KEY_A)
+            titles[backupCursor].selected ^= true;
+
+        /* KEY_X — backup selected titles */
+        if (k & KEY_X) {
+            int selCount = 0;
+            for (int i = 0; i < titleCount; i++)
+                if (titles[i].selected && titles[i].isValid) selCount++;
+            if (selCount == 0) {
+                const char *msg[] = { "", "  Nessun titolo selezionato.", "  Seleziona titoli con A.", "", "  Premi A per continuare." };
+                drawDialog(msg, 5);
+                while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                continue;
+            }
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup di %d titoli selezionati?", selCount);
+            const char *cfDl[] = { "", cntMsg, "", "  A=Si   B=No" };
+            bool confirmed = false;
+            while (aptMainLoop()) {
+                drawDialog(cfDl, 4);
+                hidScanInput(); u32 ck = hidKeysDown();
+                if (ck & KEY_A) { confirmed = true; break; }
+                if (ck & KEY_B) break;
+            }
+            if (!confirmed) continue;
+            int done = 0;
+            for (int i = 0; i < titleCount; i++) {
+                if (!titles[i].selected || !titles[i].isValid) continue;
+                drawLoadingScreen(done, selCount, titles[i].name); /* manages own frame */
+                backupSaveData(&titles[i]);
+                titles[i].hasBackup = true;
+                done++;
+            }
+            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completato per %d titoli.", done);
+            const char *doneDl[] = { "", doneMsg, "", "  A=Continua" };
+            drawDialog(doneDl, 4);
+            while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+            return;
+        }
+
+        /* KEY_Y — backup ALL valid titles */
+        if (k & KEY_Y) {
+            int validCount = 0;
+            for (int i = 0; i < titleCount; i++)
+                if (titles[i].isValid) validCount++;
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup di TUTTI i titoli (%d)?", validCount);
+            const char *cfDl[] = { "", cntMsg, "  Potrebbe richiedere del tempo.", "", "  A=Si   B=No" };
+            bool confirmed = false;
+            while (aptMainLoop()) {
+                drawDialog(cfDl, 5);
+                hidScanInput(); u32 ck = hidKeysDown();
+                if (ck & KEY_A) { confirmed = true; break; }
+                if (ck & KEY_B) break;
+            }
+            if (!confirmed) continue;
+            int done = 0;
+            for (int i = 0; i < titleCount; i++) {
+                if (!titles[i].isValid) continue;
+                drawLoadingScreen(done, validCount, titles[i].name); /* manages own frame */
+                backupSaveData(&titles[i]);
+                titles[i].hasBackup = true;
+                done++;
+            }
+            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completato per %d titoli.", done);
+            const char *doneDl[] = { "", doneMsg, "", "  A=Continua" };
+            drawDialog(doneDl, 4);
+            while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+            return;
+        }
     }
 }
 
