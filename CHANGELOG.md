@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.0.7 – Bug fixes & UI consistency (2026-04-10)
+
+### UNINSTALL – Info bar shift fixed
+- `T:%d` format replaced with `T:%-3d` (and `Sel:%-3d`) so the string is always a fixed width.  
+  Previously, when a filter was applied and `filteredCount` dropped from 3 to 1 digit, all following x-positions shifted left, causing sort/filter labels to "slide" visually.
+- Sort name is now **always yellow** (was gray when "Name", the default). This makes it easier to see the active sort at a glance.
+- Filter label reformatted from three separate `dt()` calls (`"  ["` + `fn` + `"]"`) to a single `" [xxx]"` string, eliminating the extra spaces that made it look like `"[  Upd]"`.
+
+### UNINSTALL / SYSTEMINFO – Sort state decoupled
+- Added `sysInfoSortMode` (defaults to `SORT_BY_NAME`), independent from `currentSortMode` used by Uninstall.
+- SYSTEMINFO sublist now sorts its own `sysInfoSubIndices[]` using index-based comparators (`sysInfoCmpName/Size/ID`) and `sysInfoSortSubList()` — **not** by relying on the physical order of `titles[]`.
+- **L/R in SYSTEMINFO sublist** cycles the sort mode (Name → Size → ID → Name), resets cursor, re-sorts. D-pad Left/Right still page-jumps as before.
+- Sort indicator (`Sort:Name` / `Sort:Size` / `Sort:ID`) shown **right-aligned in yellow** inside the category header bar.
+- Hint bar updated: `"A=Details  L/R=Sort  B=Back"`.
+
+### SELECT overlay – Compact box
+- Top box height reduced from 210 px to 165 px (centred on screen). The old box left ~79 px of blank space at the bottom; the new one has a balanced 9 px margin.
+- Line spacing tightened to 0.48f scale (from 0.52f) to match the available height.
+- "Release SELECT to return." moved from bottom-screen overlay into a footer separator line inside the **top** box, making the dismiss hint immediately visible.
+- Bottom overlay height reduced to 90 px accordingly (was 110 px).
+
+### BACKUP – Last row spacing
+- Added `#define BACKUP_VISIBLE 12` (matching `FILE_BROWSER_VISIBLE`).  
+  With 13 rows the last entry's text overlapped the hint bar by ~4 px; with 12 rows the gap is ≥ 8 px.
+- Scroll navigation (`KEY_DOWN/UP/RIGHT/LEFT`) in `runBackupFlow` updated to use `BACKUP_VISIBLE` for offset clamping.
+
+---
+
 ## v1.0.6 – UI/UX polish (2026-04-10)
 
 ### UI – Main menu

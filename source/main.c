@@ -40,6 +40,7 @@ typedef struct {
 #define MAX_FILE_SIZE     (100 * 1024 * 1024)
 #define MAX_VISIBLE_TITLES 13
 #define FILE_BROWSER_VISIBLE 12  /* install screen has 36px header → only 12 rows fit cleanly */
+#define BACKUP_VISIBLE       12  /* backup list: same gap-above-hint-bar as install screen */
 #define DIR_STACK_MAX  12        /* max folder nesting depth for cursor restore */
 #define MAX_FILES         256
 #define CHUNK_SIZE        0x10000
@@ -149,6 +150,7 @@ static int sysInfoSubCursor            = 0;
 static int sysInfoSubScrollOffset      = 0;
 static int sysInfoSubIndices[MAX_TITLES];
 static int sysInfoSubCount             = 0;
+static SortMode sysInfoSortMode        = SORT_BY_NAME;  /* independent from uninstall sort */
 /* Settings */
 static int settingsCursor = 0;
 /* Flag: set to true after a CIA install so next Uninstall/Backup/SysInfo entry reloads */
@@ -164,6 +166,7 @@ void sanitizeName(char *name);
 void formatSize(u64 size, char *buf, size_t bufSize);
 void sortTitles(void);
 void updateFilteredList(void);
+static void sysInfoSortSubList(void);
 int  compareTitlesByName(const void *a, const void *b);
 int  compareTitlesBySize(const void *a, const void *b);
 int  compareTitlesByID(const void *a, const void *b);
@@ -415,6 +418,32 @@ void updateFilteredList(void) {
     }
     if (cursor>=filteredCount && filteredCount>0) cursor=filteredCount-1;
     if (cursor<0 && filteredCount>0) cursor=0;
+}
+/* SysInfo sub-list independent sort — compares via indices into titles[] */
+static int sysInfoCmpName(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    return strcasecmp(titles[ia].name, titles[ib].name);
+}
+static int sysInfoCmpSize(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    if (titles[ia].size > titles[ib].size) return -1;
+    if (titles[ia].size < titles[ib].size) return  1;
+    return 0;
+}
+static int sysInfoCmpID(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    if (titles[ia].titleID < titles[ib].titleID) return -1;
+    if (titles[ia].titleID > titles[ib].titleID) return  1;
+    return 0;
+}
+static void sysInfoSortSubList(void) {
+    if (sysInfoSubCount <= 0) return;
+    if (sysInfoSortMode == SORT_BY_NAME)
+        qsort(sysInfoSubIndices, sysInfoSubCount, sizeof(int), sysInfoCmpName);
+    else if (sysInfoSortMode == SORT_BY_SIZE)
+        qsort(sysInfoSubIndices, sysInfoSubCount, sizeof(int), sysInfoCmpSize);
+    else
+        qsort(sysInfoSubIndices, sysInfoSubCount, sizeof(int), sysInfoCmpID);
 }
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
     SMDH smdh;
@@ -972,9 +1001,9 @@ void drawDialogWithSelectedList(const char **lines, int lineCount) {
    MUST be the only draw call for this frame — replaces drawUI entirely. */
 void drawControlsOverlay(void) {
     C2D_TextBufClear(dynamicBuf);
-    /* Top overlay */
+    /* Top overlay — compact box sized to content (8 lines + title + footer) */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
-    float bw = 300.0f, bh = 210.0f;
+    float bw = 300.0f, bh = 165.0f;
     float bx = (400.0f - bw) / 2.0f, by = (240.0f - bh) / 2.0f;
     C2D_DrawRectSolid(bx,      by,        0.5f, bw, bh, C2D_Color32(10,10,20,230));
     C2D_DrawRectSolid(bx,      by,        0.5f, bw, 2,  CLR_WHITE);
@@ -993,10 +1022,13 @@ void drawControlsOverlay(void) {
         "SELECT    : Show/hide controls"
     };
     for (int i = 0; i < 8; i++)
-        dt(bx+8, by+26.0f + (float)i*13.0f, 0.5f, 0.52f, CLR_WHITE, ctrl[i]);
+        dt(bx+8, by+24.0f + (float)i*13.0f, 0.5f, 0.48f, CLR_WHITE, ctrl[i]);
+    /* Footer separator + dismiss hint */
+    C2D_DrawRectSolid(bx+4, by+bh-22, 0.5f, bw-8, 1, CLR_GRAY);
+    dt(bx+8, by+bh-18, 0.5f, 0.44f, CLR_GRAY, "Release SELECT to return.");
     /* Bottom overlay */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
-    float bbw = 280.0f, bbh = 110.0f;
+    float bbw = 280.0f, bbh = 90.0f;
     float bbx = (320.0f - bbw) / 2.0f, bby = (240.0f - bbh) / 2.0f;
     C2D_DrawRectSolid(bbx,       bby,        0.5f, bbw, bbh, C2D_Color32(10,10,20,230));
     C2D_DrawRectSolid(bbx,       bby,        0.5f, bbw, 2,   CLR_WHITE);
@@ -1005,9 +1037,8 @@ void drawControlsOverlay(void) {
     C2D_DrawRectSolid(bbx+bbw-2, bby,        0.5f, 2,   bbh, CLR_WHITE);
     dt(bbx+8, bby+8,  0.5f, 0.52f, CLR_CYAN,  "Touch screen");
     dt(bbx+8, bby+28, 0.5f, 0.52f, CLR_GRAY,  "Selected title details are");
-    dt(bbx+8, bby+48, 0.5f, 0.52f, CLR_GRAY,  "visible on the bottom screen");
-    dt(bbx+8, bby+68, 0.5f, 0.52f, CLR_GRAY,  "while navigating.");
-    dt(bbx+8, bby+88, 0.5f, 0.52f, CLR_WHITE, "Release SELECT to return.");
+    dt(bbx+8, bby+48, 0.5f, 0.52f, CLR_GRAY,  "visible on the bottom screen.");
+    dt(bbx+8, bby+68, 0.5f, 0.52f, CLR_GRAY,  "Navigate to see details.");
 }
 
 /* drawTouchControls: draws title details on bottom screen.
@@ -1112,22 +1143,18 @@ void drawUI(void) {
         if (titles[i].selected && titles[i].isValid) selCount++;
     static const char *sortNames[]   = { "Name", "Size", "ID" };
     static const char *filterNames[] = { "All", "Upd", "DLC" };
-    /* Info bar: static prefix in gray, sort name and filter in color when non-default */
+    /* Info bar: fixed-width prefix (%-3d prevents shifting when filteredCount changes) */
     char infoP1[36];
-    snprintf(infoP1, sizeof(infoP1), "T:%d  Sel:%d  Sort:", filteredCount, selCount);
+    snprintf(infoP1, sizeof(infoP1), "T:%-3d Sel:%-3d Sort:", filteredCount, selCount);
     float xi  = 4.0f + (float)strlen(infoP1) * 6.5f;
     const char *sn = sortNames[currentSortMode];
     float xi2 = xi  + (float)strlen(sn) * 6.5f;
-    float xi3 = xi2 + 3.0f * 6.5f; /* "  [" */
     const char *fn = filterNames[currentFilterMode];
-    float xi4 = xi3 + (float)strlen(fn) * 6.5f;
-    u32 sortClr = (currentSortMode  != SORT_BY_NAME) ? CLR_YELLOW : CLR_GRAY;
-    u32 filtClr = (currentFilterMode != FILTER_ALL)  ? CLR_YELLOW : CLR_GRAY;
-    dt(4,   24, 0.5f, 0.44f, CLR_GRAY, infoP1);
-    dt(xi,  24, 0.5f, 0.44f, sortClr,  sn);
-    dt(xi2, 24, 0.5f, 0.44f, CLR_GRAY, "  [");
-    dt(xi3, 24, 0.5f, 0.44f, filtClr,  fn);
-    dt(xi4, 24, 0.5f, 0.44f, CLR_GRAY, "]");
+    char filtFull[8]; snprintf(filtFull, sizeof(filtFull), " [%s]", fn);
+    u32 filtClr = (currentFilterMode != FILTER_ALL) ? CLR_YELLOW : CLR_GRAY;
+    dt(4,   24, 0.5f, 0.44f, CLR_GRAY,   infoP1);
+    dt(xi,  24, 0.5f, 0.44f, CLR_YELLOW, sn);        /* sort always yellow */
+    dt(xi2, 24, 0.5f, 0.44f, filtClr,    filtFull);  /* "[All]"=gray, "[Upd]"/"[DLC]"=yellow */
     /* Title list */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
         int fi = scrollOffset + i;
@@ -1283,7 +1310,7 @@ void drawBackupScreen(void) {
     char hdr[56]; snprintf(hdr, sizeof(hdr), "Save Backups   Sel:%d", selCount);
     dt(4, 4, 0.5f, 0.54f, CLR_WHITE, hdr);
     /* Title list — indexed via backupIndices[], same 3-column layout as Uninstall */
-    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+    for (int i = 0; i < BACKUP_VISIBLE; i++) {
         int bi = backupScrollOffset + i;
         if (bi >= backupTitleCount) break;
         TitleInfo *t2 = &titles[backupIndices[bi]];
@@ -1313,7 +1340,7 @@ void drawBackupScreen(void) {
         dt(292.0f, y, 0.5f, 0.38f, CLR_GRAY, tidBuf);
     }
     /* Scroll counter */
-    if (backupTitleCount > MAX_VISIBLE_TITLES) {
+    if (backupTitleCount > BACKUP_VISIBLE) {
         char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", backupCursor+1, backupTitleCount);
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
@@ -1402,13 +1429,18 @@ void drawSysInfoScreen(void) {
         dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN = Select category.");
         dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B = Back to main menu.");
     } else {
-        /* Sublist: GIOCHI / UPDATE / DLC */
+        /* Sublist: GAMES / UPDATES / DLC — independent sort from Uninstall */
+        static const char *siSortNames[] = { "Name", "Size", "ID" };
         const char *hdrLabel =
             (sysInfoMode == SYSINFO_GAMES)   ? "GAMES"   :
             (sysInfoMode == SYSINFO_UPDATES) ? "UPDATES" : "DLC";
-        char hdr[32]; snprintf(hdr, sizeof(hdr), "%s  (%d)", hdrLabel, sysInfoSubCount);
+        char hdr[40]; snprintf(hdr, sizeof(hdr), "%s (%d)", hdrLabel, sysInfoSubCount);
         C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
         dt(4, 4, 0.5f, 0.52f, CLR_WHITE, hdr);
+        /* Sort indicator right-aligned in header */
+        char sortLbl[16]; snprintf(sortLbl, sizeof(sortLbl), "Sort:%s", siSortNames[sysInfoSortMode]);
+        float slX = 396.0f - (float)strlen(sortLbl) * 7.0f;
+        dt(slX, 4, 0.5f, 0.52f, CLR_YELLOW, sortLbl);
         for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
             int si = sysInfoSubScrollOffset + i;
             if (si >= sysInfoSubCount) break;
@@ -1433,7 +1465,7 @@ void drawSysInfoScreen(void) {
             dt(352, 225, 0.5f, 0.52f, CLR_GRAY, sc);
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Details & actions   B=Back");
+        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Details  L/R=Sort  B=Back");
         /* Bottom: simplified details for cursor item */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -2149,8 +2181,8 @@ void runBackupFlow(void) {
         if (k & KEY_DOWN) {
             if (backupCursor < backupTitleCount - 1) {
                 backupCursor++;
-                if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
-                    backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
+                if (backupCursor >= backupScrollOffset + BACKUP_VISIBLE)
+                    backupScrollOffset = backupCursor - BACKUP_VISIBLE + 1;
             }
         }
         if (k & KEY_UP) {
@@ -2160,13 +2192,13 @@ void runBackupFlow(void) {
             }
         }
         if (k & KEY_RIGHT) {
-            backupCursor += MAX_VISIBLE_TITLES;
+            backupCursor += BACKUP_VISIBLE;
             if (backupCursor >= backupTitleCount) backupCursor = (backupTitleCount > 0) ? backupTitleCount - 1 : 0;
-            if (backupCursor >= backupScrollOffset + MAX_VISIBLE_TITLES)
-                backupScrollOffset = backupCursor - MAX_VISIBLE_TITLES + 1;
+            if (backupCursor >= backupScrollOffset + BACKUP_VISIBLE)
+                backupScrollOffset = backupCursor - BACKUP_VISIBLE + 1;
         }
         if (k & KEY_LEFT) {
-            backupCursor -= MAX_VISIBLE_TITLES;
+            backupCursor -= BACKUP_VISIBLE;
             if (backupCursor < 0) backupCursor = 0;
             if (backupCursor < backupScrollOffset) backupScrollOffset = backupCursor;
         }
@@ -2262,6 +2294,7 @@ void handleSysInfoInput(void) {
                 }
             }
             sysInfoSubCursor = 0; sysInfoSubScrollOffset = 0;
+            sysInfoSortSubList(); /* sort independently from Uninstall */
             sysInfoMode = (sysInfoCursor == 0) ? SYSINFO_GAMES :
                           (sysInfoCursor == 1) ? SYSINFO_UPDATES : SYSINFO_DLC;
         }
@@ -2281,7 +2314,18 @@ void handleSysInfoInput(void) {
                     sysInfoSubScrollOffset = sysInfoSubCursor;
             }
         }
-        /* Fast page navigation with L/R pad */
+        /* L/R: cycle sort mode and re-sort (independent from Uninstall sort) */
+        if (keys & KEY_L) {
+            sysInfoSortMode = (SortMode)((sysInfoSortMode + 2) % 3);
+            sysInfoSortSubList();
+            sysInfoSubCursor = 0; sysInfoSubScrollOffset = 0;
+        }
+        if (keys & KEY_R) {
+            sysInfoSortMode = (SortMode)((sysInfoSortMode + 1) % 3);
+            sysInfoSortSubList();
+            sysInfoSubCursor = 0; sysInfoSubScrollOffset = 0;
+        }
+        /* Fast page navigation with D-pad Left/Right */
         if (keys & KEY_RIGHT) {
             sysInfoSubCursor += MAX_VISIBLE_TITLES;
             if (sysInfoSubCursor >= sysInfoSubCount)
