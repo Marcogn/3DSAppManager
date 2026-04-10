@@ -1288,7 +1288,116 @@ void drawBackupScreen(void) {
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.33f, CLR_GRAY, "X=Backup sel   Y=Backup tutti");
 }
-void drawSysInfoScreen(void)     { _drawSoon("Info Sistema"); }
+/* SysInfo detail view state — set by _runSysInfoDetailFlow before drawTitleDetails */
+static int sysInfoDetailIdx    = 0;
+static int sysInfoDetailCursor = 0;
+
+/* drawSysInfoScreen: system info — NO C3D frame management (main loop). */
+void drawSysInfoScreen(void) {
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+
+    if (sysInfoMode == SYSINFO_OVERVIEW) {
+        C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+        dt(4, 4, 0.5f, 0.50f, CLR_WHITE, "INFORMAZIONI SISTEMA");
+        /* Calculate totals at runtime */
+        int cntG=0, cntU=0, cntD=0;
+        u64 szG=0, szU=0, szD=0;
+        for (int i = 0; i < titleCount; i++) {
+            if (!titles[i].isValid) continue;
+            u32 hi = (u32)(titles[i].titleID >> 32);
+            if      (hi == 0x00040000) { cntG++; szG += titles[i].size; }
+            else if (hi == 0x0004000E) { cntU++; szU += titles[i].size; }
+            else if (hi == 0x0004008C) { cntD++; szD += titles[i].size; }
+        }
+        char szBufG[24], szBufU[24], szBufD[24];
+        formatSize(szG, szBufG, sizeof(szBufG));
+        formatSize(szU, szBufU, sizeof(szBufU));
+        formatSize(szD, szBufD, sizeof(szBufD));
+        /* 3 navigable rows */
+        const char *rowLabels[] = { "Giochi: ", "Update: ", "DLC:    " };
+        int   rowCnt[] = { cntG, cntU, cntD };
+        const char *rowSz[]  = { szBufG, szBufU, szBufD };
+        for (int i = 0; i < 3; i++) {
+            float y = 50.0f + (float)i * 36.0f;
+            if (i == sysInfoCursor)
+                C2D_DrawRectSolid(0, y - 2, 0.5f, 400, 30, CLR_SELECTED);
+            char line[64];
+            snprintf(line, sizeof(line), "  %-9s%3d    %s", rowLabels[i], rowCnt[i], rowSz[i]);
+            dt(8, y + 6, 0.5f, 0.45f, (i == sysInfoCursor) ? CLR_WHITE : CLR_GRAY, line);
+        }
+        /* Separator + SD free space */
+        C2D_DrawRectSolid(8, 162, 0.5f, 384, 1, CLR_GRAY);
+        u64 freeB=0, totalB=0; getSDFreeSpace(&freeB, &totalB);
+        char szFree[24], szTot[24];
+        formatSize(freeB,  szFree, sizeof(szFree));
+        formatSize(totalB, szTot,  sizeof(szTot));
+        char sdLine[64]; snprintf(sdLine, sizeof(sdLine), "  SD Libero: %s / %s", szFree, szTot);
+        dt(8, 170, 0.5f, 0.42f, CLR_CYAN, sdLine);
+        C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Entra nella categoria   B=Menu");
+        /* Bottom: hint */
+        C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+        C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+        dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Panoramica");
+        dt(8, 26, 0.5f, 0.40f, CLR_GRAY, "Seleziona una categoria con A");
+        dt(8, 44, 0.5f, 0.38f, CLR_GRAY, "per vedere la lista titoli,");
+        dt(8, 62, 0.5f, 0.38f, CLR_GRAY, "backup, restore o cancellazione.");
+    } else {
+        /* Sublist: GIOCHI / UPDATE / DLC */
+        const char *hdrLabel =
+            (sysInfoMode == SYSINFO_GAMES)   ? "GIOCHI"  :
+            (sysInfoMode == SYSINFO_UPDATES) ? "UPDATE" : "DLC";
+        char hdr[32]; snprintf(hdr, sizeof(hdr), "%s  (%d)", hdrLabel, sysInfoSubCount);
+        C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+        dt(4, 4, 0.5f, 0.48f, CLR_WHITE, hdr);
+        for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+            int si = sysInfoSubScrollOffset + i;
+            if (si >= sysInfoSubCount) break;
+            int idx = sysInfoSubIndices[si];
+            TitleInfo *ti = &titles[idx];
+            float y = 28.0f + (float)i * 14.5f;
+            bool isCursor = (si == sysInfoSubCursor);
+            if (isCursor)
+                C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
+            char nm[34]; strncpy(nm, ti->name[0] ? ti->name : "Unknown", 32); nm[32]='\0';
+            if (strlen(ti->name) > 32) { nm[29]='.'; nm[30]='.'; nm[31]='.'; nm[32]='\0'; }
+            char szBuf[16]; formatSize(ti->size, szBuf, sizeof(szBuf));
+            char line[52]; snprintf(line, sizeof(line), "%-32s [%s]", nm, szBuf);
+            dt(4, y, 0.5f, 0.36f, isCursor ? CLR_WHITE : CLR_GRAY, line);
+        }
+        if (sysInfoSubCount > MAX_VISIBLE_TITLES) {
+            char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", sysInfoSubCursor+1, sysInfoSubCount);
+            dt(352, 225, 0.5f, 0.34f, CLR_GRAY, sc);
+        }
+        C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+        dt(4, 224, 0.5f, 0.38f, CLR_WHITE, "A=Dettagli e azioni   B=Indietro");
+        /* Bottom: simplified details for cursor item */
+        C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+        C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+        dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Info");
+        if (sysInfoSubCount > 0 && sysInfoSubCursor < sysInfoSubCount) {
+            int idx = sysInfoSubIndices[sysInfoSubCursor];
+            TitleInfo *ti = &titles[idx];
+            char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
+            dt(4, 22, 0.5f, 0.38f, CLR_WHITE, nm2);
+            char tidStr[32]; snprintf(tidStr, sizeof(tidStr), "%016llX", (unsigned long long)ti->titleID);
+            dt(4, 40, 0.5f, 0.32f, CLR_GRAY, tidStr);
+            char szBuf[24]; formatSize(ti->size, szBuf, sizeof(szBuf));
+            char loc[36]; snprintf(loc, sizeof(loc), "%s  |  %s", szBuf,
+                                   (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND");
+            dt(4, 58, 0.5f, 0.34f, CLR_GRAY, loc);
+            if (ti->hasBackup) {
+                char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
+                char bkLine[48]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
+                dt(4, 76, 0.5f, 0.34f, CLR_GREEN, bkLine);
+            } else {
+                dt(4, 76, 0.5f, 0.34f, CLR_RED, "Nessun backup");
+            }
+            dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "A = Dettagli e azioni");
+        }
+    }
+}
 /* drawSettingsScreen: settings UI — NO C3D frame management (main loop). */
 void drawSettingsScreen(void) {
     C2D_TextBufClear(dynamicBuf);
@@ -1354,7 +1463,76 @@ void drawSettingsScreen(void) {
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "B/START = salva e torna al menu");
 }
-void drawTitleDetails(void)      { _drawSoon("Dettagli Titolo"); }
+/* drawTitleDetails: detail view for a single title (SysInfo flow).
+   Called from _runSysInfoDetailFlow within C3D_FrameBegin/End — NO frame mgmt. */
+void drawTitleDetails(void) {
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    int idx = sysInfoDetailIdx;
+    TitleInfo *ti = &titles[idx];
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    dt(4, 4, 0.5f, 0.44f, CLR_WHITE, "Dettagli Titolo");
+    /* Info */
+    char nm[50]; strncpy(nm, ti->fullName[0] ? ti->fullName : ti->name, 48); nm[48]='\0';
+    dt(4, 28, 0.5f, 0.40f, CLR_WHITE, nm);
+    char tidLine[36]; snprintf(tidLine, sizeof(tidLine), "ID: %016llX", (unsigned long long)ti->titleID);
+    dt(4, 48, 0.5f, 0.34f, CLR_GRAY, tidLine);
+    char szBuf[24]; formatSize(ti->size, szBuf, sizeof(szBuf));
+    char szLine[52]; snprintf(szLine, sizeof(szLine), "v%u   %s   %s",
+                              ti->version, szBuf, (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND");
+    dt(4, 64, 0.5f, 0.34f, CLR_GRAY, szLine);
+    /* Backup status */
+    if (ti->hasBackup) {
+        char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
+        char bkLine[52]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
+        dt(4, 80, 0.5f, 0.34f, CLR_GREEN, bkLine);
+    } else {
+        dt(4, 80, 0.5f, 0.34f, CLR_RED, "Nessun backup");
+    }
+    /* Related titles (only for base games) */
+    u32 hi = (u32)(ti->titleID >> 32);
+    int relIdx[20]; int relCount = 0;
+    if (hi == 0x00040000) findRelatedTitles(ti->titleID, idx, relIdx, &relCount);
+    float actY = 100.0f;
+    if (relCount > 0) {
+        dt(4, 96, 0.5f, 0.33f, CLR_CYAN, "Correlati:");
+        for (int r = 0; r < relCount && r < 3; r++) {
+            u32 rhi = (u32)(titles[relIdx[r]].titleID >> 32);
+            char rl[42]; snprintf(rl, sizeof(rl), "  %s %.32s",
+                                  (rhi == 0x0004000E) ? "[Upd]" : "[DLC]",
+                                  titles[relIdx[r]].name);
+            dt(4, 108.0f + (float)r * 13.0f, 0.5f, 0.32f, CLR_GRAY, rl);
+        }
+        actY = 148.0f;
+    }
+    /* 3 action options */
+    static const char *actions[] = {
+        "[A] Backup Salvataggio",
+        "[Y] Ripristina Salvataggio",
+        "[X] Cancella Titolo (+ correlati)"
+    };
+    for (int a = 0; a < 3; a++) {
+        float y = actY + (float)a * 19.0f;
+        if (a == sysInfoDetailCursor)
+            C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 18, CLR_SELECTED);
+        dt(8, y, 0.5f, 0.38f, (a == sysInfoDetailCursor) ? CLR_WHITE : CLR_GRAY, actions[a]);
+    }
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.36f, CLR_WHITE, "Su/Giu=Naviga  A=Esegui  B=Indietro");
+    /* Bottom: description of selected action */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Azione");
+    static const char *actDesc[3][2] = {
+        { "Salva i dati del titolo",          "nella cartella backup configurata." },
+        { "Ripristina i dati dal backup",     "precedentemente creato." },
+        { "Elimina il titolo dal sistema",    "inclusi DLC, Update e dati." }
+    };
+    dt(8, 28, 0.5f, 0.40f, CLR_WHITE, actDesc[sysInfoDetailCursor][0]);
+    dt(8, 48, 0.5f, 0.38f, CLR_GRAY,  actDesc[sysInfoDetailCursor][1]);
+    C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+    dt(4, 224, 0.5f, 0.34f, CLR_GRAY, "A = conferma azione");
+}
 
 /* ============================================================
    SECTION 10: Input / Flow Handlers
@@ -1924,10 +2102,107 @@ void runBackupFlow(void) {
     }
 }
 
-/* handleSysInfoInput: stub, B/START returns to menu. */
+/* handleSysInfoInput: navigation only — KEY_A in sublist handled in main()
+   as blocking flow to avoid nested C3D frames. */
 void handleSysInfoInput(void) {
     u32 keys = hidKeysDown();
-    if ((keys & KEY_B) || (keys & KEY_START)) appState = APP_MAIN_MENU;
+    if (sysInfoMode == SYSINFO_OVERVIEW) {
+        if (keys & KEY_DOWN) sysInfoCursor = (sysInfoCursor + 1) % 3;
+        if (keys & KEY_UP)   sysInfoCursor = (sysInfoCursor + 2) % 3;
+        if (keys & KEY_B)    appState = APP_MAIN_MENU;
+        if (keys & KEY_A) {
+            u32 tHi = (sysInfoCursor == 0) ? 0x00040000u :
+                      (sysInfoCursor == 1) ? 0x0004000Eu : 0x0004008Cu;
+            sysInfoSubCount = 0;
+            for (int i = 0; i < titleCount; i++) {
+                if (titles[i].isValid && (u32)(titles[i].titleID >> 32) == tHi) {
+                    sysInfoSubIndices[sysInfoSubCount++] = i;
+                    if (sysInfoSubCount >= MAX_TITLES) break;
+                }
+            }
+            sysInfoSubCursor = 0; sysInfoSubScrollOffset = 0;
+            sysInfoMode = (sysInfoCursor == 0) ? SYSINFO_GAMES :
+                          (sysInfoCursor == 1) ? SYSINFO_UPDATES : SYSINFO_DLC;
+        }
+    } else {
+        /* Sublist — KEY_A intercepted in main() */
+        if (keys & KEY_DOWN) {
+            if (sysInfoSubCursor < sysInfoSubCount - 1) {
+                sysInfoSubCursor++;
+                if (sysInfoSubCursor >= sysInfoSubScrollOffset + MAX_VISIBLE_TITLES)
+                    sysInfoSubScrollOffset = sysInfoSubCursor - MAX_VISIBLE_TITLES + 1;
+            }
+        }
+        if (keys & KEY_UP) {
+            if (sysInfoSubCursor > 0) {
+                sysInfoSubCursor--;
+                if (sysInfoSubCursor < sysInfoSubScrollOffset)
+                    sysInfoSubScrollOffset = sysInfoSubCursor;
+            }
+        }
+        if (keys & KEY_B) { sysInfoMode = SYSINFO_OVERVIEW; sysInfoCursor = 0; }
+    }
+}
+
+/* _runSysInfoDetailFlow: blocking detail/action view for a single title.
+   Called from main() BEFORE C3D_FrameBegin — manages own C3D frames.
+   Uses sysInfoDetailIdx and sysInfoDetailCursor. */
+static void _runSysInfoDetailFlow(void) {
+    int idx = sysInfoDetailIdx;
+    sysInfoDetailCursor = 0;
+
+    while (aptMainLoop()) {
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        drawTitleDetails();
+        C3D_FrameEnd(0);
+        hidScanInput();
+        u32 k = hidKeysDown();
+
+        if (k & KEY_DOWN) sysInfoDetailCursor = (sysInfoDetailCursor + 1) % 3;
+        if (k & KEY_UP)   sysInfoDetailCursor = (sysInfoDetailCursor + 2) % 3;
+        if (k & KEY_B)    break;
+
+        if (k & KEY_A) {
+            if (sysInfoDetailCursor == 0) {
+                /* Backup save */
+                backupSaveData(&titles[idx]);
+                titles[idx].hasBackup = true;
+                const char *msg[] = { "", "  Backup eseguito.", "", "  A=OK" };
+                drawDialog(msg, 4);
+                while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+
+            } else if (sysInfoDetailCursor == 1) {
+                /* Restore save */
+                if (!titles[idx].hasBackup) {
+                    const char *msg[] = { "", "  Nessun backup disponibile.", "", "  A=OK" };
+                    drawDialog(msg, 4);
+                    while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+                    continue;
+                }
+                bool ok = restoreSaveData(&titles[idx]);
+                if (ok) {
+                    const char *msg[] = { "", "  Salvataggio ripristinato.", "", "  A=OK" };
+                    drawDialog(msg, 4);
+                } else {
+                    const char *msg[] = { "", "  Errore nel ripristino.", "", "  A=OK" };
+                    drawDialog(msg, 4);
+                }
+                while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+
+            } else {
+                /* Delete — mark selected, reuse uninstall flow */
+                titles[idx].selected = true;
+                _runUninstallDeleteFlow(); /* handles related, backup, confirm, deleteTitle */
+                if (titleCount == 0) {
+                    /* Deletion done: _runUninstallDeleteFlow set appState=APP_MAIN_MENU */
+                    sysInfoMode = SYSINFO_OVERVIEW;
+                    break;
+                }
+                /* Cancelled: clean up selection */
+                titles[idx].selected = false;
+            }
+        }
+    }
 }
 
 /* handleSettingsInput: full settings handler with real-time config save. */
@@ -2025,6 +2300,14 @@ int main(void) {
         /* KEY_X uninstall flow: blocking, must run outside C3D frame */
         if (appState == APP_UNINSTALL && (keys & KEY_X)) {
             _runUninstallDeleteFlow();
+            continue;
+        }
+        /* SysInfo title detail: blocking (Backup/Restore/Delete), outside C3D frame */
+        if (appState == APP_SYSINFO && sysInfoMode != SYSINFO_OVERVIEW
+                && sysInfoSubCount > 0 && (keys & KEY_A)) {
+            sysInfoDetailIdx    = sysInfoSubIndices[sysInfoSubCursor];
+            sysInfoDetailCursor = 0;
+            _runSysInfoDetailFlow();
             continue;
         }
 
