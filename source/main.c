@@ -730,19 +730,33 @@ int scanDirectory(const char *path) {
     }
     DIR *d=opendir(path); if (!d) return fileCount;
     struct dirent *ent;
-    /* collect dirs */
+    /* collect dirs — usa stat() come fallback se d_type non affidabile (FAT32) */
     while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
         if (strcmp(ent->d_name,".")==0||strcmp(ent->d_name,"..")==0) continue;
-        if (ent->d_type!=DT_DIR) continue;
+        bool isDir=false;
+        if (ent->d_type==DT_DIR) { isDir=true; }
+        else if (ent->d_type==DT_UNKNOWN) {
+            char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
+            struct stat st2;
+            if (stat(fp2,&st2)==0 && S_ISDIR(st2.st_mode)) isDir=true;
+        }
+        if (!isDir) continue;
         strncpy(fileEntries[fileCount].name,ent->d_name,255);
         fileEntries[fileCount].name[255]='\0';
         fileEntries[fileCount].isDir=true; fileEntries[fileCount].isCIA=false;
         fileEntries[fileCount].size=0; fileCount++;
     }
     rewinddir(d);
-    /* collect .cia files */
+    /* collect .cia files — usa stat() come fallback per escludere dir */
     while ((ent=readdir(d))!=NULL&&fileCount<MAX_FILES) {
-        if (ent->d_type==DT_DIR) continue;
+        bool isDir=false;
+        if (ent->d_type==DT_DIR) { isDir=true; }
+        else if (ent->d_type==DT_UNKNOWN) {
+            char fp2[512]; snprintf(fp2,sizeof(fp2),"%s/%s",path,ent->d_name);
+            struct stat st2;
+            if (stat(fp2,&st2)==0 && S_ISDIR(st2.st_mode)) isDir=true;
+        }
+        if (isDir) continue;
         const char *ext=strrchr(ent->d_name,'.');
         if (!ext||strcasecmp(ext,".cia")!=0) continue;
         strncpy(fileEntries[fileCount].name,ent->d_name,255);
@@ -1935,29 +1949,14 @@ void runInstallFlow(void) {
                     if (strcmp(currentPath, "sdmc:/") == 0) return;
                     _goUpDir();
                 } else {
-                    /* Dir action dialog */
+                    /* Enter directory directly — no confirmation dialog */
                     char newPath[512];
                     if (strcmp(currentPath, "sdmc:/") == 0)
                         snprintf(newPath, sizeof(newPath), "sdmc:/%s", fe->name);
                     else
                         snprintf(newPath, sizeof(newPath), "%s/%s", currentPath, fe->name);
-                    char dirMsg[52]; snprintf(dirMsg, sizeof(dirMsg), "  %.40s", fe->name);
-                    const char *dirDl[] = { "", dirMsg, "", "  A=Enter   Y=Install all .cia   B=Cancel" };
-                    int dirAction = 0;
-                    while (aptMainLoop()) {
-                        drawDialog(dirDl, 4);
-                        hidScanInput(); u32 dk = hidKeysDown();
-                        if (dk & KEY_A) { dirAction = 1; break; }
-                        if (dk & KEY_Y) { dirAction = 2; break; }
-                        if (dk & KEY_B) break;
-                    }
-                    if (dirAction == 1) {
-                        scanDirectory(newPath);
-                        fileCursor = 0; fileScrollOffset = 0;
-                    } else if (dirAction == 2) {
-                        _installFolderCIAs(newPath);
-                        return;
-                    }
+                    scanDirectory(newPath);
+                    fileCursor = 0; fileScrollOffset = 0;
                 }
             } else if (fe->isCIA) {
                 /* Install single CIA */
