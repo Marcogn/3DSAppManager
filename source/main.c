@@ -2169,7 +2169,12 @@ void handleSysInfoInput(void) {
                     sysInfoSubScrollOffset = sysInfoSubCursor;
             }
         }
-        if (keys & KEY_B) { sysInfoMode = SYSINFO_OVERVIEW; sysInfoCursor = 0; }
+        if (keys & KEY_B) {
+            /* Restore overview cursor to the category we came from */
+            sysInfoCursor = (sysInfoMode == SYSINFO_GAMES)   ? 0 :
+                            (sysInfoMode == SYSINFO_UPDATES) ? 1 : 2;
+            sysInfoMode = SYSINFO_OVERVIEW;
+        }
     }
 }
 
