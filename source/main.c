@@ -1384,8 +1384,12 @@ void drawSysInfoScreen(void) {
             char nm[34]; strncpy(nm, ti->name[0] ? ti->name : "Unknown", 32); nm[32]='\0';
             if (strlen(ti->name) > 32) { nm[29]='.'; nm[30]='.'; nm[31]='.'; nm[32]='\0'; }
             char szBuf[16]; formatSize(ti->size, szBuf, sizeof(szBuf));
-            char line[52]; snprintf(line, sizeof(line), "%-32s [%s]", nm, szBuf);
-            dt(4, y, 0.5f, 0.36f, isCursor ? CLR_WHITE : CLR_GRAY, line);
+            char szLine[20]; snprintf(szLine, sizeof(szLine), "[%s]", szBuf);
+            u32 clr = isCursor ? CLR_WHITE : CLR_GRAY;
+            dt(4, y, 0.5f, 0.36f, clr, nm);
+            /* Right-align size: stima ~5.4px per char a scala 0.36f */
+            float szX = 396.0f - (float)strlen(szLine) * 5.4f;
+            dt(szX, y, 0.5f, 0.36f, CLR_GRAY, szLine);
         }
         if (sysInfoSubCount > MAX_VISIBLE_TITLES) {
             char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", sysInfoSubCursor+1, sysInfoSubCount);
