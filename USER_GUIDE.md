@@ -1,229 +1,264 @@
-# User Guide
+i # User Guide
 
-Quick guide to using 3DS Fast Uninstall without getting lost.
+Quick guide to using 3DS Fast Uninstall.
+
+---
 
 ## First Time Setup
 
-1. Copy `3ds-fast-uninstall.3dsx` to your SD card's `/3ds/` folder
-2. Launch it from Homebrew Launcher
-3. Wait for it to load (you'll see a progress bar)
-4. That's it, you're ready to go
+1. Copy `3ds-fast-uninstall.3dsx` to `/3ds/` on your SD card.
+2. Launch it from the Homebrew Launcher.
+3. Wait for the loading screen (progress bar is shown).
+4. You land on the **Main Menu** — pick a feature and get started.
 
-## Basic Usage
+---
 
-### Just Looking Around
+## Main Menu
 
-When you first open the app, you'll see:
-- **Top screen**: List of all your installed titles
-- **Bottom screen**: Details about the selected title
+The app has five sections, each accessible with the **D-Pad** and **A**:
 
-Use the D-Pad up/down to move through the list. The bottom screen updates automatically to show you what you're looking at.
+| Option | What it does |
+|---|---|
+| **Install CIA** | Browse the SD card and install `.CIA` files |
+| **Backup Saves** | Back up save data for installed titles |
+| **Uninstall Titles** | Remove titles with optional pre-uninstall backup |
+| **System Info** | View your library stats and per-title details |
+| **Settings** | Configure backup path and automation options |
 
-### Selecting Titles to Delete
+Press **START** at any time to exit the application.
 
-1. Use D-Pad to highlight a title
-2. Press **A** to select it (you'll see a checkbox appear)
-3. Keep selecting as many as you want
-4. Press **X** when you're ready to delete
+---
 
-### The Deletion Process
+## Install CIA
 
-When you press X, the app walks you through it:
+### Navigating the File Browser
 
-**Step 1: Backup saves?**
-- Press **A** if you want to backup your save data (recommended!)
-- Press **B** if you're sure you don't need it
-- Press **START** to cancel
+When you enter Install, you see a file browser starting at `sdmc:/`.
 
-**Step 2: Where to backup? (if you chose yes)**
-- Press **A** to use the default location
-- Press **Y** to pick from other locations
-- If you picked Y, use D-Pad to choose and press **A** to confirm
+- **↑ / ↓** — move cursor one row
+- **← / →** — jump one page
+- **A** — enter a folder, or install the selected `.CIA` file
+- **Y** — install **all** `.CIA` files in the current folder (batch install)
+- **B** — go up one directory level
 
-**Step 3: Final confirmation**
-- Shows you what's about to be deleted
-- Press **A** to go ahead
-- Press **B** to back out
+Directories are shown in cyan with a `[DIR]` prefix.  
+`.CIA` files show their size right-aligned and a type badge if applicable:
+- `^` (cyan) = Update
+- `+` (green) = DLC
 
-**Step 4: Watch it work**
-The app shows you what it's doing as it:
-- Backs up your saves (if you chose to)
-- Deletes the title
-- Removes all associated data
+### Installing a Single File
 
-When it's done, it refreshes the list automatically.
+1. Navigate to the `.CIA` file.
+2. Press **A**.
+3. Confirm the prompt (or skip if "Skip Install Confirm" is ON in Settings).
+4. Wait for the progress bar to complete.
 
-## Understanding the Interface
+### Batch Installing a Folder
 
-### Top Screen Layout
+1. Enter the folder containing your `.CIA` files.
+2. Press **Y**.
+3. The app installs all files one by one and shows progress for each.
+
+> All installs target the **SD card**. NAND installs are not supported.
+
+---
+
+## Backup Saves
+
+### Understanding the List
+
+Each row shows:
+- `[ ]` — no backup exists
+- `[*]` (green) — backup exists
+- `[X]` (yellow) — title selected for batch backup
+
+The bottom screen shows full name, Title ID, size, storage location, and last backup date for the cursor item.
+
+### Backing Up
+
+**Single title:**  
+1. Navigate to the title.  
+2. Press **A** to select it.  
+3. Press **X** to back it up.
+
+**Multiple titles:**  
+1. Press **A** on each title to select them (marked `[X]`).  
+2. Press **X** to back up all selected.
+
+**Entire library:**  
+Press **Y** to back up every title at once — no selection needed.
+
+### What Gets Backed Up
+
+For each title, the app saves up to three archive types:
+- **savedata/** — main game saves
+- **extdata/** — extended data (e.g. DLC content, extra data)
+- **boss_extdata/** — SpotPass / StreetPass data
+
+A `backup_info.txt` file with title name, version and date is included in each backup folder.
+
+---
+
+## Uninstall Titles
+
+### Selecting Titles
+
+1. Use **↑ / ↓** to navigate the list (or **← / →** to jump a full page).
+2. Press **A** to toggle selection (checkbox turns yellow when selected).
+3. Select as many titles as you want.
+4. Press **X** to begin the uninstall flow.
+
+Use **L / R** to cycle sort modes (Name → Size → ID) and **Y** to filter (All → Updates → DLC).
+
+### The Uninstall Flow
+
+**Step 1 — Backup?**  
+- **A**: Back up all save data before deleting.
+- **B**: Skip backup.
+- **START**: Cancel the entire operation.
+
+> If "Force Backup" is ON in Settings, this step is skipped and backup always runs.
+
+**Step 2 — Backup location** *(only if you chose to back up)*  
+- **A**: Use the default path from Settings.
+- **Y**: Pick a different path from the preset list.
+
+**Step 3 — Final confirmation**  
+Review what will be deleted (titles list visible on the bottom screen).  
+- **A**: Confirm and delete.
+- **B**: Cancel.
+
+> If "Skip Uninstall Confirm" is ON in Settings, the final confirmation is skipped.
+
+**Step 4 — Deletion in progress**  
+The app shows each title as it is being removed. The title list is refreshed automatically when done.
+
+### Related Titles (DLC and Updates)
+
+When you select a **base game**, the app automatically finds its Updates and DLC and offers to delete them together. You can confirm or skip for each.
+
+---
+
+## System Info
+
+### Overview Screen
+
+Shows your library at a glance:
 
 ```
-┌────────────────────────────────────────┐
-│ 3DS Fast Uninstall                     │ ← App name
-├────────────────────────────────────────┤
-│ Titles: 150  Selected: 3  Sort: Name   │ ← Info bar
-├────────────────────────────────────────┤
-│ [ ] Super Mario 3D Land    00040000... │ ← Not selected
-│ [X] Pokemon Sun ^          00040000... │ ← Selected (Update)
-│ [ ] Mario Kart 8 DLC +     00040000... │ ← DLC
-└────────────────────────────────────────┘
+  Games:      87    4.23 GB
+> Updates:    43    980 MB      ← cursor
+  DLC:        31    1.12 GB
+
+  SD Free: 12.4 GB / 59.6 GB
 ```
 
-**What the symbols mean:**
-- `^` = This is an update/patch
-- `+` = This is DLC
-- `...` = Name is longer, see bottom screen for full name
+Navigate the three categories with **↑ / ↓**.  
+Press **A** to enter a category and see the full title list.
 
-**Colors:**
-- **Green title count** = You're good (under 300)
-- **Red title count** = Warning! Over 300 titles (HOME menu can't show more than 300)
+### Category List
 
-### Bottom Screen Layout
+Lists all titles in the selected category with name and size (right-aligned).  
+Press **A** on any title to open its **detail page**.
 
-```
-┌────────────────────────────────────────┐
-│  ?   TITLE DETAILS                     │ ← Icon placeholder
-├────────────────────────────────────────┤
-│ Name: The Legend of Zelda: Ocarina of │ ← Full name
-│ Time 3D                                │
-│                                        │
-│ Title ID: 0004000000033500             │ ← Unique ID
-│ Version: v0                            │ ← Game version
-│ Size: 823.45 MB                        │ ← Space used
-│ Type: Game/Application                 │ ← What it is
-│ Location: SD Card                      │ ← Where it's stored
-├────────────────────────────────────────┤
-│ Backup: NO ✗                           │ ← Backup status
-├────────────────────────────────────────┤
-│ Press SELECT for controls              │ ← Help reminder
-└────────────────────────────────────────┘
-```
+### Title Detail Page
 
-## Tips and Tricks
+Shows:
+- Full name, Title ID, version, size, storage location
+- Backup date (if a backup exists)
+- Related Updates and DLC (for base games)
+- Three action options to select with **↑ / ↓** and execute with **A**:
 
-### Sorting Your List
+| Action | What it does |
+|---|---|
+| **Backup Save Data** | Saves all archive types to the backup folder |
+| **Restore Save Data** | Restores save data from the last backup |
+| **Delete Title (+ related)** | Deletes the title, its DLC, Updates and all save data |
 
-The app has three sort modes that you cycle through with L and R:
-- Press **R** to go forward: Name → Size → Title ID → Name...
-- Press **L** to go backward: Name ← Size ← Title ID ← Name...
+Press **B** to go back at any level.
 
-**Sort by Name** (alphabetical A-Z) - Good for finding specific titles  
-**Sort by Size** (largest first) - Good for finding space hogs at the top  
-**Sort by Title ID** (numerical) - Groups games with their updates/DLC
+---
 
-Your selections are preserved when sorting.
+## Settings
 
-### Filtering Content
+Navigate with **↑ / ↓**. Change a value with **A**, **L**, **R**, **←**, or **→**.
 
-Press **Y** to cycle through filter modes:
-- **All** - Shows everything (default)
-- **Updates** - Shows only game updates (marked with ↑)
-- **DLC** - Shows only DLC content (marked with ⊕)
+| Setting | Description |
+|---|---|
+| **Force Backup** | If ON, save data is backed up automatically before every uninstall — no prompt |
+| **Skip Uninstall Confirm** | If ON, titles are deleted immediately on X without the confirmation dialog |
+| **Force Restore** | If ON, save data is automatically restored after every successful CIA install |
+| **Skip Install Confirm** | If ON, CIA files install immediately on A without the confirmation dialog |
+| **Backup Folder** | Cycles through 5 preset backup paths |
 
-The info bar at the top shows which filter is active: "[Updates]" or "[DLC]"
+The bottom screen shows a description of the currently highlighted setting, including the current backup folder path.
 
-### Fast Navigation
+> Settings are saved in real time. Press **B** or **START** to return to the main menu.
 
-- **D-Pad Up/Down**: Move one item at a time (precise)
-- **D-Pad Left/Right**: Jump by a full page (fast)
-- Hold Up/Down for 1.5 seconds: Starts slow continuous scroll
+---
 
-The slow scroll is intentional - it's way better than accidentally flying past what you wanted.
+## Tips & Tricks
 
-### Finding DLC and Updates
+### Free Up the Most Space
 
-Want to clean up just DLC or updates?
-1. Press **Y** to filter (once for Updates, twice for DLC)
-2. You'll see only that type of content
-3. Select what you want to remove
-4. Press **X** to uninstall
+1. Go to **Uninstall Titles**.
+2. Press **R** twice to sort by Size (largest first).
+3. Select the titles you no longer need.
+4. Press **X** and follow the prompts.
 
-### Checking Space
+### Clean Up DLC and Updates Only
 
-The bottom screen shows how much space each title takes. Useful for finding the big ones to delete first.
+1. Press **Y** once for Updates, twice for DLC.
+2. Select what you want to remove.
+3. Press **X**.
 
-Use **R** twice to sort by size - the largest titles appear at the top.
+### Check What Has a Backup
 
-### Backup Locations
+Open **Backup Saves**. Titles with `[*]` in green already have a backup.  
+Titles with `[ ]` have never been backed up.
 
-Default backup path: `sdmc:/3ds/fast-uninstall/backups/`
+### Batch Backup Before a Big Cleanup
 
-Each backup gets its own folder named after the Title ID. Inside you'll find:
-- `backup_info.txt` - Info about what was backed up
-- `savedata/` - Your actual save files
-- `extdata/` - Extended data (DLC, extra content)
-- `boss_extdata/` - SpotPass/StreetPass data
+1. Go to **Backup Saves** and press **Y** to back up everything.
+2. Then go to **Uninstall Titles** and delete freely.
 
-### If You Need Help
+### Restoring a Save After Reinstalling a Game
 
-Press **SELECT** any time to see a full overlay with all the controls.
+1. Reinstall the `.CIA` from **Install CIA**.
+   - If "Force Restore" is ON in Settings, the backup is restored automatically.
+   - Otherwise: go to **System Info**, find the title, press A → "Restore Save Data".
 
-## Common Scenarios
+---
 
-### "I want to delete all my DLC"
+## Common Questions
 
-1. Press **Y** twice (filters to DLC only)
-2. Scroll through and select the DLC you want to remove (marked with ⊕)
-3. Press **X** and follow the prompts
+**No titles showing up**  
+The app only shows user-installed titles. System titles are hidden for safety.
 
-### "I want to delete all updates"
+**The title counter is red**  
+You have over 300 titles. The HOME menu cap is 300. The app still shows all of them (up to 500), but consider cleaning up.
 
-1. Press **Y** once (filters to Updates only)
-2. Select the updates you want to remove (marked with ↑)
-3. Press **X** and follow the prompts
+**Scroll feels slow**  
+Single press = one row. Use ← / → for page jumps. The deliberate speed prevents accidental skips.
 
-### "I'm running out of space"
+**Can't find a title**  
+Try different sort modes (L / R) or use the filter (Y) to isolate Updates or DLC.
 
-1. Press **R** twice to sort by Size
-2. The biggest titles appear at the top
-3. Select the large ones you don't play
-4. Delete and watch your free space go up
+**Something deleted but still showing in HOME menu**  
+Restart the HOME menu or the console. The 3DS system cache can take a moment to update.
 
-### "I have too many titles and the HOME menu is weird"
-
-If your title counter is red (300+):
-1. Go through and delete stuff you don't use
-2. Get it under 300 for the HOME menu to work properly
-3. Use the filter to quickly find DLC or updates to remove
-
-### "I deleted something by accident"
-
-If you backed up the saves:
-1. Reinstall the title from eShop or cartridge
-2. Copy the backup folder contents back manually
-
-If you didn't backup: You'll need to start over, sorry.
-
-## Things to Remember
-
-- **System titles are hidden** - You can't delete them even if you wanted to
-- **Backups are separate** - Deleting a title doesn't delete its backup
-- **DLC and base games are separate** - Deleting DLC keeps the base game
-- **Updates and base games are separate** - Deleting an update keeps the game (just at older version)
-- **Sleep mode works** - Close your 3DS, it won't crash
+---
 
 ## Troubleshooting
 
-**App won't load/crashes**
-- Make sure you're on latest Homebrew Launcher
-- Try restarting your 3DS
+| Problem | Solution |
+|---|---|
+| App won't load | Make sure you're on a recent Homebrew Launcher and have CFW access |
+| Loading bar stuck | Not stuck — it reads each title individually. 200+ titles can take ~30 seconds |
+| Backup failed | Check that the SD card has enough free space and the backup folder is writable |
+| Install failed | Verify the `.CIA` file is not corrupted; check free SD space |
+| Restore failed | The backup folder may be missing or the title must be installed first |
 
-**No titles showing up**
-- You probably have only system titles
-- Try installing a demo from eShop to test
+---
 
-**Progress bar stuck**
-- It's not stuck, just slow if you have 200+ titles
-- Each title needs to be read from the system
-
-**Scroll is too slow**
-- It's intentional for precision
-- Use Left/Right for faster navigation
-
-**Can't find a title**
-- Try both sort modes (L and R)
-- Some updates/DLC have weird names
-
-## Need More Help?
-
-Check the README.md or open an issue on GitHub.
+For full technical documentation and architecture details, see [docs/README.md](docs/README.md).
