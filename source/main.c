@@ -1126,12 +1126,12 @@ void drawUI(void) {
         dt(28, y, 0.5f, 0.38f, txtColor, nm);
         /* Type symbol */
         u32 hi = (u32)(ti->titleID >> 32);
-        if      (hi == 0x0004000E) dt(235, y, 0.5f, 0.52f, CLR_CYAN,  "^");
-        else if (hi == 0x0004008C) dt(235, y, 0.5f, 0.52f, CLR_GREEN, "+");
-        /* Short TitleID (low 32 bit) */
-        char shortID[12];
-        snprintf(shortID, sizeof(shortID), "%08lX", (unsigned long)(ti->titleID & 0xFFFFFFFF));
-        dt(248, y, 0.5f, 0.52f, CLR_GRAY, shortID);
+        if      (hi == 0x0004000E) dt(220, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+        else if (hi == 0x0004008C) dt(220, y, 0.5f, 0.44f, CLR_GREEN, "+");
+        /* Full TitleID (16 hex chars) */
+        char fullID[20];
+        snprintf(fullID, sizeof(fullID), "%016llX", (unsigned long long)ti->titleID);
+        dt(230, y, 0.5f, 0.40f, CLR_GRAY, fullID);
     }
     /* Scroll counter */
     if (filteredCount > MAX_VISIBLE_TITLES) {
