@@ -1069,17 +1069,17 @@ void drawMainMenu(void) {
     /* Bottom screen */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     static const char *descLine1[] = {
-        "Install CIA files from SD card.",
-        "Create save data backups",
-        "Uninstall installed titles",
-        "View info about installed titles",
-        "Configure application options"
+        "Install .CIA files from the SD card.",
+        "Backup save data for installed titles.",
+        "Uninstall titles with optional backup.",
+        "View info on games, updates and DLC.",
+        "Configure application settings."
     };
     static const char *descLine2[] = {
-        "Supports SD and NAND titles.",
-        "for installed titles.",
-        "with optional backup.",
-        "(games, DLC, updates).",
+        "Supports single file and batch install.",
+        "Backup single title or entire library.",
+        "Supports batch uninstall with X button.",
+        "Includes backup, restore and delete.",
         ""
     };
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1107,7 +1107,7 @@ void drawUI(void) {
     snprintf(info, sizeof(info), "T:%d  Sel:%d  Sort:%s  [%s]",
              filteredCount, selCount,
              sortNames[currentSortMode], filterNames[currentFilterMode]);
-    dt(4, 24, 0.5f, 0.52f, CLR_GRAY, info);
+    dt(4, 24, 0.5f, 0.44f, CLR_GRAY, info);
     /* Title list */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
         int fi = scrollOffset + i;
@@ -1130,10 +1130,11 @@ void drawUI(void) {
         u32 hi = (u32)(ti->titleID >> 32);
         if      (hi == 0x0004000E) dt(220, y, 0.5f, 0.44f, CLR_CYAN,  "^");
         else if (hi == 0x0004008C) dt(220, y, 0.5f, 0.44f, CLR_GREEN, "+");
-        /* Full TitleID (16 hex chars) */
+        /* Full TitleID right-aligned — ~6.0px per char at scale 0.40f */
         char fullID[20];
         snprintf(fullID, sizeof(fullID), "%016llX", (unsigned long long)ti->titleID);
-        dt(230, y, 0.5f, 0.40f, CLR_GRAY, fullID);
+        float tidX = 396.0f - 16.0f * 6.0f; /* 16 hex chars × 6px = 96px */
+        dt(tidX, y, 0.5f, 0.40f, CLR_GRAY, fullID);
     }
     /* Scroll counter */
     if (filteredCount > MAX_VISIBLE_TITLES) {
@@ -1167,22 +1168,22 @@ void drawFileBrowserScreen(void) {
     C2D_TextBufClear(dynamicBuf);
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
-    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 36, CLR_HEADER);
     dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "Install CIA");
-    /* Path (show tail if long) */
+    /* Path inside header (avoids crowding first list row) */
     const char *dispPath = currentPath;
     char pathBuf[52];
     int plen = (int)strlen(currentPath);
-    if (plen > 44) {
-        snprintf(pathBuf, sizeof(pathBuf), "...%s", currentPath + plen - 40);
+    if (plen > 48) {
+        snprintf(pathBuf, sizeof(pathBuf), "...%s", currentPath + plen - 44);
         dispPath = pathBuf;
     }
-    dt(4, 24, 0.5f, 0.52f, CLR_GRAY, dispPath);
-    /* File list */
+    dt(4, 22, 0.5f, 0.40f, CLR_GRAY, dispPath);
+    /* File list — starts at y=40 to leave clean gap after header */
     for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
         int fi = fileScrollOffset + i;
         if (fi >= fileCount) break;
-        float y = 38.0f + (float)i * 14.5f;
+        float y = 40.0f + (float)i * 14.5f;
         bool isCursor = (fi == fileCursor);
         if (isCursor)
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
@@ -1197,10 +1198,10 @@ void drawFileBrowserScreen(void) {
             char nm[30]; strncpy(nm, fe->name, 28); nm[28]='\0';
             if (strlen(fe->name) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
             dt(4, y, 0.5f, 0.38f, isCursor ? CLR_WHITE : CLR_GRAY, nm);
-            /* Type badge — same symbols as Uninstall list */
+            /* Type badge — closer to size, gives more room for filename */
             u32 hi = (u32)(fe->titleID >> 32);
-            if      (hi == 0x0004000E) dt(206, y, 0.5f, 0.44f, CLR_CYAN,  "^");
-            else if (hi == 0x0004008C) dt(206, y, 0.5f, 0.44f, CLR_GREEN, "+");
+            if      (hi == 0x0004000E) dt(316, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+            else if (hi == 0x0004008C) dt(316, y, 0.5f, 0.44f, CLR_GREEN, "+");
             /* Size right-aligned (~5.7px per char at scale 0.38f) */
             char szBuf[16]; formatSize(fe->size, szBuf, sizeof(szBuf));
             char szLine[20]; snprintf(szLine, sizeof(szLine), "[%s]", szBuf);
@@ -1279,16 +1280,16 @@ void drawBackupScreen(void) {
         else if (t2->hasBackup)  { cb = "[*]"; cbColor = CLR_BACKUP_OK; }
         else                     { cb = "[ ]"; cbColor = isCursor ? CLR_WHITE : CLR_GRAY; }
         dt(3, y, 0.5f, 0.38f, cbColor, cb);
-        /* Name */
+        /* Name — 28 chars max (same as Uninstall) */
         const char *srcName = t2->name[0] ? t2->name : "Unknown";
-        char nm[36]; strncpy(nm, srcName, 34); nm[34] = '\0';
-        if (strlen(srcName) > 34) { nm[31]='.'; nm[32]='.'; nm[33]='.'; nm[34]='\0'; }
+        char nm[30]; strncpy(nm, srcName, 28); nm[28] = '\0';
+        if (strlen(srcName) > 28) { nm[25]='.'; nm[26]='.'; nm[27]='.'; nm[28]='\0'; }
         u32 nameColor = t2->selected ? CLR_YELLOW : (isCursor ? CLR_WHITE : CLR_GRAY);
         dt(28, y, 0.5f, 0.38f, nameColor, nm);
-        /* Type tag */
+        /* Type badge — same symbols as Uninstall (^/+) at consistent position */
         u32 hi = (u32)(t2->titleID >> 32);
-        if      (hi == 0x0004000E) dt(340, y, 0.5f, 0.52f, CLR_CYAN,  "Upd");
-        else if (hi == 0x0004008C) dt(340, y, 0.5f, 0.52f, CLR_GREEN, "DLC");
+        if      (hi == 0x0004000E) dt(220, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+        else if (hi == 0x0004008C) dt(220, y, 0.5f, 0.44f, CLR_GREEN, "+");
     }
     /* Scroll counter */
     if (titleCount > MAX_VISIBLE_TITLES) {
@@ -1376,9 +1377,9 @@ void drawSysInfoScreen(void) {
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
         dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Overview");
-        dt(8, 26, 0.5f, 0.52f, CLR_GRAY, "Select a category with A");
-        dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "to see the title list,");
-        dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "backup, restore or delete.");
+        dt(8, 26, 0.5f, 0.52f, CLR_GRAY, "A = Open category list.");
+        dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN = Select category.");
+        dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B = Back to main menu.");
     } else {
         /* Sublist: GIOCHI / UPDATE / DLC */
         const char *hdrLabel =
@@ -1472,7 +1473,7 @@ void drawSettingsScreen(void) {
             dt(260, y + 2, 0.5f, 0.50f, CLR_CYAN, values[i]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L=Change  DX/SX=Change  B/START=Salva & Esci");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L=Change  DX/SX=Change  B/START=Save & Back");
 
     /* Bottom screen: contextual description */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
@@ -1480,11 +1481,11 @@ void drawSettingsScreen(void) {
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Description");
 
     static const char *desc[5][3] = {
-        { "Backup automatico prima di ogni",   "uninstall (nessuna conferma).",      "Consigliato: ON per sicurezza." },
-        { "Salta la conferma di cancellazione","Elimina subito alla pressione X.",   "Consigliato: OFF (conferma sempre)." },
-        { "Ripristino save automatico",        "dopo ogni install CIA riuscita.",    "Usare solo con backup aggiornati." },
-        { "Salta la conferma di installazione","Installa il CIA immediatamente.",    "Consigliato: OFF (conferma sempre)." },
-        { "Folder for save backups.",          "Use Left/Right or L/R to cycle",    "through 5 available destinations." }
+        { "Auto-backup saves before",          "every uninstall (no prompt).",        "Recommended: ON for safety." },
+        { "Skip the uninstall prompt.",         "Title deletes immediately on X.",     "Recommended: OFF (always confirm)." },
+        { "Auto-restore save data",            "after every successful CIA install.",  "Use only with up-to-date backups." },
+        { "Skip the install prompt.",          "CIA installs immediately on A.",       "Recommended: OFF (always confirm)." },
+        { "Folder for save backups.",          "Use Left/Right or L/R to cycle",      "through 5 available destinations." }
     };
     if (settingsCursor == 4) {
         /* Show full path on bottom screen */

@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.4 - UI consistency pass (2026-04-10)
+
+### Look & feel uniforme su tutte le pagine
+- **Main menu descriptions**: tutte le righe ora frasi complete e autonome (niente più continuazione da riga 1 a riga 2).
+- **Install — header path**: percorso spostato dentro la header bar (altezza 36px); evita il visual bleed sulla prima riga evidenziata del file browser.
+- **Install — type badge**: `^`/`+` spostato da x=206 a x=316 (vicino alla dimensione), lasciando più spazio al nome file.
+- **Backup — type badge**: rimpiazzato testo "Upd"/"DLC" (0.52f, x=340) con `^`/`+` (0.44f, x=220), identico a Uninstall e SysInfo. Nome ridotto a 28 char (come Uninstall).
+- **Uninstall — info bar**: scala ridotta da 0.52f a 0.44f; TitleID ora right-aligned a x=300 (fine riga), stesso look dell'Install.
+- **SysInfo — bottom overview**: tre righe riscritte come frasi complete: "A = Open category list." / "UP/DOWN = Select category." / "B = Back to main menu."
+- **Settings — stringhe italiane rimosse**: tutte le descrizioni tradotte in inglese; hint barra inferiore "Salva & Esci" → "Save & Back".
+
+---
+
 ## v1.0.3 - Install UX polish (2026-04-10)
 
 ### Miglioramenti UI — Install file browser
