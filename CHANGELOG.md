@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.0.3 - Install UX polish (2026-04-10)
+
+### Miglioramenti UI — Install file browser
+- **Layout uniforme con SysInfo**: le voci CIA ora usano tre draw call separate:
+  nome troncato a sinistra (x=4), badge tipo (`^`/`+`) a x=206, dimensione
+  `[XXX MB]` right-aligned a `396 - len × 5.7px` (stessa formula di SysInfo).
+- **Badge tipo update/DLC**: letto dal TitleID cachato in `FileEntry.titleID` al
+  momento della scan — nessuna lettura file aggiuntiva durante il render.
+  `^` ciano = Update (`0x0004000E`), `+` verde = DLC (`0x0004008C`).
+- **Navigazione DX/SX per pagina**: `KEY_RIGHT`/`KEY_LEFT` ora saltano di
+  `MAX_VISIBLE_TITLES` posizioni nel file browser, come già in Uninstall e Backup.
+- **Bottom screen info**: usa `fe->titleID` cachato invece di ri-aprire il file;
+  mostra riga "Type: Game/Update/DLC" colorata.
+- **Hint controlli aggiornato**: `DX/SX=Page` nella barra inferiore.
+
+### Tecnico
+- Aggiunto campo `u64 titleID` a `FileEntry`; popolato in `scanDirectory` pass 2
+  tramite `getCIATitleID()` — evita la doppia-slash bug già presente nel path
+  della bottom screen (`currentPath + "/" + name`).
+
+---
+
 ## v1.0.2 - Bug fixes & UX polish (2026-04-10)
 
 ### Bug fix
