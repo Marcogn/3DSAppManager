@@ -552,15 +552,18 @@ The 3DS homebrew heap is typically 32-64 MB — well within budget.
 | Element | x | y | scale |
 |---|---|---|---|
 | Header bar | 0 | 0 | — |
-| Header text | 4-8 | 4-6 | 0.44-0.54f |
-| List rows (most screens) | varies | 32 + i x 14.5 | 0.38f |
-| Type badge ^ / + (Uninstall/Backup) | 240 | row y | 0.44f |
-| Type badge ^ / + (Install) | 316 | row y | 0.38f |
+| Header text (all screens) | 4 | 4–6 | 0.54f |
+| List rows (all screens) | varies | 32 + i × 14.5 | 0.38f |
+| Type badge ^ / + (all list screens) | 240 | row y | 0.44f |
 | TitleID right-aligned (Uninstall/Backup) | 292 | row y | 0.38f |
-| Size right-aligned (Install) | 396 - len x 5.7 | row y | 0.38f |
-| Size right-aligned (SysInfo) | 396 - len x 5.4 | row y | 0.36f |
+| Size right-aligned (Install) | 396 − len × 5.7 | row y | 0.38f |
+| Size right-aligned (SysInfo) | 396 − len × 5.7 | row y | 0.38f |
 | Bottom hint bar | 0 | 222 | — |
 | Bottom hint text | 4 | 224 | 0.52f |
+| Detail panel — name | 4 | 22 | 0.52f |
+| Detail panel — ID (`ID: XXXXXXXXXXXXXXXX`) | 4 | 42 | 0.52f |
+| Detail panel — version + size + location | 4 | 60 | 0.52f |
+| Detail panel — backup status | 4 | 78–80 | 0.52f |
 
 ### Known Limitations
 

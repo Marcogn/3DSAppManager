@@ -45,6 +45,17 @@ typedef struct {
 #define MAX_FILES         256
 #define CHUNK_SIZE        0x10000
 #define ALIGN64(x)        (((u32)(x) + 63) & ~63U)
+/* ---- Color palette (defined early so all sections can use CLR_* macros) ---- */
+#define CLR_BG        C2D_Color32(20,20,30,255)
+#define CLR_HEADER    C2D_Color32(40,60,100,255)
+#define CLR_SELECTED  C2D_Color32(60,100,180,255)
+#define CLR_WHITE     C2D_Color32(255,255,255,255)
+#define CLR_GRAY      C2D_Color32(160,160,160,255)
+#define CLR_RED       C2D_Color32(220,60,60,255)
+#define CLR_GREEN     C2D_Color32(60,200,60,255)
+#define CLR_YELLOW    C2D_Color32(255,220,60,255)
+#define CLR_CYAN      C2D_Color32(100,220,255,255)
+#define CLR_BACKUP_OK C2D_Color32(255,200,50,255)
 /* ---- Enums ---- */
 typedef enum {
     APP_MAIN_MENU,
@@ -179,6 +190,7 @@ void getBackupDirName(u64 titleID, const char *titleName, char *outName, size_t 
 bool getBackupLastDate(u64 titleID, char *outDate, size_t outSize);
 void loadTitleIcon(TitleInfo *title);
 void drawLoadingScreen(int current, int total, const char *status);
+static void drawInstallProgressScreen(const char *ciaPath, long done, long total);
 void loadTitles(void);
 void findRelatedTitles(u64 baseTitleID, int selfIdx, int *outIdx, int *outCount);
 bool getSDFreeSpace(u64 *freeBytes, u64 *totalBytes);
@@ -519,27 +531,34 @@ void getTitleInfo(TitleInfo *title) {
 }
 void drawLoadingScreen(int current, int total, const char *status) {
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C2D_TargetClear(top,C2D_Color32(0,0,0,255)); C2D_SceneBegin(top);
-    C2D_TextBufClear(dynamicBuf); C2D_Text t;
-    C2D_TextParse(&t,dynamicBuf,"Loading titles..."); C2D_TextOptimize(&t);
-    C2D_DrawText(&t,C2D_WithColor,50,80,0.5f,0.6f,0.6f,C2D_Color32(255,255,255,255));
+    C2D_TextBufClear(dynamicBuf);
+    /* Top screen */
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,"Loading..."); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,4,4,0.5f,0.54f,0.54f,CLR_WHITE); }
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,"Loading titles..."); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,4,28,0.5f,0.52f,0.52f,CLR_WHITE); }
     if (status) {
-        C2D_TextParse(&t,dynamicBuf,status); C2D_TextOptimize(&t);
-        C2D_DrawText(&t,C2D_WithColor,50,105,0.5f,0.4f,0.4f,C2D_Color32(200,200,200,255));
+        C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,status); C2D_TextOptimize(&_t);
+        C2D_DrawText(&_t,C2D_WithColor,4,48,0.5f,0.48f,0.48f,CLR_GRAY);
     }
-    if (total>0) {
-        float p=(float)current/total, bw=300,bh=20,bx=50,by=130;
-        C2D_DrawRectSolid(bx,by,0.5f,bw,bh,C2D_Color32(50,50,50,255));
-        C2D_DrawRectSolid(bx,by,0.5f,bw*p,bh,C2D_Color32(100,180,255,255));
-        C2D_DrawRectSolid(bx,by,0.5f,bw,2,C2D_Color32(255,255,255,255));
-        C2D_DrawRectSolid(bx,by+bh-2,0.5f,bw,2,C2D_Color32(255,255,255,255));
-        C2D_DrawRectSolid(bx,by,0.5f,2,bh,C2D_Color32(255,255,255,255));
-        C2D_DrawRectSolid(bx+bw-2,by,0.5f,2,bh,C2D_Color32(255,255,255,255));
-        char pt[64]; snprintf(pt,sizeof(pt),"%d / %d",current,total);
-        C2D_TextParse(&t,dynamicBuf,pt); C2D_TextOptimize(&t);
-        C2D_DrawText(&t,C2D_WithColor,bx+bw/2-20,by+25,0.5f,0.45f,0.45f,C2D_Color32(255,255,255,255));
+    if (total > 0) {
+        float p = (float)current / total;
+        float bw = 300.0f, bh = 20.0f, bx = 50.0f, by = 90.0f;
+        C2D_DrawRectSolid(bx,      by,      0.5f, bw,   bh, C2D_Color32(50,50,50,255));
+        C2D_DrawRectSolid(bx,      by,      0.5f, bw*p, bh, CLR_CYAN);
+        C2D_DrawRectSolid(bx,      by,      0.5f, bw,   2,  CLR_WHITE);
+        C2D_DrawRectSolid(bx,      by+bh-2, 0.5f, bw,   2,  CLR_WHITE);
+        C2D_DrawRectSolid(bx,      by,      0.5f, 2,    bh, CLR_WHITE);
+        C2D_DrawRectSolid(bx+bw-2, by,      0.5f, 2,    bh, CLR_WHITE);
+        char pt[64]; snprintf(pt, sizeof(pt), "%d / %d", current, total);
+        C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,pt); C2D_TextOptimize(&_t);
+        C2D_DrawText(&_t,C2D_WithColor,bx+bw/2.0f-20.0f,by+25.0f,0.5f,0.48f,0.48f,CLR_WHITE);
     }
-    C2D_TargetClear(bottom,C2D_Color32(20,20,30,255)); C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    /* Bottom screen */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C3D_FrameEnd(0);
 }
 void loadTitles(void) {
@@ -822,6 +841,44 @@ int scanDirectory(const char *path) {
     (void)plen;
     return fileCount;
 }
+/* drawInstallProgressScreen: progress bar for CIA install.
+   Called from installCIA inside its own C3D_FrameBegin/End — NO frame management here. */
+static void drawInstallProgressScreen(const char *ciaPath, long done, long total) {
+    C2D_TextBufClear(dynamicBuf);
+    C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,"Installing CIA"); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,4,4,0.5f,0.54f,0.54f,CLR_WHITE); }
+    /* Filename */
+    int nameStart = (int)(strlen(ciaPath) - 1);
+    while (nameStart > 0 && ciaPath[nameStart-1] != '/' && ciaPath[nameStart-1] != ':') nameStart--;
+    char nb[52]; snprintf(nb, sizeof(nb), "%.50s", &ciaPath[nameStart]);
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,nb); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,4,28,0.5f,0.48f,0.48f,CLR_GRAY); }
+    /* Progress bar */
+    float p = (total > 0) ? (float)done / (float)total : 0.0f;
+    float bw = 300.0f, bh = 20.0f, bx = 50.0f, by = 70.0f;
+    C2D_DrawRectSolid(bx,      by,      0.5f, bw,   bh, C2D_Color32(50,50,50,255));
+    C2D_DrawRectSolid(bx,      by,      0.5f, bw*p, bh, CLR_GREEN);
+    C2D_DrawRectSolid(bx,      by,      0.5f, bw,   2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by+bh-2, 0.5f, bw,   2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by,      0.5f, 2,    bh, CLR_WHITE);
+    C2D_DrawRectSolid(bx+bw-2, by,      0.5f, 2,    bh, CLR_WHITE);
+    /* Size counter */
+    char szDone[32], szTotal[32];
+    formatSize((u64)done,  szDone, sizeof(szDone));
+    formatSize((u64)total, szTotal, sizeof(szTotal));
+    char ps[64]; snprintf(ps, sizeof(ps), "%s / %s", szDone, szTotal);
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,ps); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,bx+60.0f,by+25.0f,0.5f,0.48f,0.48f,CLR_WHITE); }
+    /* Footer */
+    C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
+    { C2D_Text _t; C2D_TextParse(&_t,dynamicBuf,"Do not power off the console."); C2D_TextOptimize(&_t);
+      C2D_DrawText(&_t,C2D_WithColor,4,224,0.5f,0.48f,0.48f,CLR_GRAY); }
+    /* Bottom screen */
+    C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
+}
+
 bool installCIA(const char *ciaPath, FS_MediaType dest) {
     FILE *f2=fopen(ciaPath,"rb"); if (!f2) return false;
     fseek(f2,0,SEEK_END); long fsize=ftell(f2); fseek(f2,0,SEEK_SET);
@@ -840,26 +897,7 @@ bool installCIA(const char *ciaPath, FS_MediaType dest) {
         /* progress display */
         {
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-            C2D_TargetClear(top,C2D_Color32(0,0,0,255)); C2D_SceneBegin(top);
-            C2D_TextBufClear(dynamicBuf); C2D_Text t;
-            C2D_TextParse(&t,dynamicBuf,"Installing..."); C2D_TextOptimize(&t);
-            C2D_DrawText(&t,C2D_WithColor,10,20,0.5f,0.55f,0.55f,C2D_Color32(255,255,255,255));
-            char nb[256]; int nameStart=(int)(strlen(ciaPath)-1);
-            while(nameStart>0&&ciaPath[nameStart-1]!='/'&&ciaPath[nameStart-1]!=':') nameStart--;
-            snprintf(nb,sizeof(nb),"%.50s",&ciaPath[nameStart]);
-            C2D_TextParse(&t,dynamicBuf,nb); C2D_TextOptimize(&t);
-            C2D_DrawText(&t,C2D_WithColor,10,40,0.5f,0.42f,0.42f,C2D_Color32(200,200,200,255));
-            float p=(float)done/fsize,bw2=300,bh=20,bx=50,by=80;
-            C2D_DrawRectSolid(bx,by,0.5f,bw2,bh,C2D_Color32(50,50,50,255));
-            C2D_DrawRectSolid(bx,by,0.5f,bw2*p,bh,C2D_Color32(100,200,100,255));
-            C2D_DrawRectSolid(bx,by,0.5f,bw2,2,C2D_Color32(255,255,255,255));
-            C2D_DrawRectSolid(bx,by+bh-2,0.5f,bw2,2,C2D_Color32(255,255,255,255));
-            char ps[64]; char szDone[32],szTotal[32];
-            formatSize(done,szDone,sizeof(szDone)); formatSize(fsize,szTotal,sizeof(szTotal));
-            snprintf(ps,sizeof(ps),"%s / %s",szDone,szTotal);
-            C2D_TextParse(&t,dynamicBuf,ps); C2D_TextOptimize(&t);
-            C2D_DrawText(&t,C2D_WithColor,bx+60,by+25,0.5f,0.42f,0.42f,C2D_Color32(255,255,255,255));
-            C2D_TargetClear(bottom,C2D_Color32(20,20,30,255)); C2D_SceneBegin(bottom);
+            drawInstallProgressScreen(ciaPath, done, fsize);
             C3D_FrameEnd(0);
         }
     }
@@ -897,17 +935,6 @@ void deleteTitle(TitleInfo *title) {
    SECTION 9: Draw Functions
    ============================================================ */
 
-/* Color palette */
-#define CLR_BG        C2D_Color32(20,20,30,255)
-#define CLR_HEADER    C2D_Color32(40,60,100,255)
-#define CLR_SELECTED  C2D_Color32(60,100,180,255)
-#define CLR_WHITE     C2D_Color32(255,255,255,255)
-#define CLR_GRAY      C2D_Color32(160,160,160,255)
-#define CLR_RED       C2D_Color32(220,60,60,255)
-#define CLR_GREEN     C2D_Color32(60,200,60,255)
-#define CLR_YELLOW    C2D_Color32(255,220,60,255)
-#define CLR_CYAN      C2D_Color32(100,220,255,255)
-#define CLR_BACKUP_OK C2D_Color32(255,200,50,255)
 
 /* Helper: draw text via dynamic buffer (buffer must be cleared by caller) */
 static void dt(float x, float y, float z, float s, u32 c, const char *str) {
@@ -943,7 +970,7 @@ static void _renderSelectedList(void) {
     for (int i = 0; i < titleCount; i++)
         if (titles[i].selected && titles[i].isValid) selCount++;
     char hdr[64];
-    snprintf(hdr, sizeof(hdr), "SELECTED TITLES (%d)", selCount);
+    snprintf(hdr, sizeof(hdr), "Selected (%d)", selCount);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_RED);
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, hdr);
     int shown = 0;
@@ -1052,18 +1079,18 @@ void drawTouchControls(void) {
     int idx = filteredIndices[cursor];
     TitleInfo *ti = &titles[idx];
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "TITLE DETAILS");
+    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Details");
     /* Name */
     char nm[46]; strncpy(nm, ti->fullName[0] ? ti->fullName : ti->name, 44); nm[44] = '\0';
     dt(4, 22, 0.5f, 0.52f, CLR_WHITE, nm);
     /* TitleID */
-    char tid[32]; snprintf(tid, sizeof(tid), "ID: %016llX", (unsigned long long)ti->titleID);
-    dt(4, 42, 0.5f, 0.54f, CLR_GRAY, tid);
+    char tid[36]; snprintf(tid, sizeof(tid), "ID: %016llX", (unsigned long long)ti->titleID);
+    dt(4, 42, 0.5f, 0.52f, CLR_GRAY, tid);
     /* Version + Size */
     char ver[16]; snprintf(ver, sizeof(ver), "v%u", ti->version);
     char sz[24];  formatSize(ti->size, sz, sizeof(sz));
     char vs[48];  snprintf(vs, sizeof(vs), "%s   %s", ver, sz);
-    dt(4, 60, 0.5f, 0.54f, CLR_GRAY, vs);
+    dt(4, 60, 0.5f, 0.52f, CLR_GRAY, vs);
     /* Type + Location */
     u32 hi = (u32)(ti->titleID >> 32);
     const char *type = (hi == 0x0004000E) ? "Update" : (hi == 0x0004008C) ? "DLC" : "Game";
@@ -1073,10 +1100,10 @@ void drawTouchControls(void) {
     /* Backup */
     if (ti->hasBackup) {
         char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
-        char bk[64]; snprintf(bk, sizeof(bk), "Backup: YES [%s]", dateBuf);
-        dt(4, 96, 0.5f, 0.54f, CLR_GREEN, bk);
+        char bk[64]; snprintf(bk, sizeof(bk), "Backup: %s", dateBuf);
+        dt(4, 96, 0.5f, 0.52f, CLR_GREEN, bk);
     } else {
-        dt(4, 96, 0.5f, 0.54f, CLR_RED, "Backup: NO");
+        dt(4, 96, 0.5f, 0.52f, CLR_RED, "No backup");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "[SELECT = Controls]");
@@ -1088,7 +1115,7 @@ void drawMainMenu(void) {
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(8, 4, 0.5f, 0.54f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
+    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
     static const char *items[] = {
         "Install CIA",
         "Backup Saves",
@@ -1136,7 +1163,7 @@ void drawUI(void) {
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 28, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.44f, CLR_WHITE, "Uninstall");
+    dt(4, 6, 0.5f, 0.54f, CLR_WHITE, "Uninstall");
     /* Info bar inside expanded header */
     int selCount = 0;
     for (int i = 0; i < titleCount; i++)
@@ -1199,7 +1226,7 @@ static void _drawSoon(const char *feature) {
     C2D_TextBufClear(dynamicBuf);
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(8, 4, 0.5f, 0.54f, CLR_WHITE, feature);
+    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, feature);
     dt(110, 95, 0.5f, 0.65f, CLR_YELLOW, "COMING SOON");
     dt(80, 135, 0.5f, 0.54f, CLR_GRAY, "Feature under development (v2.0).");
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
@@ -1263,7 +1290,7 @@ void drawFileBrowserScreen(void) {
     /* Bottom screen: info file selezionato */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Info");
+    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "File Info");
     if (fileCount > 0 && fileCursor < fileCount) {
         FileEntry *fe = &fileEntries[fileCursor];
         if (fe->isDir) {
@@ -1349,25 +1376,26 @@ void drawBackupScreen(void) {
     /* Bottom screen: details for backupCursor title */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Info");
+    dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Details");
     if (backupCursor < backupTitleCount) {
         TitleInfo *ti = &titles[backupIndices[backupCursor]];
         char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
         dt(4, 22, 0.5f, 0.52f, CLR_WHITE, nm2);
-        char tidStr[32]; snprintf(tidStr, sizeof(tidStr), "%016llX", (unsigned long long)ti->titleID);
+        char tidStr[36]; snprintf(tidStr, sizeof(tidStr), "ID: %016llX", (unsigned long long)ti->titleID);
         dt(4, 42, 0.5f, 0.52f, CLR_GRAY, tidStr);
         char szBuf[24]; formatSize(ti->size, szBuf, sizeof(szBuf));
-        char locLine[36];
-        snprintf(locLine, sizeof(locLine), "%s  |  %s", szBuf,
+        char locLine[52];
+        snprintf(locLine, sizeof(locLine), "v%u   %s   %s",
+                 ti->version, szBuf,
                  (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND");
         dt(4, 60, 0.5f, 0.52f, CLR_GRAY, locLine);
-        /* Backup status — only 1 file read per frame (cursor item only) */
+        /* Backup status */
         if (ti->hasBackup) {
             char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
             char bkLine[52]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
-            dt(4, 80, 0.5f, 0.54f, CLR_GREEN, bkLine);
+            dt(4, 80, 0.5f, 0.52f, CLR_GREEN, bkLine);
         } else {
-            dt(4, 80, 0.5f, 0.54f, CLR_RED, "No backup");
+            dt(4, 80, 0.5f, 0.52f, CLR_RED, "No backup");
         }
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
@@ -1428,6 +1456,8 @@ void drawSysInfoScreen(void) {
         dt(8, 26, 0.5f, 0.52f, CLR_GRAY, "A = Open category list.");
         dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN = Select category.");
         dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B = Back to main menu.");
+        C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A=Open  Up/Down=Select  B=Menu");
     } else {
         /* Sublist: GAMES / UPDATES / DLC — independent sort from Uninstall */
         static const char *siSortNames[] = { "Name", "Size", "ID" };
@@ -1436,7 +1466,7 @@ void drawSysInfoScreen(void) {
             (sysInfoMode == SYSINFO_UPDATES) ? "UPDATES" : "DLC";
         char hdr[40]; snprintf(hdr, sizeof(hdr), "%s (%d)", hdrLabel, sysInfoSubCount);
         C2D_DrawRectSolid(0, 0, 0.5f, 400, 28, CLR_HEADER);
-        dt(4, 6, 0.5f, 0.52f, CLR_WHITE, hdr);
+        dt(4, 6, 0.5f, 0.54f, CLR_WHITE, hdr);
         /* Sort indicator right-aligned in header */
         char sortLbl[16]; snprintf(sortLbl, sizeof(sortLbl), "Sort:%s", siSortNames[sysInfoSortMode]);
         float slX = 396.0f - (float)strlen(sortLbl) * 7.0f;
@@ -1456,41 +1486,48 @@ void drawSysInfoScreen(void) {
             char szBuf[16]; formatSize(ti->size, szBuf, sizeof(szBuf));
             char szLine[20]; snprintf(szLine, sizeof(szLine), "[%s]", szBuf);
             u32 clr = isCursor ? CLR_WHITE : CLR_GRAY;
-            dt(4, y, 0.5f, 0.36f, clr, nm);
-            /* Right-align size: stima ~5.4px per char a scala 0.36f */
-            float szX = 396.0f - (float)strlen(szLine) * 5.4f;
-            dt(szX, y, 0.5f, 0.36f, CLR_GRAY, szLine);
+            dt(4, y, 0.5f, 0.38f, clr, nm);
+            /* Type symbol — x=240, consistent with Uninstall and Backup */
+            u32 thi = (u32)(ti->titleID >> 32);
+            if      (thi == 0x0004000E) dt(240, y, 0.5f, 0.44f, CLR_CYAN,  "^");
+            else if (thi == 0x0004008C) dt(240, y, 0.5f, 0.44f, CLR_GREEN, "+");
+            /* Right-align size: ~5.7px per char at scale 0.38f */
+            float szX = 396.0f - (float)strlen(szLine) * 5.7f;
+            dt(szX, y, 0.5f, 0.38f, CLR_GRAY, szLine);
         }
         if (sysInfoSubCount > MAX_VISIBLE_TITLES) {
             char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", sysInfoSubCursor+1, sysInfoSubCount);
-            dt(352, 225, 0.5f, 0.52f, CLR_GRAY, sc);
+            dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
         dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Details  L/R=Sort  B=Back");
         /* Bottom: simplified details for cursor item */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Info");
+        dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Details");
         if (sysInfoSubCount > 0 && sysInfoSubCursor < sysInfoSubCount) {
             int idx = sysInfoSubIndices[sysInfoSubCursor];
             TitleInfo *ti = &titles[idx];
             char nm2[46]; strncpy(nm2, ti->fullName[0] ? ti->fullName : ti->name, 44); nm2[44]='\0';
             dt(4, 22, 0.5f, 0.52f, CLR_WHITE, nm2);
-            char tidStr[32]; snprintf(tidStr, sizeof(tidStr), "%016llX", (unsigned long long)ti->titleID);
-            dt(4, 40, 0.5f, 0.52f, CLR_GRAY, tidStr);
+            char tidStr[36]; snprintf(tidStr, sizeof(tidStr), "ID: %016llX", (unsigned long long)ti->titleID);
+            dt(4, 42, 0.5f, 0.52f, CLR_GRAY, tidStr);
             char szBuf[24]; formatSize(ti->size, szBuf, sizeof(szBuf));
-            char loc[36]; snprintf(loc, sizeof(loc), "%s  |  %s", szBuf,
+            char loc[52]; snprintf(loc, sizeof(loc), "v%u   %s   %s",
+                                   ti->version, szBuf,
                                    (ti->mediaType == MEDIATYPE_SD) ? "SD" : "NAND");
-            dt(4, 58, 0.5f, 0.52f, CLR_GRAY, loc);
+            dt(4, 60, 0.5f, 0.52f, CLR_GRAY, loc);
             if (ti->hasBackup) {
                 char dateBuf[32]; getBackupLastDate(ti->titleID, dateBuf, sizeof(dateBuf));
                 char bkLine[48]; snprintf(bkLine, sizeof(bkLine), "Backup: %s", dateBuf);
-                dt(4, 76, 0.5f, 0.52f, CLR_GREEN, bkLine);
+                dt(4, 78, 0.5f, 0.52f, CLR_GREEN, bkLine);
             } else {
-                dt(4, 76, 0.5f, 0.52f, CLR_RED, "No backup");
+                dt(4, 78, 0.5f, 0.52f, CLR_RED, "No backup");
             }
-            dt(4, 96, 0.5f, 0.52f, CLR_CYAN, "A = Details & actions");
+            dt(4, 98, 0.5f, 0.52f, CLR_CYAN, "A = Details & actions");
         }
+        C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A=Open  L/R=Sort  B=Back");
     }
 }
 /* drawSettingsScreen: settings UI — NO C3D frame management (main loop). */

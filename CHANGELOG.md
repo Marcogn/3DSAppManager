@@ -1,6 +1,50 @@
 # Changelog
 
-## v1.0.9 – Documentation consolidation (2026-04-13)
+## v2.0.0 – UI unification (2026-04-13)
+
+### Visual consistency — all screens
+
+**Obiettivo**: look & feel identico su tutte le schermate: stessa palette, stessi simboli, stesse scale tipografiche, stessa struttura header/footer.
+
+#### Palette colori spostata
+- I `#define CLR_*` sono stati spostati dalla Section 9 alla Section 4 (prima degli enum), rendendoli disponibili a tutte le funzioni incluse `drawLoadingScreen` e `drawInstallProgressScreen`.
+
+#### Header top screen — uniformato
+- Tutte le schermate usano ora `x=4, y=4–6, scale=0.54f, CLR_WHITE`.
+- Corretti `drawMainMenu` e `_drawSoon` che usavano `x=8`.
+- Corretto `drawUI` (Uninstall) che usava `scale=0.44f` e `y=2` → ora `y=6, scale=0.54f` allineato agli altri header da 28px (Backup, SysInfo sublist).
+- Corretta `drawSysInfoScreen` sublist da `scale=0.52f` a `0.54f`.
+
+#### Header bottom screen — uniformato
+- "TITLE DETAILS" → "Title Details" (`drawTouchControls`)
+- "Info" → "File Info" (`drawFileBrowserScreen`)
+- "Title Info" → "Title Details" (`drawBackupScreen`)
+- "Info" → "Title Details" (`drawSysInfoScreen` sublist)
+- "SELECTED TITLES (N)" → "Selected (N)" (`_renderSelectedList`)
+
+#### Footer bar bottom screen — aggiunto dove mancava
+- `drawSysInfoScreen` overview e sublist: aggiunto `CLR_HEADER` bar a `y=222` con hint contestuale. In precedenza erano gli unici schermi senza footer sulla bottom screen.
+
+#### Pannelli dettaglio bottom — parità di contenuto e scala
+- Tutte le viste dettaglio (Uninstall, Backup, SysInfo sublist) mostrano ora: nome, `ID: XXXXXXXXXXXXXXXX`, `vN   size   SD/NAND`, stato backup.
+- Aggiunto prefisso `"ID: "` in `drawBackupScreen` e `drawSysInfoScreen` (mancante).
+- Aggiunto campo versione `v%u` in `drawBackupScreen` e `drawSysInfoScreen` (mancante).
+- `drawTouchControls`: formato backup `"Backup: YES [data]"` → `"Backup: data"` e `"Backup: NO"` → `"No backup"` — allineato al formato usato da tutti gli altri pannelli.
+- Scale uniformata a `0.52f` per tutte le righe info (rimossi i `0.54f` sparsi in `drawTouchControls`).
+
+#### Lista SysInfo sublist — allineata alle altre liste
+- Scale righe: `0.36f` → `0.38f` (uniforme con Uninstall e Backup).
+- Aggiunto simbolo tipo `^`/`+` a `x=240` (mancante; presente in Uninstall e Backup).
+- Size right-align: coefficiente aggiornato da `5.4f` a `5.7f` per scala `0.38f`.
+- Scroll counter: `x=352` → `x=340` (uniforme con tutti gli altri schermi).
+
+#### Schermate di caricamento/progress — stile unificato
+- `drawLoadingScreen`: sfondo `CLR_BG` (prima pure nero), header `CLR_HEADER` con testo "Loading..." a `scale=0.54f`, testo secondario a `scale=0.52f`, status a `scale=0.48f`, barra progress fill `CLR_CYAN`, footer bar a `y=222`. Testi convertiti a macro `CLR_*` (rimossi tutti i colori inline hardcoded).
+- Estratta nuova funzione `drawInstallProgressScreen(ciaPath, done, total)`: rimuove il blocco inline di 25 righe da `installCIA`; header "Installing CIA" a `scale=0.54f`, filename a `scale=0.48f`, barra progress fill `CLR_GREEN` (semantico: azione positiva), footer "Do not power off the console." a `scale=0.48f`. Stessa struttura di `drawLoadingScreen`.
+
+---
+
+
 
 ### Documentation
 - **Single-file docs**: merged `USER_GUIDE.md` and `docs/README.md` into the root `README.md` — the repository now has one canonical reference for both users and developers.
