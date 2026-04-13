@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.8 – Uniform list margins (2026-04-10)
+
+### UNINSTALL / BACKUP / SYSINFO sublist — equal top and bottom margins
+- All three list screens now use the same layout formula: **28px header, list starts at y=32, 13 visible rows, 14.5px row spacing**.
+  - Top margin (header bottom → first row): 4px on all screens.
+  - Bottom margin (last row text bottom → hint bar at y=222): 4px on all screens.
+- **UNINSTALL**: header rect expanded from 22px to 28px; info bar moved from y=24 (outside header) to y=16 inside the header rect (scale 0.40f, 6.0px/char); title repositioned to y=2 at scale 0.44f. List start moved from y=38 to y=32 — gains a visible top margin for the first time.
+- **BACKUP**: header rect expanded from 22px to 28px; header text moved to y=6; list start moved from y=38 to y=32; `BACKUP_VISIBLE` restored to 13 (was 12 in v1.0.7). This eliminates the extra blank space that was visible above and below the list compared to the other screens.
+- **SYSINFO sublist**: header rect expanded from 22px to 28px; header text and sort indicator moved to y=6; list start moved from y=28 to y=32.
+- Net result: same number of visible titles (13) and identical visual spacing on all three screens.
+
+---
+
 ## v1.0.7 – Bug fixes & UI consistency (2026-04-10)
 
 ### UNINSTALL – Info bar shift fixed
