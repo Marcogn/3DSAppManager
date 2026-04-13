@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.9 – Documentation consolidation (2026-04-13)
+
+### Documentation
+- **Single-file docs**: merged `USER_GUIDE.md` and `docs/README.md` into the root `README.md` — the repository now has one canonical reference for both users and developers.
+- **Task-oriented structure**: README reordered as Quick Start → Features → How to Use (per flow) → Controls Reference → Screen Layout → Tips & Tricks → FAQ & Troubleshooting → Safety → Backup Structure → Configuration → Building from Source → Technical Reference.
+- **Content gaps filled**: added `[*]` backup indicator description, Tips & Tricks section, expanded FAQ/troubleshooting entries ("Scroll feels slow", "Something deleted but still in HOME menu", "Can't find a title", loading bar note, install/restore failure causes) and full Technical Reference (architecture, data structures, rendering pipeline, language fallback, sort/filter internals, memory budget, UI layout constants, known limitations).
+- **Removed obsolete files**: `USER_GUIDE.md`, `docs/README.md`, `RELEASE_NOTES_v1.0.1.md`, `implementation_guide.md`, `plan-3dsFastUninstallV2.prompt.md`, `BUILD_INFO.txt` — all content either absorbed into README or no longer relevant.
+- **Fixed garbage prefixes**: removed stray `es` prefix at the top of `README.md` and `i ` prefix from `USER_GUIDE.md` (now deleted).
+- **AGENTS.md updated**: references to deleted files replaced with single `README.md` pointer.
+
+---
+
 ## v1.0.8 – Uniform list margins (2026-04-10)
 
 ### UNINSTALL / BACKUP / SYSINFO sublist — equal top and bottom margins

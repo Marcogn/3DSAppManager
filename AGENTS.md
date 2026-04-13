@@ -8,7 +8,7 @@
 - `source/main.c`: logica completa (enumerazione titoli, UI top/bottom, input, backup, delete flow).
 - `Makefile`: build devkitPro (`DEVKITARM`, `3ds_rules`, output `.3dsx/.elf/.smdh`).
 - `romfs/default_config.ini`: default `backup_path`.
-- `README.md` + `docs/README.md`: comportamento utente e note tecniche (rendering, limiti, fallback lingua).
+- `README.md`: documentazione unica — comportamento utente, controlli, backup, build, riferimento tecnico (rendering, limiti, fallback lingua, memory budget).
 - `CHANGELOG.md`: cronologia reale delle decisioni UI/rendering (es. fix flicker SELECT overlay).
 
 ## Workflow sviluppatore (reale)
@@ -43,6 +43,6 @@
 - Non ampliare scope dei titoli eliminabili senza mantenere i filtri sicurezza (`0x00040010`, `0x00040030`, `0x00040138`).
 
 ## Quando modifichi il comportamento
-- Mantieni allineati i testi UI/dialog e la documentazione utente (`README.md`, `USER_GUIDE.md`).
+- Mantieni allineati i testi UI/dialog e la documentazione utente (`README.md`).
 - Se cambi UX o rendering, aggiorna anche `CHANGELOG.md` con motivazione concreta (regressioni evitate, impatto utente).
 - Preferisci modifiche piccole e locali: molte feature condividono stato globale in `main.c`.
