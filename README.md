@@ -4,316 +4,602 @@
 
 # 3DS Fast Uninstall
 
-A Nintendo 3DS homebrew application for quickly uninstalling multiple titles with optional save data backup.
+A Nintendo 3DS homebrew application for managing installed titles: install CIA files, back up save data, uninstall titles in batch, and view system information — all from a single clean multi-screen interface.
 
-**🎯 Perfect for managing your 3DS storage!** Easily remove multiple games and apps at once while safely backing up your save data.
+**The complete toolkit for managing your 3DS storage.**
+
+---
+
+## Quick Start
+
+1. Download `3ds-fast-uninstall.3dsx`
+2. Copy it to `/3ds/` on your SD card
+3. Launch from the **Homebrew Launcher**
+4. Wait for the loading screen (progress bar shown while reading titles)
+5. You land on the **Main Menu** — pick a feature and get started
+
+> **Requirements**: Nintendo 3DS / 2DS / New 3DS running Custom Firmware (e.g. Luma3DS) or a homebrew entrypoint with sufficient AM access.
+
+---
 
 ## Features
 
-- Display all installed titles (up to 500, HOME menu shows 300)
-- Multi-selection for batch uninstall
-- Sort by Name, Size (largest first), or Title ID
-- Filter by All/Updates/DLC
-- Complete save backup (User Save, ExtData, Boss ExtData)
-- Complete removal of title and all associated data
-- Configurable backup location
-- Dual-screen layout with selected titles list during uninstall
-- Info bar with proper spacing (Titles / Selected / Sort mode)
-- Sleep mode support
-- Loading progress bar
-- Red warning when over 300 titles
-- Clean table layout: `[X] Name  ↑  TitleID`
-- Precise scrolling (slow, controlled)
-- Hold SELECT for controls overlay (flicker-free)
-- Multi-language support (Japanese, English, all SMDH languages)
+### Install
+- Browse the SD card file system to find `.CIA` files
+- Install single files or batch-install an entire folder in one step (**Y**)
+- Detects Update (`^`) and DLC (`+`) types at scan time — no extra file reads
+- Size shown right-aligned per row; type badge close to size column
+- All installs always target the SD card
 
-## Installation
+### Backup Saves
+- List all installed titles with backup status at a glance (`[ ]` none · `[*]` exists · `[X]` selected)
+- Select individual titles or back up the entire library at once (**Y**)
+- Three save archive types per title: User Save, ExtData, Boss ExtData
+- Backup date shown in the bottom-screen detail panel
+- Backups stored under `[backup_path]/[TitleID]/`
 
-1. Download `3ds-fast-uninstall.3dsx`
-2. Copy to your SD card's `/3ds/` folder
-3. Launch from Homebrew Launcher
+### Uninstall
+- Multi-selection with **A**; batch uninstall with **X**
+- Optional pre-uninstall backup (prompted automatically, or forced via Settings)
+- Selected titles list visible on the bottom screen throughout the confirmation flow
+- Automatically finds and offers to delete related DLC/Updates for base games
+- Post-delete verification: slot is cleared only after AM confirms deletion
 
-## Controls
+### System Info
+- Overview: Games / Updates / DLC counts + total sizes + SD free space
+- Navigate into each category (**A**) to browse the full title list
+- Per-title detail page with full name, Title ID, version, size, storage location, backup date
+- Actions per title: **Backup Save Data**, **Restore Save Data**, **Delete Title**
 
-**Top Screen:**
-- **D-Pad ↑/↓**: Navigate list (precise, one item at a time)
-- **D-Pad ←→**: Fast scroll (page up/down)
-- **A**: Toggle selection
-- **X**: Uninstall selected
-- **L/R**: Cycle sort mode (Name ↔ Size ↔ Title ID)
-  - Name: Alphabetical
-  - Size: Largest first
-  - TitleID: Numerical
-- **Y**: Cycle filter (All → Updates → DLC)
-- **SELECT (hold)**: Show controls overlay (release to hide)
-- **START**: Exit
+### Settings
 
-**Top Screen Layout:**
+| Setting | Default | Description |
+|---|---|---|
+| Force Backup | OFF | Auto-backup before every uninstall (no prompt) |
+| Skip Uninstall Confirm | OFF | Delete immediately on X without confirmation |
+| Force Restore | OFF | Auto-restore backup after every CIA install |
+| Skip Install Confirm | OFF | Install immediately on A without confirmation |
+| Backup Folder | `sdmc:/3ds/fast-uninstall/backups` | Cycle through 5 preset paths with left/right or L/R |
+
+Changes are saved in real time; press **B** or **START** to return to the menu.
+
+### General
+- Sort by **Name**, **Size** (largest first), or **Title ID**
+- Filter by **All**, **Updates only**, or **DLC only**
+- Supports up to **500 titles** (HOME menu cap is 300; counter turns red above it)
+- Multi-language title names: system language -> English -> Japanese -> any available
+- Hold **SELECT** for a full controls overlay (flicker-free rendering)
+- Sleep mode compatible — close and re-open the console freely
+- Progress bar during title loading
+
+---
+
+## How to Use
+
+### Install CIA
+
+1. From the Main Menu, select **Install CIA** and press **A**.
+2. Navigate the file browser with the controls listed in the Controls Reference section.
+3. Directories appear in cyan with a `[DIR]` prefix. `.CIA` files show size right-aligned and a type badge: `^` = Update, `+` = DLC.
+
+**Installing a single file:**
+1. Navigate to the `.CIA` file and press **A**.
+2. Confirm the prompt (skipped if "Skip Install Confirm" is ON in Settings).
+3. Wait for the progress bar to complete.
+
+**Batch installing a folder:**
+1. Enter the folder containing your `.CIA` files.
+2. Press **Y**. The app installs all files one by one and shows progress for each.
+
+> All installs target the **SD card**. NAND installs are not supported.
+
+---
+
+### Backup Saves
+
+Each row in the list shows:
+- `[ ]` — no backup exists
+- `[*]` (green) — backup exists
+- `[X]` (yellow) — title selected for batch backup
+
+The bottom screen shows full name, Title ID, size, storage location, and last backup date for the cursor item.
+
+**Single title:** navigate to it -> press **A** to select -> press **X** to back up.  
+**Multiple titles:** press **A** on each -> press **X** to back them all up.  
+**Entire library:** press **Y** — no selection needed.
+
+For each title, the app saves up to three archive types:
+- `savedata/` — main game saves
+- `extdata/` — extended data (e.g. DLC content)
+- `boss_extdata/` — SpotPass / StreetPass data
+
+A `backup_info.txt` file with title name, version and date is included in each backup folder.
+
+---
+
+### Uninstall Titles
+
+1. Use **up / down** to navigate (or **left / right** to jump a full page).
+2. Press **A** to toggle selection (checkbox turns yellow when selected).
+3. Use **L / R** to cycle sort modes (Name -> Size -> ID); **Y** to filter (All -> Updates -> DLC).
+4. Press **X** to begin the uninstall flow.
+
+**The uninstall flow:**
+
+| Step | Prompt | Actions |
+|---|---|---|
+| 1 — Backup? | Back up before deleting? | **A** = yes · **B** = skip · **START** = cancel |
+| 2 — Backup path | *(shown only if backup chosen)* | **A** = use default · **Y** = pick from preset list |
+| 3 — Related titles | DLC/Updates found for base game | **A** = include · **B** = skip · **START** = cancel |
+| 4 — Final confirm | Review list on bottom screen | **A** = confirm · **B** = cancel |
+| 5 — Deletion | Progress shown per title | automatic |
+
+> If "Force Backup" is ON, step 1 is skipped and backup always runs.  
+> If "Skip Uninstall Confirm" is ON, step 4 is skipped.
+
+---
+
+### System Info
+
+**Overview screen:** shows Games / Updates / DLC counts and sizes, plus SD free space.  
+Press **up / down** to navigate categories; **A** to enter a category.
+
+**Category list:** lists all titles with name and size. Press **A** on any title to open its **detail page**.
+
+**Title detail page:**
+- Full name, Title ID, version, size, storage location, backup date
+- Related Updates and DLC (for base games)
+- Three actions (navigate with **up / down**, execute with **A**).
+
+| Action | What it does |
+|---|---|
+| **Backup Save Data** | Saves all archive types to the backup folder |
+| **Restore Save Data** | Restores save data from the last backup |
+| **Delete Title (+ related)** | Removes the title, its DLC, Updates and all save data |
+
+**Restoring a save:** System Info -> find the title -> **A** -> "Restore Save Data" -> **A**.
+
+---
+
+### Settings
+
+Navigate with **up / down**. Change a value with **A**, **L**, **R**, or the d-pad left/right.  
+The bottom screen shows a description of the highlighted setting.
+
+> Settings are saved in real time. Press **B** or **START** to return to the main menu.
+
+---
+
+## Controls Reference
+
+### Main Menu
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Navigate menu |
+| **A** | Enter selected screen |
+| **START** | Exit application |
+
+### Uninstall Screen
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Move cursor one row |
+| **Left / Right** | Jump one page |
+| **A** | Toggle title selection |
+| **X** | Start uninstall flow for selected titles |
+| **L / R** | Cycle sort mode (Name -> Size -> ID) |
+| **Y** | Cycle filter (All -> Updates -> DLC) |
+| **SELECT** (hold) | Show controls overlay |
+| **B** | Back to main menu |
+| **START** | Exit application |
+
+### Install Screen (File Browser)
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Move cursor |
+| **Left / Right** | Jump one page |
+| **A** | Enter folder / Install CIA file |
+| **Y** | Install all CIA files in current folder |
+| **B** | Go up one folder level |
+
+### Backup Screen
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Move cursor one row |
+| **Left / Right** | Jump one page |
+| **A** | Toggle title selection |
+| **X** | Backup selected titles |
+| **Y** | Backup all titles |
+| **B** | Back to main menu |
+
+### System Info Screen
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Navigate categories / title list |
+| **A** | Open category list / open title detail |
+| **B** | Back / back to overview |
+
+### Title Detail (from System Info)
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Select action |
+| **A** | Execute selected action |
+| **B** | Back to category list |
+
+### Settings Screen
+
+| Button | Action |
+|---|---|
+| **Up / Down** | Navigate settings |
+| **A / L / R / d-pad left-right** | Change value |
+| **B / START** | Save and return to menu |
+
+---
+
+## Screen Layout Reference
+
+### Top Screen — Uninstall
+
 ```
-[ ] Title Name                      ↑  0004000000012345
- ^      ^                           ^         ^
-checkbox|                         symbol   TitleID
-       name (no type indicator)
++-----------------------------------------------------+
+| Uninstall                                           |  <- header
+| T:120  Sel:3  Sort:Name  [All]                      |  <- info bar
+| [ ] Super Mario 3D Land             0004000000...   |
+| [X] Pokemon Sun              ^      0004000000...   |  <- selected, Update
+| [ ] Mario Kart 7 DLC         +      0004008C00...   |  <- DLC
+| A=Sel  X=Delete  L/R=Sort  Y=Filt  B=Menu  SEL=Help |
++-----------------------------------------------------+
 ```
 
-**Bottom Screen:**
+Symbols: `^` = Update (cyan), `+` = DLC (green)  
+Checkbox: `[ ]` unselected, `[X]` selected (yellow)
 
-**During normal browsing:**
-Shows detailed information about the currently selected title:
-- Full title name (no truncation)
-- Title ID (hexadecimal)
-- Version number
-- Size (in KB/MB/GB)
-- Type (Game/Application, Update (↑), or DLC (⊕))
-- Storage location (SD Card / NAND)
-- Backup status (YES ✓ if backup exists, NO ✗ if not)
-- Backup path (if backup exists)
-- Reminder: "Press SELECT for controls"
+### Top Screen — Install (File Browser)
 
-**During uninstall dialogs:**
-Shows list of selected titles (when you press X):
-- Header: "SELECTED TITLES (X)" in red
-- Up to 10 titles visible
-- Clean names with type symbols
-- If more than 10: "...and X more" at bottom
-- Visible during all confirmation dialogs
-
-### Uninstalling Titles
-
-1. Navigate to the titles you want to uninstall using the D-Pad
-2. Press **A** to select each title (a checkbox will appear)
-3. Press **X** to begin the uninstallation process
-4. **The bottom screen will now show your selected titles** (up to 10 visible)
-5. Choose whether to backup save data:
-   - Press **A** to backup all save data types (User Save, ExtData, Boss ExtData)
-   - Press **B** to skip backup
-   - Press **START** to cancel
-6. If you chose to backup, select the backup location:
-   - Press **A** to use the default path from config
-   - Press **Y** to choose from alternative paths
-   - Use **D-Pad** to navigate alternative paths, **A** to confirm
-7. Review the final confirmation showing titles, backup option, and backup path
-   - **The bottom screen continues showing your selected titles throughout**
-8. Press **A** to confirm the deletion
-
-The application will completely remove all data associated with selected titles, including the title itself, save data, ExtData, and Boss ExtData.
-
-### Configuration
-
-The application creates a configuration file at:
 ```
-sdmc:/3ds/fast-uninstall/config.ini
++-----------------------------------------------------+
+| Install CIA                                         |  <- header
+| sdmc:/roms/cias/                                    |  <- current path
+| [DIR] demos/                                        |
+| SuperMario.cia                        ^ [45.3 MB]   |
+| DLC_Pack.cia                          + [12.1 MB]   |
+| A=Enter/Install  Y=All  B=Up  DX/SX=Page            |
++-----------------------------------------------------+
 ```
 
-You can edit this file to customize the default backup path:
+### Top Screen — System Info (Overview)
+
+```
++-----------------------------------------------------+
+| SYSTEM INFORMATION                                  |
+|                                                     |
+|   Games:      87    4.23 GB                         |
+| > Updates:    43    980 MB                          |  <- cursor row
+|   DLC:        31    1.12 GB                         |
+|                                                     |
+|   SD Free: 12.4 GB / 59.6 GB                        |
++-----------------------------------------------------+
+```
+
+---
+
+## Tips & Tricks
+
+**Free up the most space**
+1. Go to **Uninstall Titles**.
+2. Press **R** twice to sort by Size (largest first).
+3. Select the titles you no longer need and press **X**.
+
+**Clean up only DLC and Updates**
+1. Press **Y** once for Updates, twice for DLC.
+2. Select what you want to remove and press **X**.
+
+**Check what has a backup**  
+Open **Backup Saves**. Titles with `[*]` in green already have a backup; `[ ]` means never backed up.
+
+**Batch backup before a big cleanup**  
+Go to **Backup Saves** -> press **Y** to back up everything, then proceed to **Uninstall Titles**.
+
+**Restore a save after reinstalling a game**  
+Reinstall the `.CIA` from **Install CIA**.
+- If "Force Restore" is ON, the backup is restored automatically.
+- Otherwise: **System Info** -> find the title -> **A** -> "Restore Save Data".
+
+---
+
+## FAQ & Troubleshooting
+
+**No titles showing up**  
+The app only shows user-installed titles. System titles are filtered for safety.
+
+**The title counter is red**  
+You have over 300 titles. The HOME menu cap is 300. The app still shows all of them (up to 500) — consider cleaning up.
+
+**How do I restore a backup?**  
+System Info -> navigate to the title -> **A** -> "Restore Save Data".
+
+**Where are my backups?**  
+`[backup_path]/[TitleID]/`. Default: `sdmc:/3ds/fast-uninstall/backups/`. Change in Settings.
+
+**Is it safe to delete updates or DLC?**  
+Yes. Each is an independent title. Deleting an update reverts the game to its base version.
+
+**Can I use this without CFW?**  
+A homebrew entrypoint is required. Full title deletion requires AM access (CFW recommended).
+
+**Scroll feels slow**  
+Single press = one row. Use **left / right** for page jumps. The deliberate speed prevents accidental skips.
+
+**Cannot find a title**  
+Try different sort modes (**L / R**) or use the filter (**Y**) to isolate Updates or DLC.
+
+**Something deleted but still showing in HOME menu**  
+Restart the HOME menu or the console. The 3DS system cache can take a moment to update.
+
+| Problem | Solution |
+|---|---|
+| App will not load | Make sure you are on a recent Homebrew Launcher and have CFW access |
+| Loading bar appears stuck | Not stuck — it reads each title individually. 200+ titles can take ~30 seconds |
+| Backup failed | Check that the SD card has enough free space and the backup folder is writable |
+| Install failed | Verify the `.CIA` file is not corrupted; check free SD space |
+| Restore failed | The backup folder may be missing or the title must be installed first |
+
+---
+
+## Safety
+
+- **System titles filtered** — ranges `0x00040010`, `0x00040030`, `0x00040138` are excluded
+- **Confirmation dialogs** before every destructive action (unless disabled in Settings)
+- **Post-delete verification** via `AM_GetTitleInfo` — title removed from list only after system confirms deletion
+- **Backups are independent** — deleting a title does not delete its backup
+
+---
+
+## Backup Structure
+
+```
+[backup_path]/
+|__ [TitleID]/            e.g. 0004000000033500/
+    |__ backup_info.txt   metadata (date, version, name)
+    |__ savedata/         main game saves
+    |__ extdata/          extended data (DLC content)
+    |__ boss_extdata/     SpotPass / StreetPass data
+```
+
+**Default path:** `sdmc:/3ds/fast-uninstall/backups`
+
+**Alternative paths** (cycle with d-pad left/right in Settings):
+1. `sdmc:/3ds/fast-uninstall/backups`
+2. `sdmc:/backups/3ds-titles`
+3. `sdmc:/save-backups`
+4. `sdmc:/3ds-backups`
+5. `sdmc:/backups`
+
+---
+
+## Configuration
+
+Config file: `sdmc:/3ds/fast-uninstall/config.ini`
 
 ```ini
-# Path where save backups will be stored by default
 backup_path=sdmc:/3ds/fast-uninstall/backups
+force_backup=0
+skip_uninstall_confirm=0
+force_restore=0
+skip_install_confirm=0
 ```
 
-**Note**: You can also choose the backup path at runtime when performing an uninstallation. The config file sets the default that is shown first, but you can select from alternative paths during the backup process.
+---
 
 ## Building from Source
 
 ### Prerequisites
 
-You need to have devkitPro and the 3DS development tools installed on your system.
-
-#### Install devkitPro (All Platforms)
-
-Follow the official guide at: https://devkitpro.org/wiki/Getting_Started
-
-#### Install 3DS Development Tools
-
-After installing devkitPro, install the required libraries:
-
 ```bash
-# On Linux/macOS:
+# Install devkitPro — see https://devkitpro.org/wiki/Getting_Started
 sudo dkp-pacman -S 3ds-dev
-
-# This installs:
-# - devkitARM compiler
-# - libctru (3DS system library)
-# - citro3d/citro2d (graphics libraries)
-# - 3dstools (3dsxtool, smdhtool, etc.)
-# - All other required dependencies
 ```
 
-#### Environment Variables
-
-Make sure these environment variables are set:
+Environment variables (add to `~/.bashrc` or `~/.zshrc`):
 
 ```bash
 export DEVKITPRO=/opt/devkitpro
 export DEVKITARM=$DEVKITPRO/devkitARM
 ```
 
-Add these to your `~/.bashrc` or `~/.zshrc` to make them permanent.
-
-### Build Steps
+### Build
 
 ```bash
-# Clone the repository (if not already done)
 git clone https://github.com/yourusername/3ds-fast-uninstall.git
 cd 3ds-fast-uninstall
-
-# Build the project
-make
+make clean && make
 ```
 
-The compiled `.3dsx` and `.smdh` files will be created in the project root directory.
+Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall.smdh`
 
-### Clean Build
+| Error | Fix |
+|---|---|
+| `3ds.h: No such file or directory` | `sudo dkp-pacman -S libctru` |
+| `Please set DEVKITARM in your environment` | Export `DEVKITARM` as above |
+| Linker errors | `make clean && make` |
 
-```bash
-make clean
-make
+---
+
+## Technical Reference
+
+**Language:** C (modular architecture)  
+**SDK:** libctru (devkitARM)  
+**Graphics:** citro3d + citro2d (hardware-accelerated, flicker-free double buffering)  
+**Services:** AM (title management), FS (file system / save archives)  
+**Target:** Nintendo 3DS, New 3DS, 2DS (all variants)
+
+### Architecture
+
+The application is structured into **8 modules** for maintainability and testability:
+
+```
+source/
+├── types.h            — Type definitions, enums, structs, constants
+├── globals.h/c        — Shared global state (externalized from main.c)
+├── utils.h/c          — Utility functions (createDirectory, formatSize, etc.)
+├── config.h/c         — Config load/save (INI parsing)
+├── titles.h/c         — Title loading (optimized), sort/filter, backup-dir helpers
+├── backup_restore.h/c — Save backup, restore, title deletion
+├── install.h/c        — CIA scanning and installation
+├── draw.h/c           — All rendering functions (~750 lines)
+├── input.h/c          — Input handlers and blocking flows (~560 lines)
+└── main.c             — Entry point + main loop (125 lines)
 ```
 
-### Troubleshooting Build Issues
+**No Makefile changes required**: the devkitPro template's `$(wildcard $(dir)/*.c)` includes all `.c` files automatically.
 
-**Error: "3ds.h: No such file or directory"**
-- Make sure libctru is installed: `sudo dkp-pacman -S libctru`
-- Verify DEVKITPRO and DEVKITARM environment variables are set
+#### App State Machine
 
-**Error: "Please set DEVKITARM in your environment"**
-- Set the environment variables as shown above
-- Restart your terminal after setting them
+```c
+typedef enum {
+    APP_MAIN_MENU,
+    APP_INSTALL,
+    APP_BACKUP,
+    APP_UNINSTALL,
+    APP_SYSINFO,
+    APP_SETTINGS
+} AppState;
+```
 
-**Linker errors**
-- Run `make clean` and try again
-- Ensure all dependencies are installed: `sudo dkp-pacman -S 3ds-dev`
+The main loop dispatches draw calls and input handlers based on `appState`. Blocking flows (uninstall dialog chain, install progress, backup progress) run as sub-loops **before** `C3D_FrameBegin` to avoid nested frame management.
 
-## Technical Details
+### Core Data Structures
 
-- **Language**: C
-- **SDK**: libctru (devkitARM)
-- **Graphics**: citro3d + citro2d (hardware-accelerated rendering)
-- **Services Used**: 
-  - AM (Application Manager) - Title management and deletion
-  - FS (File System) - Save data access and backup
-- **Target**: Nintendo 3DS (Old 3DS, New 3DS, 2DS)
-- **Save Types Supported**:
-  - ARCHIVE_USER_SAVEDATA (main game saves)
-  - ARCHIVE_EXTDATA (extended data)
-  - ARCHIVE_BOSS_EXTDATA (SpotPass data)
+```c
+typedef struct {
+    u64            titleID;
+    char           name[256];     // truncated for list view
+    char           fullName[256]; // used in detail views
+    FS_MediaType   mediaType;     // MEDIATYPE_SD or MEDIATYPE_NAND
+    bool           selected;
+    bool           isValid;       // false after successful deletion
+    u16            version;
+    bool           hasBackup;
+    C2D_Image      icon;          // reserved, not currently loaded
+    bool           iconLoaded;
+    u64            size;
+} TitleInfo;
 
-### Graphics System
+typedef struct {
+    char backupPath[256];
+    bool forceBackup;
+    bool skipUninstallConfirm;
+    bool forceRestore;
+    bool skipInstallConfirm;
+} Config;
 
-The application uses **citro3d** and **citro2d** for hardware-accelerated graphics rendering:
-- **No flickering** - Smooth, synchronized frame updates
-- **Efficient rendering** - Only redraws when needed
-- **Double buffering** - PICA200 GPU handles all graphics processing
-- **Text rendering** - Dynamic text buffers for optimal performance
+typedef struct {
+    char name[256];
+    bool isDir;
+    bool isCIA;
+    u64  size;
+    u64  titleID; // cached at scan time; 0 for dirs or unreadable CIAs
+} FileEntry;
+```
 
-### How Complete Deletion Works
+### Rendering Pipeline
 
-When you delete a title, the application:
-1. Backs up all save data types (if selected)
-2. Deletes ExtData archives
-3. Deletes Boss ExtData (SpotPass data)
-4. Calls AM_DeleteTitle to remove the title and remaining data
-5. Verifies deletion was successful
+Every frame follows this pattern:
 
-## Safety Features
+```
+C3D_FrameBegin(C3D_FRAME_SYNCDRAW)
+    C2D_SceneBegin(top)    -> draw top screen
+    C2D_SceneBegin(bottom) -> draw bottom screen
+C3D_FrameEnd(0)
+```
 
-- System titles are automatically filtered out and cannot be selected
-- Only user-installed applications and updates are shown
-- Requires explicit confirmation before deletion
-- Protected title ranges (0x00040010, 0x00040030, 0x00040138) are excluded
+`C2D_TextBufClear(dynamicBuf)` is called once at the start of each full draw function. **`C2D_SceneBegin` must be called exactly once per target per frame** — double calls cause flickering.
 
-## FAQ / Troubleshooting
+**SELECT overlay (flicker-free):** when SELECT is held, the overlay is baked directly into the same frame at higher z-depth (0.6-0.7), avoiding a second `C2D_SceneBegin` on the same target.
 
-### Q: The application doesn't show any titles
-**A**: Make sure you have titles installed on your 3DS. The application only shows user-installed titles (games, apps). System titles are filtered out for safety.
+### Title Loading & Language Fallback
 
-### Q: The title counter is red - what does that mean?
-**A**: If you have over 300 titles installed, the counter turns red. This is a warning because the 3DS HOME menu can only display up to 300 titles properly. Consider deleting some unused titles.
+1. `AM_GetTitleCount` for SD + NAND
+2. `AM_GetTitleList` fills a `u64` array of title IDs
+3. Safety filter: skip ranges `0x00040010`, `0x00040030`, `0x00040138`
+4. `AM_GetTitleInfo` -> size, version, media type
+5. SMDH icon handle -> UTF-16 short description extracted
+6. UTF-16 -> UTF-8 with language fallback:
 
-### Q: Can the app handle more than 300 titles?
-**A**: Yes! The app supports up to 500 titles. The 300 limit is only for the HOME menu display, not for this app. You'll see all your titles here.
+   ```
+   1. System language (cfguGetSystemLanguage)
+   2. English (index 1)
+   3. Japanese (index 0)
+   4. All 12 SMDH language slots
+   5. Fallback: "Title [TitleID]"
+   ```
 
-### Q: How do I find the largest titles to delete?
-**A**: Press **R** twice to sort by Size. The largest titles appear at the top of the list.
+7. Clamp to `MAX_TITLES` (500); call `sortTitles()`
 
-### Q: How do I see only Updates or only DLC?
-**A**: Press **Y** to cycle through filters:
-- All (shows everything)
-- Updates (shows only updates - marked with ↑)
-- DLC (shows only DLC - marked with ⊕)
+Names consisting only of spaces or `--` are rejected and the next fallback is tried.
 
-### Q: Why do I see "..." at the end of some title names?
-**A**: Long title names are truncated in the top screen list to fit the layout. You can see the full name in the bottom screen details panel.
+### Sort & Filter Internals
 
-### Q: The scroll is too slow/fast
-**A**: The scroll has been carefully tuned to be precise. Single presses move one item, holding the button waits 1.5 seconds before starting continuous scroll (to prevent accidents). Use D-Pad Left/Right for faster navigation (page up/down).
+```c
+static int filteredIndices[MAX_TITLES]; // indices into titles[]
+static int filteredCount;
+```
 
-### Q: Can I recover a title after deleting it?
-**A**: Once deleted, the title cannot be recovered unless you:
-- Have a backup of the save data (created by this app)
-- Re-download/reinstall the title from the eShop or reinstall from the original source
+`updateFilteredList()` rebuilds `filteredIndices` by iterating `titles[]` (only `isValid == true` entries) and applying `currentFilterMode`. `sortTitles()` sorts `titles[]` in-place via `qsort` with one of three comparators (name, size, titleID).
 
-### Q: Where are the backups stored?
-**A**: By default, backups are stored in `sdmc:/3ds/fast-uninstall/backups/[TitleID]/`
-Each backup includes:
-- `backup_info.txt` - Information about the backup
-- `savedata/` - User save data (if present)
-- `extdata/` - Extended data (if present)
-- `boss_extdata/` - SpotPass data (if present)
+### Memory Budget
 
-### Q: How do I restore a backup?
-**A**: Currently, you need to:
-1. Reinstall the title
-2. Manually copy the backup files back to the appropriate location
-Note: A future version may include automatic restore functionality.
+| Allocation | Size |
+|---|---|
+| `titles[500]` | ~120 KB |
+| `filteredIndices[500]` | ~2 KB |
+| `fileEntries[256]` | ~70 KB |
+| `dynamicBuf` (text buffer) | 4 KB |
+| `sysInfoSubIndices[500]` | ~2 KB |
+| **Total approx.** | **~200 KB** |
 
-### Q: Can I change the backup location?
-**A**: Yes, in two ways:
-1. Edit the config file at `sdmc:/3ds/fast-uninstall/config.ini`
-2. Choose a different path at runtime when performing an uninstallation
+The 3DS homebrew heap is typically 32-64 MB — well within budget.
 
-### Q: Is it safe to delete DLC or updates?
-**A**: Yes, but be aware:
-- Deleting DLC will remove the DLC content
-- Deleting updates will revert the game to its base version
-- Base games and DLC are separate titles
-- You'll see (↑) for updates and (⊕) for DLC in the title list
+### UI Layout Constants
 
-### Q: The app freezes when I close the 3DS lid
-**A**: This has been fixed in v2.2+. The app now properly supports sleep mode - you can close and open the 3DS without issues.
+| Element | x | y | scale |
+|---|---|---|---|
+| Header bar | 0 | 0 | — |
+| Header text (all screens) | 4 | 4–6 | 0.54f |
+| List rows (all screens) | varies | 32 + i × 14.5 | 0.38f |
+| Type badge ^ / + (all list screens) | 240 | row y | 0.44f |
+| TitleID right-aligned (Uninstall/Backup) | 292 | row y | 0.38f |
+| Size right-aligned (Install) | 396 − len × 5.7 | row y | 0.38f |
+| Size right-aligned (SysInfo) | 396 − len × 5.7 | row y | 0.38f |
+| Bottom hint bar | 0 | 222 | — |
+| Bottom hint text | 4 | 224 | 0.52f |
+| Detail panel — name | 4 | 22 | 0.52f |
+| Detail panel — ID (`ID: XXXXXXXXXXXXXXXX`) | 4 | 42 | 0.52f |
+| Detail panel — version + size + location | 4 | 60 | 0.52f |
+| Detail panel — backup status | 4 | 78–80 | 0.52f |
 
-### Q: Why does loading take a while?
-**A**: The app now shows a progress bar while loading. The time depends on how many titles you have installed - each title needs to be read from the system to get its name, size, and details.
+### Known Limitations
 
-### Q: Can I use this on a stock 3DS (no CFW)?
-**A**: No, you need a 3DS with access to the Homebrew Launcher. This typically requires either:
-- Custom Firmware (CFW) like Luma3DS
-- Or a homebrew entrypoint (limited access)
-Note: Some features may require CFW for full functionality.
+- Icon images (`C2D_Image icon`) are allocated in `TitleInfo` but not loaded at runtime (complexity vs. benefit tradeoff).
+- Max file size per backup copy: `MAX_FILE_SIZE` = 100 MB.
+- Title name truncation: 32 chars in list views; full name shown in all detail/bottom panels.
+- Sleep mode: `aptMainLoop()` returns `false` during sleep, pausing the main loop. No aggressive frame-skipping permitted — rendering must continue every frame when awake.
 
-## Technical Documentation
-
-For technical details about the implementation, see [docs/README.md](docs/README.md).
-
-Topics covered:
-- Architecture and core components
-- Data structures
-- Rendering pipeline
-- UTF-16 to UTF-8 conversion
-- Save backup strategy
-- Sleep mode support
-- Memory management
-- Performance characteristics
+---
 
 ## License
 
-This project is open source. Feel free to use, modify, and distribute.
+Open source. See [LICENSE](LICENSE).
 
 ## Credits
 
-Created by Marcogn
+Created by Marcogn.
 
 ## Disclaimer
 
-Use this software at your own risk. While the application now includes full save data backup functionality for all save types, always ensure you have additional backups of important save data before uninstalling titles. The developers are not responsible for any data loss.
+Use at your own risk. Always keep additional backups of important save data before uninstalling titles. The authors are not responsible for any data loss.
