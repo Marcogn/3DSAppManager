@@ -432,7 +432,7 @@ Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall
 
 ## Technical Reference
 
-**Language:** C (single-file: `source/main.c`)  
+**Language:** C (modular architecture)  
 **SDK:** libctru (devkitARM)  
 **Graphics:** citro3d + citro2d (hardware-accelerated, flicker-free double buffering)  
 **Services:** AM (title management), FS (file system / save archives)  
@@ -440,7 +440,25 @@ Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall
 
 ### Architecture
 
-The entire application lives in `source/main.c` (~2500 lines). This is intentional — all screens share global state, which avoids extern sprawl in a project of this scale.
+The application is structured into **8 modules** for maintainability and testability:
+
+```
+source/
+├── types.h            — Type definitions, enums, structs, constants
+├── globals.h/c        — Shared global state (externalized from main.c)
+├── utils.h/c          — Utility functions (createDirectory, formatSize, etc.)
+├── config.h/c         — Config load/save (INI parsing)
+├── titles.h/c         — Title loading (optimized), sort/filter, backup-dir helpers
+├── backup_restore.h/c — Save backup, restore, title deletion
+├── install.h/c        — CIA scanning and installation
+├── draw.h/c           — All rendering functions (~750 lines)
+├── input.h/c          — Input handlers and blocking flows (~560 lines)
+└── main.c             — Entry point + main loop (125 lines)
+```
+
+**No Makefile changes required**: the devkitPro template's `$(wildcard $(dir)/*.c)` includes all `.c` files automatically.
+
+#### App State Machine
 
 ```c
 typedef enum {
