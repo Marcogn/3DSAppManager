@@ -41,6 +41,7 @@ typedef struct {
 #define MAX_VISIBLE_TITLES 13
 #define FILE_BROWSER_VISIBLE 12  /* install screen has 36px header → only 12 rows fit cleanly */
 #define BACKUP_VISIBLE       13  /* backup list: uniform layout with UNINSTALL and SYSINFO */
+#define UNINSTALL_VISIBLE    12  /* uninstall: 36px header → 12 rows fit cleanly */
 #define DIR_STACK_MAX  12        /* max folder nesting depth for cursor restore */
 #define MAX_FILES         256
 #define CHUNK_SIZE        0x10000
@@ -147,6 +148,7 @@ static char currentPath[512];
 /* Backup flow */
 static int backupCursor      = 0;
 static int backupScrollOffset = 0;
+static SortMode backupSortMode = SORT_BY_NAME;  /* independent from uninstall sort */
 /* Backup filtered list (excludes DLC/Updates — no standalone save data) */
 static int backupIndices[MAX_TITLES];
 static int backupTitleCount  = 0;
@@ -178,6 +180,7 @@ void formatSize(u64 size, char *buf, size_t bufSize);
 void sortTitles(void);
 void updateFilteredList(void);
 static void sysInfoSortSubList(void);
+static void sortBackupList(void);
 int  compareTitlesByName(const void *a, const void *b);
 int  compareTitlesBySize(const void *a, const void *b);
 int  compareTitlesByID(const void *a, const void *b);
@@ -456,6 +459,32 @@ static void sysInfoSortSubList(void) {
         qsort(sysInfoSubIndices, sysInfoSubCount, sizeof(int), sysInfoCmpSize);
     else
         qsort(sysInfoSubIndices, sysInfoSubCount, sizeof(int), sysInfoCmpID);
+}
+/* Backup sub-list independent sort — compares via indices into titles[] */
+static int backupCmpName(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    return strcasecmp(titles[ia].name, titles[ib].name);
+}
+static int backupCmpSize(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    if (titles[ia].size > titles[ib].size) return -1;
+    if (titles[ia].size < titles[ib].size) return  1;
+    return 0;
+}
+static int backupCmpID(const void *a, const void *b) {
+    int ia=*(const int*)a, ib=*(const int*)b;
+    if (titles[ia].titleID < titles[ib].titleID) return -1;
+    if (titles[ia].titleID > titles[ib].titleID) return  1;
+    return 0;
+}
+static void sortBackupList(void) {
+    if (backupTitleCount <= 0) return;
+    if (backupSortMode == SORT_BY_NAME)
+        qsort(backupIndices, backupTitleCount, sizeof(int), backupCmpName);
+    else if (backupSortMode == SORT_BY_SIZE)
+        qsort(backupIndices, backupTitleCount, sizeof(int), backupCmpSize);
+    else
+        qsort(backupIndices, backupTitleCount, sizeof(int), backupCmpID);
 }
 void getTitleName(u64 titleID, FS_MediaType mediaType, char *outName, size_t outSize) {
     SMDH smdh;
@@ -1106,7 +1135,7 @@ void drawTouchControls(void) {
         dt(4, 96, 0.5f, 0.52f, CLR_RED, "No backup");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "[SELECT = Controls]");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "[SELECT: Controls]");
 }
 
 /* drawMainMenu: called from main loop — NO C3D frame management. */
@@ -1132,7 +1161,7 @@ void drawMainMenu(void) {
             dt(12, y, 0.5f, 0.54f, CLR_WHITE, ">");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "START = Exit");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "START: Exit");
     /* Bottom screen */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     static const char *descLine1[] = {
@@ -1154,7 +1183,7 @@ void drawMainMenu(void) {
     dt(8, 30, 0.5f, 0.54f, CLR_WHITE, descLine1[menuCursor]);
     dt(8, 52, 0.5f, 0.52f, CLR_GRAY,  descLine2[menuCursor]);
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A = Select   START = Exit");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Select   START: Exit");
 }
 
 /* drawUI: uninstall list — called from main loop, NO C3D frame management. */
@@ -1162,9 +1191,9 @@ void drawUI(void) {
     C2D_TextBufClear(dynamicBuf);
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
-    C2D_DrawRectSolid(0, 0, 0.5f, 400, 28, CLR_HEADER);
-    dt(4, 6, 0.5f, 0.54f, CLR_WHITE, "Uninstall");
-    /* Info bar inside expanded header */
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 36, CLR_HEADER);
+    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "Uninstall");
+    /* Info bar — second line inside expanded header */
     int selCount = 0;
     for (int i = 0; i < titleCount; i++)
         if (titles[i].selected && titles[i].isValid) selCount++;
@@ -1173,22 +1202,22 @@ void drawUI(void) {
     /* Info bar: fixed-width prefix (%-3d prevents shifting when filteredCount changes) */
     char infoP1[36];
     snprintf(infoP1, sizeof(infoP1), "T:%-3d Sel:%-3d Sort:", filteredCount, selCount);
-    float xi  = 4.0f + (float)strlen(infoP1) * 6.0f;
+    float xi  = 4.0f + (float)strlen(infoP1) * 5.4f;
     const char *sn = sortNames[currentSortMode];
-    float xi2 = xi  + (float)strlen(sn) * 6.0f;
+    float xi2 = xi  + (float)strlen(sn) * 5.4f;
     const char *fn = filterNames[currentFilterMode];
     char filtFull[8]; snprintf(filtFull, sizeof(filtFull), " [%s]", fn);
     u32 filtClr = (currentFilterMode != FILTER_ALL) ? CLR_YELLOW : CLR_GRAY;
-    dt(4,   16, 0.5f, 0.40f, CLR_GRAY,   infoP1);
-    dt(xi,  16, 0.5f, 0.40f, CLR_YELLOW, sn);        /* sort always yellow */
-    dt(xi2, 16, 0.5f, 0.40f, filtClr,    filtFull);  /* "[All]"=gray, "[Upd]"/"[DLC]"=yellow */
-    /* Title list — starts at y=32: 4px gap below 28px header */
-    for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
+    dt(4,   22, 0.5f, 0.40f, CLR_GRAY,   infoP1);
+    dt(xi,  22, 0.5f, 0.40f, CLR_YELLOW, sn);        /* sort always yellow */
+    dt(xi2, 22, 0.5f, 0.40f, filtClr,    filtFull);  /* "[All]"=gray, "[Upd]"/"[DLC]"=yellow */
+    /* Title list — starts at y=40: 4px gap below 36px header */
+    for (int i = 0; i < UNINSTALL_VISIBLE; i++) {
         int fi = scrollOffset + i;
         if (fi >= filteredCount) break;
         int idx = filteredIndices[fi];
         TitleInfo *ti = &titles[idx];
-        float y = 32.0f + (float)i * 14.5f;
+        float y = 40.0f + (float)i * 14.5f;
         bool isCursor = (fi == cursor);
         if (isCursor)
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
@@ -1210,12 +1239,12 @@ void drawUI(void) {
         dt(292.0f, y, 0.5f, 0.38f, CLR_GRAY, fullID);
     }
     /* Scroll counter */
-    if (filteredCount > MAX_VISIBLE_TITLES) {
+    if (filteredCount > UNINSTALL_VISIBLE) {
         char sc[16]; snprintf(sc, sizeof(sc), "%d/%d", cursor + 1, filteredCount);
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Sel  X=Delete  L/R=Sort  Y=Filt  B=Menu  SEL=Help");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Sel  X: Delete  L/R: Sort  Y: Filt  B: Menu  SEL: Help");
     /* Bottom screen via sub-function (no TextBufClear here) */
     drawTouchControls();
 }
@@ -1230,7 +1259,7 @@ static void _drawSoon(const char *feature) {
     dt(110, 95, 0.5f, 0.65f, CLR_YELLOW, "COMING SOON");
     dt(80, 135, 0.5f, 0.54f, CLR_GRAY, "Feature under development (v2.0).");
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B / START = Back to menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B / START: Back to menu");
 }
 
 /* drawFileBrowserScreen: file browser for CIA install.
@@ -1286,7 +1315,7 @@ void drawFileBrowserScreen(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Enter/Install Y=All B=Up DX/SX=Page");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Enter/Install  Y: All  B: Up  DX/SX: Page");
     /* Bottom screen: info file selezionato */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1330,18 +1359,23 @@ void drawBackupScreen(void) {
     C2D_TextBufClear(dynamicBuf);
     /* Top screen */
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
-    C2D_DrawRectSolid(0, 0, 0.5f, 400, 28, CLR_HEADER);
+    C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     int selCount = 0;
     for (int i = 0; i < backupTitleCount; i++)
         if (titles[backupIndices[i]].selected) selCount++;
     char hdr[56]; snprintf(hdr, sizeof(hdr), "Save Backups   Sel:%d", selCount);
-    dt(4, 6, 0.5f, 0.54f, CLR_WHITE, hdr);
-    /* Title list — starts at y=32: 4px gap below 28px header */
+    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, hdr);
+    /* Sort indicator right-aligned — same pattern as SysInfo sublist */
+    static const char *bkSortNames[] = { "Name", "Size", "ID" };
+    char sortLbl[16]; snprintf(sortLbl, sizeof(sortLbl), "Sort:%s", bkSortNames[backupSortMode]);
+    float slX = 393.0f - (float)strlen(sortLbl) * 7.0f;
+    dt(slX, 4, 0.5f, 0.52f, CLR_YELLOW, sortLbl);
+    /* Title list — starts at y=26: 4px gap below 22px header */
     for (int i = 0; i < BACKUP_VISIBLE; i++) {
         int bi = backupScrollOffset + i;
         if (bi >= backupTitleCount) break;
         TitleInfo *t2 = &titles[backupIndices[bi]];
-        float y = 32.0f + (float)i * 14.5f;
+        float y = 26.0f + (float)i * 14.5f;
         bool isCursor = (bi == backupCursor);
         if (isCursor)
             C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 15, CLR_SELECTED);
@@ -1372,7 +1406,7 @@ void drawBackupScreen(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Sel  X=Backup Sel  Y=Backup All  B=Menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Sel  X: Backup Sel  Y: Backup All  L/R: Sort  B: Menu");
     /* Bottom screen: details for backupCursor title */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1399,7 +1433,7 @@ void drawBackupScreen(void) {
         }
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "X=Backup sel   Y=Backup all");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "X: Backup sel   Y: Backup all");
 }
 /* SysInfo detail view state — set by _runSysInfoDetailFlow before drawTitleDetails */
 static int sysInfoDetailIdx    = 0;
@@ -1448,16 +1482,16 @@ void drawSysInfoScreen(void) {
         char sdLine[64]; snprintf(sdLine, sizeof(sdLine), "  SD Free: %s / %s", szFree, szTot);
         dt(8, 170, 0.5f, 0.52f, CLR_CYAN, sdLine);
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Enter category   B=Menu");
+        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Enter category   B: Menu");
         /* Bottom: hint */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
         dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Overview");
-        dt(8, 26, 0.5f, 0.52f, CLR_GRAY, "A = Open category list.");
-        dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN = Select category.");
-        dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B = Back to main menu.");
+        dt(8, 26, 0.5f, 0.52f, CLR_GRAY, "A: Open category list.");
+        dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN: Select category.");
+        dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B: Back to main menu.");
         C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A=Open  Up/Down=Select  B=Menu");
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: Open  Up/Down: Select  B: Menu");
     } else {
         /* Sublist: GAMES / UPDATES / DLC — independent sort from Uninstall */
         static const char *siSortNames[] = { "Name", "Size", "ID" };
@@ -1469,7 +1503,7 @@ void drawSysInfoScreen(void) {
         dt(4, 6, 0.5f, 0.54f, CLR_WHITE, hdr);
         /* Sort indicator right-aligned in header */
         char sortLbl[16]; snprintf(sortLbl, sizeof(sortLbl), "Sort:%s", siSortNames[sysInfoSortMode]);
-        float slX = 396.0f - (float)strlen(sortLbl) * 7.0f;
+        float slX = 393.0f - (float)strlen(sortLbl) * 7.0f;
         dt(slX, 6, 0.5f, 0.52f, CLR_YELLOW, sortLbl);
         /* Sublist — starts at y=32: 4px gap below 28px header, 4px gap above hint bar */
         for (int i = 0; i < MAX_VISIBLE_TITLES; i++) {
@@ -1500,7 +1534,7 @@ void drawSysInfoScreen(void) {
             dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A=Details  L/R=Sort  B=Back");
+        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Details  L/R: Sort  B: Back");
         /* Bottom: simplified details for cursor item */
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1524,10 +1558,10 @@ void drawSysInfoScreen(void) {
             } else {
                 dt(4, 78, 0.5f, 0.52f, CLR_RED, "No backup");
             }
-            dt(4, 98, 0.5f, 0.52f, CLR_CYAN, "A = Details & actions");
+            dt(4, 98, 0.5f, 0.52f, CLR_CYAN, "A: Details & actions");
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A=Open  L/R=Sort  B=Back");
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: Open  L/R: Sort  B: Back");
     }
 }
 /* drawSettingsScreen: settings UI — NO C3D frame management (main loop). */
@@ -1564,7 +1598,7 @@ void drawSettingsScreen(void) {
             dt(260, y + 2, 0.5f, 0.50f, CLR_CYAN, values[i]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L=Change  DX/SX=Change  B/START=Save & Back");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L: Change  DX/SX: Change  B/START: Save & Back");
 
     /* Bottom screen: contextual description */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
@@ -1593,7 +1627,7 @@ void drawSettingsScreen(void) {
     C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 206, 0.5f, 0.54f, CLR_GREEN, "Changes saved in real time.");
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B/START = save & back to menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B/START: save & back to menu");
 }
 /* drawTitleDetails: detail view for a single title (SysInfo flow).
    Called from _runSysInfoDetailFlow within C3D_FrameBegin/End — NO frame mgmt. */
@@ -1650,7 +1684,7 @@ void drawTitleDetails(void) {
         dt(8, y, 0.5f, 0.38f, (a == sysInfoDetailCursor) ? CLR_WHITE : CLR_GRAY, actions[a]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.54f, CLR_WHITE, "Up/Down=Nav  A=Execute  B=Back");
+    dt(4, 224, 0.5f, 0.54f, CLR_WHITE, "Up/Down: Nav  A: Execute  B: Back");
     /* Bottom: description of selected action */
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
@@ -1663,7 +1697,7 @@ void drawTitleDetails(void) {
     dt(8, 28, 0.5f, 0.52f, CLR_WHITE, actDesc[sysInfoDetailCursor][0]);
     dt(8, 48, 0.5f, 0.52f, CLR_GRAY,  actDesc[sysInfoDetailCursor][1]);
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A = confirm action");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: confirm action");
 }
 
 /* ============================================================
@@ -1710,8 +1744,8 @@ void handleUninstallInput(void) {
     if (keys & KEY_DOWN) {
         if (cursor < filteredCount - 1) {
             cursor++;
-            if (cursor >= scrollOffset + MAX_VISIBLE_TITLES)
-                scrollOffset = cursor - MAX_VISIBLE_TITLES + 1;
+            if (cursor >= scrollOffset + UNINSTALL_VISIBLE)
+                scrollOffset = cursor - UNINSTALL_VISIBLE + 1;
         }
     }
     if (keys & KEY_UP) {
@@ -1721,13 +1755,13 @@ void handleUninstallInput(void) {
         }
     }
     if (keys & KEY_RIGHT) {
-        cursor += MAX_VISIBLE_TITLES;
+        cursor += UNINSTALL_VISIBLE;
         if (cursor >= filteredCount) cursor = (filteredCount > 0) ? filteredCount - 1 : 0;
-        if (cursor >= scrollOffset + MAX_VISIBLE_TITLES)
-            scrollOffset = cursor - MAX_VISIBLE_TITLES + 1;
+        if (cursor >= scrollOffset + UNINSTALL_VISIBLE)
+            scrollOffset = cursor - UNINSTALL_VISIBLE + 1;
     }
     if (keys & KEY_LEFT) {
-        cursor -= MAX_VISIBLE_TITLES;
+        cursor -= UNINSTALL_VISIBLE;
         if (cursor < 0) cursor = 0;
         if (cursor < scrollOffset) scrollOffset = cursor;
     }
@@ -2015,6 +2049,7 @@ static void buildBackupList(void) {
         if (backupTitleCount < MAX_TITLES)
             backupIndices[backupTitleCount++] = i;
     }
+    sortBackupList(); /* apply current sort order */
 }
 
 /* runInstallFlow: blocking CIA install flow — manages own C3D frames. */
@@ -2214,6 +2249,18 @@ void runBackupFlow(void) {
         u32 k = hidKeysDown();
 
         if ((k & KEY_B) || (k & KEY_START)) return;
+
+        /* Sort */
+        if (k & KEY_L) {
+            backupSortMode = (SortMode)((backupSortMode + 2) % 3);
+            sortBackupList();
+            backupCursor = 0; backupScrollOffset = 0;
+        }
+        if (k & KEY_R) {
+            backupSortMode = (SortMode)((backupSortMode + 1) % 3);
+            sortBackupList();
+            backupCursor = 0; backupScrollOffset = 0;
+        }
 
         /* Navigation */
         if (k & KEY_DOWN) {

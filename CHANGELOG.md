@@ -1,6 +1,32 @@
 # Changelog
 
-## v2.0.0 – UI unification (2026-04-13)
+## v2.1.0 – Sort backup, header tweaks, footer normalizzazione (2026-04-13)
+
+### Backup — ordinamento indipendente
+- Aggiunto `backupSortMode` (globale, `SortMode`, default `SORT_BY_NAME`) separato da `currentSortMode` dell'Uninstall.
+- Aggiunte funzioni `backupCmpName/Size/ID` e `sortBackupList()` (stesso schema di `sysInfoSortSubList`).
+- `buildBackupList()` chiama `sortBackupList()` al termine, così la lista è già ordinata al primo accesso.
+- In `runBackupFlow()` i tasti `L/R` ciclano il sort (L = precedente, R = successivo), resettano `backupCursor` e `backupScrollOffset`.
+- Indicatore `Sort:Name/Size/ID` aggiunto nell'header top di `drawBackupScreen` (right-aligned a `x=393`, stessa posizione della SysInfo sublist).
+
+### Header `drawUI` (Uninstall) — due righe pulite
+- Header espanso da 28px a **36px** per contenere le due righe senza sovrapposizione.
+- Titolo "Uninstall" spostato a `y=4` (prima riga); info-bar `T:X Sel:X Sort:` spostata a `y=22` (seconda riga).
+- La lista inizia a `y=40` (4px gap sotto header da 36px); numero di righe visibili aggiornato a `UNINSTALL_VISIBLE=12`.
+- Moltiplicatore gap Sort↔Name corretto: `6.0f → 5.4f` per entrambi `xi` e `xi2`, elimina overflow visivo su `Sort:Size`.
+
+### Header `drawBackupScreen` — ridotto
+- Header da 28px a **22px** (una riga): titolo a `y=4`, lista parte da `y=26`.
+- Il contatore di selezione rimane nel titolo (`Sel:N`).
+
+### Fix `drawSysInfoScreen` — Sort:Name overflow
+- `slX = 396.0f → 393.0f`: il label `Sort:Name` (9 caratteri × 7px = 63px) inizia ora a `330px`, evitando clip sul bordo destro.
+
+### Footer — normalizzazione separatore comandi
+- Tutti i footer di reminder comandi usano ora `": "` come separatore (era `"="` o `" = "`).
+- Aggiornati: `drawTouchControls`, `drawMainMenu`, `drawUI`, `drawFileBrowserScreen`, `drawBackupScreen`, `drawSysInfoScreen` (overview + sublist + hint bottom), `drawSettingsScreen`, `drawTitleDetails`, `_drawSoon`.
+
+
 
 ### Visual consistency — all screens
 
