@@ -83,7 +83,7 @@ typedef u8 CFG_Language;
 static inline ssize_t utf16_to_utf8(uint8_t *dst, const uint16_t *src, size_t size) {
     if (!src || !dst || size == 0) return -1;
     size_t i = 0;
-    while (i < size) {
+    while (i < size - 1) {  /* leave room for null terminator */
         uint16_t c = src[i];
         if (c == 0) break;
         if (c < 0x80) {

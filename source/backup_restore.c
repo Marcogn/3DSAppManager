@@ -63,7 +63,7 @@ bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     createDirectory(backupDir);
     /* createDirectory wraps mkdir which may fail silently (e.g. SD full);
        stat confirms the directory was actually created on the SD card. */
-    struct stat bst; if (stat(backupDir, &bst) != 0) return false;
+    struct stat bst; if (stat(backupDir, &bst) != 0 || !S_ISDIR(bst.st_mode)) return false;
 
     time_t now = time(NULL); struct tm *tm2 = localtime(&now);
     char dateBuf[32] = "??/??/?? ??:??";
