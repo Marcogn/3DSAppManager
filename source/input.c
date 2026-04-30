@@ -411,12 +411,13 @@ void runBackupFlow(void) {
             bool confirmed = false;
             while (aptMainLoop()) { drawDialog(cfDl, 4); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
             if (!confirmed) continue;
-            int done = 0;
+            int done = 0, failed = 0;
             for (int i = 0; i < backupTitleCount; i++) {
                 TitleInfo *ti = &titles[backupIndices[i]]; if (!ti->selected || !ti->isValid) continue;
-                drawLoadingScreen(done, selCount, ti->name); backupSaveData(ti); ti->hasBackup = true; done++;
+                drawLoadingScreen(done, selCount, ti->name);
+                if (backupSaveData(ti)) { ti->hasBackup = true; done++; } else { failed++; }
             }
-            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
+            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed: %d ok, %d failed.", done, failed);
             const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
             drawDialog(doneDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
@@ -428,12 +429,13 @@ void runBackupFlow(void) {
             bool confirmed = false;
             while (aptMainLoop()) { drawDialog(cfDl, 5); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
             if (!confirmed) continue;
-            int done = 0;
+            int done = 0, failed = 0;
             for (int i = 0; i < backupTitleCount; i++) {
                 TitleInfo *ti = &titles[backupIndices[i]]; if (!ti->isValid) continue;
-                drawLoadingScreen(done, validCount, ti->name); backupSaveData(ti); ti->hasBackup = true; done++;
+                drawLoadingScreen(done, validCount, ti->name);
+                if (backupSaveData(ti)) { ti->hasBackup = true; done++; } else { failed++; }
             }
-            char doneMsg[56]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed for %d titles.", done);
+            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed: %d ok, %d failed.", done, failed);
             const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
             drawDialog(doneDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
@@ -513,10 +515,16 @@ void runUninstallDeleteFlow(void) {
         if (!confirmed) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; }
     }
     /* Execute backup + delete */
+    int bkFailed = 0;
     for (int i = 0; i < titleCount; i++) {
         if (!titles[i].selected || !titles[i].isValid) continue;
-        if (doBackup) backupSaveDataToPath(&titles[i], chosenPath);
+        if (doBackup && !backupSaveDataToPath(&titles[i], chosenPath)) bkFailed++;
         deleteTitle(&titles[i]);
+    }
+    if (doBackup && bkFailed > 0) {
+        char bkErrMsg[64]; snprintf(bkErrMsg, sizeof(bkErrMsg), "  %d backup(s) failed.", bkFailed);
+        const char *bkErrDl[] = { "", bkErrMsg, "", "  A=Continue" };
+        drawDialog(bkErrDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     }
     titleCount = 0; cursor = 0; scrollOffset = 0;
     for (int i = 0; i < MAX_TITLES; i++) titles[i].selected = false;
@@ -524,23 +532,23 @@ void runUninstallDeleteFlow(void) {
 }
 
 void runSysInfoDetailFlow(void) {
-    int idx = sysInfoDetailIdx;
-    sysInfoDetailCursor = 0;
+    int idx = sysInfoDetail.idx;
+    sysInfoDetail.cursor = 0;
     while (aptMainLoop()) {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         drawTitleDetails();
         C3D_FrameEnd(0);
         hidScanInput();
         u32 k = hidKeysDown();
-        if (k & KEY_DOWN) sysInfoDetailCursor = (sysInfoDetailCursor + 1) % 3;
-        if (k & KEY_UP)   sysInfoDetailCursor = (sysInfoDetailCursor + 2) % 3;
+        if (k & KEY_DOWN) sysInfoDetail.cursor = (sysInfoDetail.cursor + 1) % 3;
+        if (k & KEY_UP)   sysInfoDetail.cursor = (sysInfoDetail.cursor + 2) % 3;
         if (k & KEY_B)    break;
         if (k & KEY_A) {
-            if (sysInfoDetailCursor == 0) {
+            if (sysInfoDetail.cursor == 0) {
                 backupSaveData(&titles[idx]); titles[idx].hasBackup = true;
                 const char *msg[] = { "", "  Backup completed.", "", "  A=OK" };
                 drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
-            } else if (sysInfoDetailCursor == 1) {
+            } else if (sysInfoDetail.cursor == 1) {
                 if (!titles[idx].hasBackup) { const char *msg[] = { "", "  No backup available.", "", "  A=OK" }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
                 bool ok = restoreSaveData(&titles[idx]);
                 if (ok) { const char *msg[] = { "", "  Save data restored.", "", "  A=OK" }; drawDialog(msg, 4); }

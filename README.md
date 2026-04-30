@@ -179,6 +179,7 @@ The bottom screen shows a description of the highlighted setting.
 | **Up / Down** | Navigate menu |
 | **A** | Enter selected screen |
 | **START** | Exit application |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 
 ### Uninstall Screen
 
@@ -190,7 +191,7 @@ The bottom screen shows a description of the highlighted setting.
 | **X** | Start uninstall flow for selected titles |
 | **L / R** | Cycle sort mode (Name -> Size -> ID) |
 | **Y** | Cycle filter (All -> Updates -> DLC) |
-| **SELECT** (hold) | Show controls overlay |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back to main menu |
 | **START** | Exit application |
 
@@ -213,6 +214,8 @@ The bottom screen shows a description of the highlighted setting.
 | **A** | Toggle title selection |
 | **X** | Backup selected titles |
 | **Y** | Backup all titles |
+| **L / R** | Cycle sort mode |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back to main menu |
 
 ### System Info Screen
@@ -221,6 +224,8 @@ The bottom screen shows a description of the highlighted setting.
 |---|---|
 | **Up / Down** | Navigate categories / title list |
 | **A** | Open category list / open title detail |
+| **L / R** | Cycle sort (in category list) |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back / back to overview |
 
 ### Title Detail (from System Info)
@@ -237,6 +242,7 @@ The bottom screen shows a description of the highlighted setting.
 |---|---|
 | **Up / Down** | Navigate settings |
 | **A / L / R / d-pad left-right** | Change value |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B / START** | Save and return to menu |
 
 ---
@@ -371,7 +377,8 @@ Restart the HOME menu or the console. The 3DS system cache can take a moment to 
     |__ boss_extdata/     SpotPass / StreetPass data
 ```
 
-**Default path:** `sdmc:/3ds/fast-uninstall/backups`
+**Default `backup_path`:** `sdmc:/3ds/fast-uninstall/backups`  
+The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by host tests).
 
 **Alternative paths** (cycle with d-pad left/right in Settings):
 1. `sdmc:/3ds/fast-uninstall/backups`
@@ -412,10 +419,20 @@ export DEVKITPRO=/opt/devkitpro
 export DEVKITARM=$DEVKITPRO/devkitARM
 ```
 
+### Running Tests (host)
+
+Unit tests compile and run on the development host without a 3DS or devkitARM:
+
+```bash
+make -C tests
+```
+
+Tests cover: `formatSize`, `sanitizeName`, config round-trip, comparators, safety filter, `smdhSelectName`, and filter logic. No 3DS hardware required.
+
 ### Build
 
 ```bash
-git clone https://github.com/yourusername/3ds-fast-uninstall.git
+git clone https://github.com/Marcogn/3ds-fast-uninstall.git
 cd 3ds-fast-uninstall
 make clean && make
 ```
@@ -458,6 +475,23 @@ source/
 
 **No Makefile changes required**: the devkitPro template's `$(wildcard $(dir)/*.c)` includes all `.c` files automatically.
 
+#### Module Relationship Diagram
+
+```
+main.c
+  ├── globals.h/c        (shared state — all modules read/write via extern)
+  ├── config.h/c         (INI parse/save — reads/writes globals.config)
+  ├── titles.h/c         (loadTitles, sort/filter — reads/writes globals.titles[])
+  │     └── [draw.h]     (calls drawLoadingScreen during load — forward-declared)
+  ├── draw.h/c           (all rendering — reads globals, calls titles helpers)
+  ├── input.h/c          (input + blocking flows — calls draw, titles, backup, install)
+  │     ├── backup_restore.h/c  (save backup, restore, delete — calls draw for dialogs)
+  │     └── install.h/c         (CIA scan, install — calls draw for progress)
+  └── utils.h/c          (pure helpers — no globals, no 3DS services; host-testable)
+
+types.h   ─── included by all modules (type definitions shared everywhere)
+```
+
 #### App State Machine
 
 ```c
@@ -499,6 +533,11 @@ typedef struct {
 } Config;
 
 typedef struct {
+    int idx;    // selected category (0=Games, 1=Updates, 2=DLC, 3=System)
+    int cursor; // selected row within the category list
+} SysInfoDetailState;
+
+typedef struct {
     char name[256];
     bool isDir;
     bool isCIA;
@@ -507,20 +546,41 @@ typedef struct {
 } FileEntry;
 ```
 
-### Rendering Pipeline
+### Rendering Pipeline — when frames are managed
 
-Every frame follows this pattern:
+The app has two rendering modes that must never overlap:
 
+**Normal frames (main loop):**
 ```
+aptMainLoop()
 C3D_FrameBegin(C3D_FRAME_SYNCDRAW)
-    C2D_SceneBegin(top)    -> draw top screen
-    C2D_SceneBegin(bottom) -> draw bottom screen
+  C2D_TextBufClear(dynamicBuf)
+  C2D_TargetClear(top, CLR_BG)
+  C2D_SceneBegin(top)     → draw top screen content at z ≈ 0.5
+  C2D_TargetClear(bottom, CLR_BG)
+  C2D_SceneBegin(bottom)  → draw bottom screen content at z ≈ 0.5
+  [if SELECT held: drawHelpOverlay() draws at z = 0.7 — NO second SceneBegin]
 C3D_FrameEnd(0)
 ```
 
-`C2D_TextBufClear(dynamicBuf)` is called once at the start of each full draw function. **`C2D_SceneBegin` must be called exactly once per target per frame** — double calls cause flickering.
+**Blocking flows** (install progress, backup progress, uninstall dialog chain, SysInfo detail)
+run **before** `C3D_FrameBegin` in the main loop and manage their own frames:
+```
+runInstallFlow() / runBackupFlow() / runUninstallDeleteFlow() / runSysInfoDetailFlow() {
+    while (aptMainLoop()) {
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW)
+            drawFileBrowserScreen() / drawBackupScreen() / drawDialog() / drawTitleDetails()
+        C3D_FrameEnd(0)
+        hidScanInput(); handle input; break when done
+    }
+}
+```
 
-**SELECT overlay (flicker-free):** when SELECT is held, the overlay is baked directly into the same frame at higher z-depth (0.6-0.7), avoiding a second `C2D_SceneBegin` on the same target.
+**Rule — never violate**: `C2D_SceneBegin` must be called **exactly once per target per frame**.  
+A second call on the same target clears it and causes flickering.  
+Overlays (SELECT help) must be drawn into the **already-active** scene at higher z-depth (0.5 → 0.7).  
+`drawLoadingScreen` and `drawInstallProgressScreen` each call `C3D_FrameBegin/End` themselves —  
+they must never be called from inside an already-open frame.
 
 ### Title Loading & Language Fallback
 

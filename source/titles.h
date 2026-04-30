@@ -24,6 +24,10 @@ void getTitleInfo (TitleInfo *title);
 u64  getTitleSize (u64 titleID, FS_MediaType mediaType);
 void loadTitleIcon(TitleInfo *title);
 
+/* Pure helpers (no global state) */
+bool titlePassesSafetyFilter(u64 titleID, FS_MediaType mediaType);
+bool smdhSelectName(const SMDH *smdh, u8 sysLang, char *outName, size_t outSize);
+
 /* Title loading (optimized) */
 void loadTitles(void);
 void findRelatedTitles(u64 baseTitleID, int selfIdx, int *outIdx, int *outCount);

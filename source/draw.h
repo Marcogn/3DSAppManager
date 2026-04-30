@@ -22,4 +22,5 @@ void drawBackupScreen     (void);
 void drawSysInfoScreen    (void);
 void drawSettingsScreen   (void);
 void drawTitleDetails     (void);
+void drawHelpOverlay      (AppState state);
 

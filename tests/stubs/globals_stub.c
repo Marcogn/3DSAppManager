@@ -1,7 +1,7 @@
-/* ============================================================
-   globals.c — definitions of all shared global state
-   ============================================================ */
-#include "globals.h"
+/*
+ * stubs/globals_stub.c — minimal globals for test builds (replaces source/globals.c).
+ */
+#include "../../source/globals.h"
 
 TitleInfo titles[MAX_TITLES];
 int       titleCount      = 0;
@@ -14,7 +14,7 @@ Config config;
 
 C3D_RenderTarget *top    = NULL;
 C3D_RenderTarget *bottom = NULL;
-C2D_TextBuf       dynamicBuf;
+C2D_TextBuf       dynamicBuf = NULL;
 
 SortMode   currentSortMode    = SORT_BY_NAME;
 FilterMode currentFilterMode  = FILTER_ALL;
@@ -46,9 +46,8 @@ int         sysInfoSubScrollOffset = 0;
 int         sysInfoSubIndices[MAX_TITLES];
 int         sysInfoSubCount        = 0;
 SortMode    sysInfoSortMode        = SORT_BY_NAME;
-SysInfoDetailState sysInfoDetail        = {0, 0};
+SysInfoDetailState sysInfoDetail   = {0, 0};
 
 bool showingHelpOverlay = false;
 
 int settingsCursor = 0;
-

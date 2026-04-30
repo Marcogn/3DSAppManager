@@ -6,8 +6,8 @@
 
 void copyDirectory      (FS_Archive archive, const char *srcPath, const char *dstPath);
 void backupArchive      (FS_Archive archive, const char *basePath, const char *archiveName);
-void backupSaveDataToPath(TitleInfo *title, const char *backupPath);
-void backupSaveData     (TitleInfo *title);
+bool backupSaveDataToPath(TitleInfo *title, const char *backupPath);
+bool backupSaveData     (TitleInfo *title);
 void restoreDirectory   (FS_Archive archive, const char *srcPath, const char *dstPath);
 bool restoreSaveData    (TitleInfo *title);
 void deleteTitleCompletely(TitleInfo *title);

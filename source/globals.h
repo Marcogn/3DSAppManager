@@ -55,8 +55,10 @@ extern int         sysInfoSubScrollOffset;
 extern int         sysInfoSubIndices[MAX_TITLES];
 extern int         sysInfoSubCount;
 extern SortMode    sysInfoSortMode;
-extern int         sysInfoDetailIdx;
-extern int         sysInfoDetailCursor;
+extern SysInfoDetailState sysInfoDetail;
+
+/* Help overlay */
+extern bool showingHelpOverlay;
 
 /* Settings */
 extern int settingsCursor;
