@@ -685,9 +685,9 @@ void drawTitleDetails(void) {
    Does NOT call C2D_SceneBegin or C2D_TargetClear.
    ============================================================ */
 
-void drawHelpOverlay(AppState state) {
-    typedef struct { const char *key; const char *desc; } HelpEntry;
+typedef struct { const char *key; const char *desc; } HelpEntry;
 
+void drawHelpOverlay(AppState state) {
     static const HelpEntry mainMenuHelp[] = {
         { "Up/Down",  "Navigate menu" },
         { "A",        "Enter screen" },
