@@ -1,5 +1,42 @@
 # Changelog
 
+## v2.3.0 – Help overlay, pure helpers, bool backups, test suite (2026-04-27)
+
+### SELECT help overlay (Tasks 1–3)
+- **`SysInfoDetailState` struct** (`types.h`): merged `sysInfoDetailIdx` + `sysInfoDetailCursor` into one struct, reducing the global count and making the relationship between the two values explicit.
+- **`showingHelpOverlay` global** (`globals.h/c`): new `bool` that drives the per-screen SELECT overlay.
+- **`drawHelpOverlay(AppState state)`** (`draw.h/c`): draws a semi-transparent context-sensitive help panel at `z=0.7f` directly onto the already-active scene — no second `C2D_SceneBegin` call, so no flicker.
+- **SELECT held → overlay visible** (`main.c`): `hidKeysHeld() & KEY_SELECT` checked between the draw-dispatch block and `C3D_FrameEnd(0)` so the overlay is baked into every frame while held.
+- Footer hints updated to `"A: Select  START: Exit  SEL: Help"` (main menu) and `"B: Back  START: Exit  SELECT: Help"` (all other screens).
+
+### Pure helper functions (Task 4)
+- **`titlePassesSafetyFilter(u32 highWord, FS_MediaType mt)`** (`titles.h/c`): extracted from `loadTitles()` Pass 1; pure — no side effects, testable on host.
+- **`smdhSelectName(const smdh_s *smdh, int lang)`** (`titles.h/c`): extracted UTF-16→name selection logic; returns `NULL` on blank/`--` names, testable on host.
+
+### Backup error reporting (Task 5)
+- **`backupSaveData` / `backupSaveDataToPath` return `bool`** (`backup_restore.h/c`): callers can now detect failure. `backupSaveDataToPath` uses `stat(backupDir)` post-creation to confirm the directory was actually created on SD.
+- **KEY_X / KEY_Y backup flows** (`input.c`): track a `failed` counter; completion dialog now shows `"Backup completed: N ok, M failed."` so the user knows if any title silently failed.
+- **Uninstall flow** (`input.c`): if pre-deletion backup fails, an error dialog is shown before proceeding (or aborting, depending on settings).
+
+### Progress / responsiveness (Task 6)
+- Loading loops in `loadTitles()` now call `aptMainLoop()` every 5 titles (previously 10) so the OS event loop runs twice as often — prevents console sleep/APT timeouts on large libraries.
+
+### Testable constants (Task 7)
+- `CONFIG_PATH` and `DEFAULT_BACKUP_PATH` in `types.h` are wrapped in `#ifndef` guards so host test builds can override them with `-DCONFIG_PATH="..."` without touching production paths.
+
+### Host-side unit test suite (Task 8)
+- **`tests/` directory**: single-header `greatest.h` test framework, libctru shims (`3ds.h`, `citro2d.h`), and globals/draw stubs for host compilation.
+- **3 test suites, 28 tests** — all pass on host (`make -C tests`):
+  - `test_utils.c` (8 tests): `formatSize`, `sanitizeName`
+  - `test_config.c` (3 tests): config load / save / round-trip (uses `-DCONFIG_PATH` override)
+  - `test_titles.c` (17 tests): comparators, `titlePassesSafetyFilter`, `smdhSelectName`, `updateFilteredList`
+
+### Documentation
+- `README.md`: SELECT hint added to all control tables; "Running tests" section added under Build; `SysInfoDetailState` struct added to Core Data Structures; clone URL corrected.
+- Top-level `Makefile`: `test:` target delegates to `$(MAKE) -C tests` (devkitARM build unchanged).
+
+---
+
 ## v2.2.0 – Refactoring and optimizations (2026-04-13)
 
 ### Code refactoring — multi-file architecture

@@ -20,3 +20,8 @@ build/
 
 # Dependency files
 *.a
+
+# Host test binaries
+tests/test_utils
+tests/test_config
+tests/test_titles

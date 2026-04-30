@@ -2,12 +2,25 @@
 .SUFFIXES:
 #---------------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------------
+# Host-side test target (no devkitARM required)
+#---------------------------------------------------------------------------------
+test:
+	$(MAKE) -C tests
+
+.PHONY: test
+#---------------------------------------------------------------------------------
+
+ifeq ($(filter test,$(MAKECMDGOALS)),)
 ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
+endif
 
 TOPDIR ?= $(CURDIR)
+ifeq ($(filter test,$(MAKECMDGOALS)),)
 include $(DEVKITARM)/3ds_rules
+endif
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output

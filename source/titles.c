@@ -9,6 +9,46 @@
 /* Forward declaration — defined in draw.c (avoids circular include) */
 void drawLoadingScreen(int current, int total, const char *status);
 
+/* ---- Pure helpers ---- */
+
+bool titlePassesSafetyFilter(u64 titleID, FS_MediaType mediaType) {
+    u32 hi = (u32)(titleID >> 32);
+    if (mediaType == MEDIATYPE_SD) {
+        if (hi == 0x00040010 || hi == 0x00040030) return false;
+    } else {
+        if (hi == 0x00040010 || hi == 0x00040030 || hi == 0x00040138) return false;
+        if (hi != 0x00040000 && hi != 0x0004000E && hi != 0x0004008C) return false;
+    }
+    return true;
+}
+
+bool smdhSelectName(const SMDH *smdh, u8 sysLang, char *outName, size_t outSize) {
+    int order[3] = {(sysLang < SMDH_LANG_COUNT) ? (int)sysLang : 1, 1, 0};
+    bool found = false;
+    for (int a = 0; a < 3 && !found; a++) {
+        if (a > 0 && order[a] == order[0]) continue;
+        ssize_t u = utf16_to_utf8((uint8_t*)outName, smdh->titles[order[a]].shortDescription, outSize - 1);
+        if (u > 0) {
+            outName[u] = '\0';
+            bool ok = false;
+            for (int i = 0; i < u; i++) { if (outName[i] != ' ' && outName[i] != '\0') { ok = true; break; } }
+            if (ok) found = true;
+        }
+    }
+    if (!found) {
+        for (int li = 0; li < SMDH_LANG_COUNT; li++) {
+            ssize_t u = utf16_to_utf8((uint8_t*)outName, smdh->titles[li].shortDescription, outSize - 1);
+            if (u > 0) {
+                outName[u] = '\0';
+                bool ok = false;
+                for (int k = 0; k < u; k++) { if (outName[k] != ' ' && outName[k] != '\0') { ok = true; break; } }
+                if (ok) { found = true; break; }
+            }
+        }
+    }
+    return found;
+}
+
 /* ---- Sort / Filter ---- */
 
 int compareTitlesByName(const void *a, const void *b) {
@@ -224,8 +264,7 @@ void loadTitles(void) {
         drawLoadingScreen(0, (int)totalRaw, "Loading SD title list...");
         if (R_SUCCEEDED(AM_GetTitleList(&rc, MEDIATYPE_SD, cntSD, ids))) {
             for (u32 i = 0; i < rc && (sdCount + nandCount) < MAX_TITLES; i++) {
-                u32 hi = (u32)(ids[i] >> 32);
-                if (hi == 0x00040010 || hi == 0x00040030) continue;
+                if (!titlePassesSafetyFilter(ids[i], MEDIATYPE_SD)) continue;
                 sdIDs[sdCount++] = ids[i];
             }
         }
@@ -234,9 +273,7 @@ void loadTitles(void) {
         drawLoadingScreen((int)cntSD, (int)totalRaw, "Loading NAND title list...");
         if (R_SUCCEEDED(AM_GetTitleList(&rc, MEDIATYPE_NAND, cntNAND, ids))) {
             for (u32 i = 0; i < rc && (sdCount + nandCount) < MAX_TITLES; i++) {
-                u32 hi = (u32)(ids[i] >> 32);
-                if (hi == 0x00040010 || hi == 0x00040030 || hi == 0x00040138) continue;
-                if (hi != 0x00040000 && hi != 0x0004000E && hi != 0x0004008C) continue;
+                if (!titlePassesSafetyFilter(ids[i], MEDIATYPE_NAND)) continue;
                 nandIDs[nandCount++] = ids[i];
             }
         }
@@ -283,9 +320,10 @@ void loadTitles(void) {
 
     /* Process SD titles */
     for (int i = 0; i < sdCount && titleCount < MAX_TITLES; i++) {
-        if (i % 10 == 0) {
+        if (i % 5 == 0) {
             char s[64]; snprintf(s, sizeof(s), "SD %d/%d", i + 1, sdCount);
             drawLoadingScreen(i, total, s);
+            aptMainLoop();
         }
         u64 tid = sdIDs[i];
         TitleInfo *t = &titles[titleCount];
@@ -349,9 +387,10 @@ void loadTitles(void) {
 
     /* Process NAND titles (same pattern) */
     for (int i = 0; i < nandCount && titleCount < MAX_TITLES; i++) {
-        if (i % 10 == 0) {
+        if (i % 5 == 0) {
             char s[64]; snprintf(s, sizeof(s), "NAND %d/%d", i + 1, nandCount);
             drawLoadingScreen(sdCount + i, total, s);
+            aptMainLoop();
         }
         u64 tid = nandIDs[i];
         TitleInfo *t = &titles[titleCount];

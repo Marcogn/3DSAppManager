@@ -51,7 +51,7 @@ void backupArchive(FS_Archive archive, const char *basePath, const char *archive
     createDirectory(p); copyDirectory(archive, "/", p);
 }
 
-void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
+bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     createDirectory(backupPath);
     char dirName[320];
     char cleanName[80]; strncpy(cleanName, title->name, 79); cleanName[79] = '\0';
@@ -61,6 +61,9 @@ void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     char backupDir[512];
     snprintf(backupDir, sizeof(backupDir), "%s/%s", backupPath, dirName);
     createDirectory(backupDir);
+    /* createDirectory wraps mkdir which may fail silently (e.g. SD full);
+       stat confirms the directory was actually created on the SD card. */
+    struct stat bst; if (stat(backupDir, &bst) != 0) return false;
 
     time_t now = time(NULL); struct tm *tm2 = localtime(&now);
     char dateBuf[32] = "??/??/?? ??:??";
@@ -97,10 +100,11 @@ void backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
         }
     }
     title->hasBackup = true;
+    return true;
 }
 
-void backupSaveData(TitleInfo *title) {
-    backupSaveDataToPath(title, config.backupPath);
+bool backupSaveData(TitleInfo *title) {
+    return backupSaveDataToPath(title, config.backupPath);
 }
 
 void restoreDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {

@@ -175,7 +175,7 @@ void drawMainMenu(void) {
     C2D_TextBufClear(dynamicBuf);
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
-    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "3DS Fast Uninstall  v2.0");
+    dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "3DS Fast Uninstall  " VERSION_STRING);
     static const char *items[] = {
         "Install CIA", "Backup Saves", "Uninstall Titles", "System Info", "Settings"
     };
@@ -207,7 +207,7 @@ void drawMainMenu(void) {
     dt(8, 30, 0.5f, 0.54f, CLR_WHITE, descLine1[menuCursor]);
     dt(8, 52, 0.5f, 0.52f, CLR_GRAY,  descLine2[menuCursor]);
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Select   START: Exit");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Select  START: Exit  SEL: Help");
 }
 
 /* ============================================================
@@ -245,7 +245,7 @@ void drawTouchControls(void) {
         dt(4, 96, 0.5f, 0.52f, CLR_RED, "No backup");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "[SELECT removed — see TODO.md]");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
 }
 
 void drawUI(void) {
@@ -623,7 +623,7 @@ void drawSettingsScreen(void) {
 void drawTitleDetails(void) {
     C2D_TextBufClear(dynamicBuf);
     C2D_TargetClear(top, CLR_BG); C2D_SceneBegin(top);
-    int idx = sysInfoDetailIdx;
+    int idx = sysInfoDetail.idx;
     TitleInfo *ti = &titles[idx];
     C2D_DrawRectSolid(0, 0, 0.5f, 400, 22, CLR_HEADER);
     dt(4, 4, 0.5f, 0.54f, CLR_WHITE, "Title Details");
@@ -661,8 +661,8 @@ void drawTitleDetails(void) {
     };
     for (int a = 0; a < 3; a++) {
         float y = actY + (float)a * 19.0f;
-        if (a == sysInfoDetailCursor) C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 18, CLR_SELECTED);
-        dt(8, y, 0.5f, 0.38f, (a == sysInfoDetailCursor) ? CLR_WHITE : CLR_GRAY, actions[a]);
+        if (a == sysInfoDetail.cursor) C2D_DrawRectSolid(0, y - 1, 0.5f, 400, 18, CLR_SELECTED);
+        dt(8, y, 0.5f, 0.38f, (a == sysInfoDetail.cursor) ? CLR_WHITE : CLR_GRAY, actions[a]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.54f, CLR_WHITE, "Up/Down: Nav  A: Execute  B: Back");
@@ -674,9 +674,97 @@ void drawTitleDetails(void) {
         { "Restore data from backup",         "previously created." },
         { "Delete the title from the system", "including DLC, Updates and data." }
     };
-    dt(8, 28, 0.5f, 0.52f, CLR_WHITE, actDesc[sysInfoDetailCursor][0]);
-    dt(8, 48, 0.5f, 0.52f, CLR_GRAY,  actDesc[sysInfoDetailCursor][1]);
+    dt(8, 28, 0.5f, 0.52f, CLR_WHITE, actDesc[sysInfoDetail.cursor][0]);
+    dt(8, 48, 0.5f, 0.52f, CLR_GRAY,  actDesc[sysInfoDetail.cursor][1]);
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: confirm action");
 }
 
+/* ============================================================
+   Help overlay — drawn on the already-active top scene at z=0.7.
+   Does NOT call C2D_SceneBegin or C2D_TargetClear.
+   ============================================================ */
+
+void drawHelpOverlay(AppState state) {
+    typedef struct { const char *key; const char *desc; } HelpEntry;
+
+    static const HelpEntry mainMenuHelp[] = {
+        { "Up/Down",  "Navigate menu" },
+        { "A",        "Enter screen" },
+        { "START",    "Exit app" },
+        { NULL, NULL }
+    };
+    static const HelpEntry installHelp[] = {
+        { "A",          "Enter folder / Install CIA" },
+        { "Y",          "Install all in folder" },
+        { "B",          "Go up one level" },
+        { "Left/Right", "Page jump" },
+        { "START",      "Back to menu" },
+        { NULL, NULL }
+    };
+    static const HelpEntry backupHelp[] = {
+        { "A",     "Select title" },
+        { "X",     "Backup selected" },
+        { "Y",     "Backup all titles" },
+        { "L/R",   "Sort" },
+        { "B",     "Back to menu" },
+        { NULL, NULL }
+    };
+    static const HelpEntry uninstallHelp[] = {
+        { "A",     "Toggle selection" },
+        { "X",     "Start uninstall flow" },
+        { "L/R",   "Cycle sort" },
+        { "Y",     "Cycle filter" },
+        { "B",     "Back to menu" },
+        { NULL, NULL }
+    };
+    static const HelpEntry sysInfoHelp[] = {
+        { "Up/Down", "Navigate" },
+        { "A",       "Open category / details" },
+        { "L/R",     "Sort (in category)" },
+        { "B",       "Back" },
+        { NULL, NULL }
+    };
+    static const HelpEntry settingsHelp[] = {
+        { "Up/Down",          "Navigate" },
+        { "A/Left/Right/L/R", "Change value" },
+        { "B/START",          "Save and back" },
+        { NULL, NULL }
+    };
+
+    static const char *titles_str[] = {
+        "Main Menu Help",
+        "Install CIA Help",
+        "Backup Saves Help",
+        "Uninstall Help",
+        "System Info Help",
+        "Settings Help"
+    };
+    static const HelpEntry *helpTables[] = {
+        mainMenuHelp, installHelp, backupHelp,
+        uninstallHelp, sysInfoHelp, settingsHelp
+    };
+
+    int si = (int)state;
+    if (si < 0 || si >= 6) si = 0;
+    const HelpEntry *entries = helpTables[si];
+    const char *title_str    = titles_str[si];
+
+    float bw = 320.0f, bh = 180.0f;
+    float bx = (400.0f - bw) / 2.0f;
+    float by = (240.0f - bh) / 2.0f;
+    C2D_DrawRectSolid(bx,      by,       0.7f, bw, bh, C2D_Color32(10,10,20,245));
+    C2D_DrawRectSolid(bx,      by,       0.7f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by+bh-2,  0.7f, bw, 2,  CLR_WHITE);
+    C2D_DrawRectSolid(bx,      by,       0.7f, 2,  bh, CLR_WHITE);
+    C2D_DrawRectSolid(bx+bw-2, by,       0.7f, 2,  bh, CLR_WHITE);
+    dt(bx + 8.0f, by + 6.0f,  0.7f, 0.54f, CLR_CYAN, title_str);
+    C2D_DrawRectSolid(bx, by + 22.0f, 0.7f, bw, 1, CLR_GRAY);
+    float ey = by + 28.0f;
+    for (int i = 0; entries[i].key != NULL; i++, ey += 18.0f) {
+        dt(bx + 8.0f,  ey, 0.7f, 0.44f, CLR_YELLOW, entries[i].key);
+        dt(bx + 90.0f, ey, 0.7f, 0.44f, CLR_WHITE,  entries[i].desc);
+    }
+    C2D_DrawRectSolid(bx, by + bh - 20.0f, 0.7f, bw, 1, CLR_GRAY);
+    dt(bx + 8.0f, by + bh - 16.0f, 0.7f, 0.44f, CLR_GRAY, "Release SELECT to return.");
+}

@@ -40,8 +40,13 @@ typedef struct {
 
 /* ---- Constants ---- */
 #define MAX_TITLES          500
+#ifndef CONFIG_PATH
 #define CONFIG_PATH         "sdmc:/3ds/fast-uninstall/config.ini"
+#endif
+#ifndef DEFAULT_BACKUP_PATH
 #define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
+#endif
+#define SMDH_LANG_COUNT     12   /* number of language slots in an SMDH title entry */
 #define LANGUAGE_ENGLISH    1
 #define MAX_FILE_SIZE       (100 * 1024 * 1024)
 #define MAX_VISIBLE_TITLES  13
@@ -52,6 +57,7 @@ typedef struct {
 #define MAX_FILES           256
 #define CHUNK_SIZE          0x10000
 #define ALIGN64(x)          (((u32)(x) + 63) & ~63U)
+#define VERSION_STRING      "v2.3.0"
 
 /* ---- Color palette ---- */
 #define CLR_BG        C2D_Color32(20,20,30,255)
@@ -116,6 +122,11 @@ typedef struct {
     bool forceRestore;
     bool skipInstallConfirm;
 } Config;
+
+typedef struct {
+    int idx;
+    int cursor;
+} SysInfoDetailState;
 
 typedef struct {
     char name[256];

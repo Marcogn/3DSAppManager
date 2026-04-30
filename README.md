@@ -179,6 +179,7 @@ The bottom screen shows a description of the highlighted setting.
 | **Up / Down** | Navigate menu |
 | **A** | Enter selected screen |
 | **START** | Exit application |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 
 ### Uninstall Screen
 
@@ -190,7 +191,7 @@ The bottom screen shows a description of the highlighted setting.
 | **X** | Start uninstall flow for selected titles |
 | **L / R** | Cycle sort mode (Name -> Size -> ID) |
 | **Y** | Cycle filter (All -> Updates -> DLC) |
-| **SELECT** (hold) | Show controls overlay |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back to main menu |
 | **START** | Exit application |
 
@@ -213,6 +214,8 @@ The bottom screen shows a description of the highlighted setting.
 | **A** | Toggle title selection |
 | **X** | Backup selected titles |
 | **Y** | Backup all titles |
+| **L / R** | Cycle sort mode |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back to main menu |
 
 ### System Info Screen
@@ -221,6 +224,8 @@ The bottom screen shows a description of the highlighted setting.
 |---|---|
 | **Up / Down** | Navigate categories / title list |
 | **A** | Open category list / open title detail |
+| **L / R** | Cycle sort (in category list) |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B** | Back / back to overview |
 
 ### Title Detail (from System Info)
@@ -237,6 +242,7 @@ The bottom screen shows a description of the highlighted setting.
 |---|---|
 | **Up / Down** | Navigate settings |
 | **A / L / R / d-pad left-right** | Change value |
+| **SELECT** (hold) | Show context-sensitive help overlay |
 | **B / START** | Save and return to menu |
 
 ---
@@ -371,7 +377,8 @@ Restart the HOME menu or the console. The 3DS system cache can take a moment to 
     |__ boss_extdata/     SpotPass / StreetPass data
 ```
 
-**Default path:** `sdmc:/3ds/fast-uninstall/backups`
+**Default `backup_path`:** `sdmc:/3ds/fast-uninstall/backups`  
+The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by host tests).
 
 **Alternative paths** (cycle with d-pad left/right in Settings):
 1. `sdmc:/3ds/fast-uninstall/backups`
@@ -412,10 +419,20 @@ export DEVKITPRO=/opt/devkitpro
 export DEVKITARM=$DEVKITPRO/devkitARM
 ```
 
+### Running Tests (host)
+
+Unit tests compile and run on the development host without a 3DS or devkitARM:
+
+```bash
+make -C tests
+```
+
+Tests cover: `formatSize`, `sanitizeName`, config round-trip, comparators, safety filter, `smdhSelectName`, and filter logic. No 3DS hardware required.
+
 ### Build
 
 ```bash
-git clone https://github.com/yourusername/3ds-fast-uninstall.git
+git clone https://github.com/Marcogn/3ds-fast-uninstall.git
 cd 3ds-fast-uninstall
 make clean && make
 ```
@@ -497,6 +514,11 @@ typedef struct {
     bool forceRestore;
     bool skipInstallConfirm;
 } Config;
+
+typedef struct {
+    int idx;    // selected category (0=Games, 1=Updates, 2=DLC, 3=System)
+    int cursor; // selected row within the category list
+} SysInfoDetailState;
 
 typedef struct {
     char name[256];

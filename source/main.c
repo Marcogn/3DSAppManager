@@ -73,8 +73,8 @@ int main(void) {
         /* SysInfo title detail: blocking (Backup/Restore/Delete), outside C3D frame */
         if (appState == APP_SYSINFO && sysInfoMode != SYSINFO_OVERVIEW
                 && sysInfoSubCount > 0 && (keys & KEY_A)) {
-            sysInfoDetailIdx    = sysInfoSubIndices[sysInfoSubCursor];
-            sysInfoDetailCursor = 0;
+            sysInfoDetail.idx    = sysInfoSubIndices[sysInfoSubCursor];
+            sysInfoDetail.cursor = 0;
             runSysInfoDetailFlow();
             continue;
         }
@@ -108,6 +108,16 @@ int main(void) {
             default:
                 drawMainMenu();
                 break;
+        }
+        /* SELECT help overlay — baked into current frame at higher z-depth */
+        {
+            u32 heldKeys = hidKeysHeld();
+            if (heldKeys & KEY_SELECT) {
+                showingHelpOverlay = true;
+                drawHelpOverlay(appState);
+            } else {
+                showingHelpOverlay = false;
+            }
         }
         C3D_FrameEnd(0);
     }
