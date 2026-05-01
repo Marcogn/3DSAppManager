@@ -5,6 +5,7 @@
 #include "titles.h"
 #include "globals.h"
 #include "utils.h"
+#include <strings.h>  /* strcasecmp */
 
 /* Forward declaration — defined in draw.c (avoids circular include) */
 void drawLoadingScreen(int current, int total, const char *status);
@@ -126,7 +127,7 @@ bool getBackupLastDate(u64 titleID, char *outDate, size_t outSize) {
     char infoPath[512];
     snprintf(infoPath, sizeof(infoPath), "%s/backup_info.txt", backupDir);
     FILE *f = fopen(infoPath, "r");
-    if (!f) { snprintf(outDate, outSize, "??/??/?? ??:??"); return true; }
+    if (!f) { snprintf(outDate, outSize, "--/--/-- --:--"); return true; }
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         if (strncmp(line, "Backup Date:", 12) == 0) {
@@ -227,10 +228,14 @@ void getTitleInfo(TitleInfo *title) {
         u32 br = 0; FSFILE_Read(fh, &br, 0, &smdh, sizeof(SMDH)); FSFILE_Close(fh);
         if (br >= sizeof(u32) && smdh.magic == 0x48444D53) {
             ssize_t u = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].longDescription, sizeof(title->fullName) - 1);
-            if (u < 0) u = 0; title->fullName[u] = '\0'; sanitizeName(title->fullName);
+            if (u < 0) u = 0;
+            title->fullName[u] = '\0';
+            sanitizeName(title->fullName);
             if (title->fullName[0] == '\0' || strcmp(title->fullName, "Unknown Title") == 0) {
                 u = utf16_to_utf8((uint8_t*)title->fullName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, sizeof(title->fullName) - 1);
-                if (u < 0) u = 0; title->fullName[u] = '\0'; sanitizeName(title->fullName);
+                if (u < 0) u = 0;
+                title->fullName[u] = '\0';
+                sanitizeName(title->fullName);
             }
         }
     }
@@ -367,10 +372,14 @@ void loadTitles(void) {
                     }
                 }
                 ssize_t u2 = utf16_to_utf8((uint8_t*)t->fullName, smdh.titles[LANGUAGE_ENGLISH].longDescription, sizeof(t->fullName) - 1);
-                if (u2 < 0) u2 = 0; t->fullName[u2] = '\0'; sanitizeName(t->fullName);
+                if (u2 < 0) u2 = 0;
+                t->fullName[u2] = '\0';
+                sanitizeName(t->fullName);
                 if (t->fullName[0] == '\0' || strcmp(t->fullName, "Unknown Title") == 0) {
                     u2 = utf16_to_utf8((uint8_t*)t->fullName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, sizeof(t->fullName) - 1);
-                    if (u2 < 0) u2 = 0; t->fullName[u2] = '\0'; sanitizeName(t->fullName);
+                    if (u2 < 0) u2 = 0;
+                    t->fullName[u2] = '\0';
+                    sanitizeName(t->fullName);
                 }
             }
         }
@@ -432,10 +441,14 @@ void loadTitles(void) {
                     }
                 }
                 ssize_t u2 = utf16_to_utf8((uint8_t*)t->fullName, smdh.titles[LANGUAGE_ENGLISH].longDescription, sizeof(t->fullName) - 1);
-                if (u2 < 0) u2 = 0; t->fullName[u2] = '\0'; sanitizeName(t->fullName);
+                if (u2 < 0) u2 = 0;
+                t->fullName[u2] = '\0';
+                sanitizeName(t->fullName);
                 if (t->fullName[0] == '\0' || strcmp(t->fullName, "Unknown Title") == 0) {
                     u2 = utf16_to_utf8((uint8_t*)t->fullName, smdh.titles[LANGUAGE_ENGLISH].shortDescription, sizeof(t->fullName) - 1);
-                    if (u2 < 0) u2 = 0; t->fullName[u2] = '\0'; sanitizeName(t->fullName);
+                    if (u2 < 0) u2 = 0;
+                    t->fullName[u2] = '\0';
+                    sanitizeName(t->fullName);
                 }
             }
         }
