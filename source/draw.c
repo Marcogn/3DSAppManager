@@ -745,6 +745,7 @@ void drawHelpOverlay(AppState state) {
         uninstallHelp, sysInfoHelp, settingsHelp
     };
 
+    /* indexed by AppState: MAIN_MENU=0 INSTALL=1 BACKUP=2 UNINSTALL=3 SYSINFO=4 SETTINGS=5 */
     static const char *screenHints[] = {
         "A: Confirm selection",
         "Title details shown on bottom screen",
@@ -753,6 +754,8 @@ void drawHelpOverlay(AppState state) {
         "Title details and actions on bottom screen",
         "Setting descriptions shown on bottom screen"
     };
+    _Static_assert(sizeof(screenHints)/sizeof(screenHints[0]) == 6,
+                   "screenHints must have one entry per AppState");
 
     int si = (int)state;
     if (si < 0 || si >= 6) si = 0;
@@ -777,7 +780,7 @@ void drawHelpOverlay(AppState state) {
     C2D_DrawRectSolid(bx, by + bh - 20.0f, 0.7f, bw, 1, CLR_GRAY);
     dt(bx + 8.0f, by + bh - 16.0f, 0.7f, 0.44f, CLR_GRAY, "Release SELECT to return.");
     const char *hint = screenHints[si];
-    if (hint && hint[0]) {
+    if (hint[0]) {
         C2D_DrawRectSolid(bx, by + bh - 40.0f, 0.7f, bw, 1, C2D_Color32(80,80,120,200));
         dt(bx + 8.0f, by + bh - 36.0f, 0.7f, 0.40f, CLR_CYAN, hint);
     }
