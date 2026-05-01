@@ -3,30 +3,8 @@
 ## Future Features
 
 ### Controls Help Overlay (SELECT button)
-**Status**: Removed in v2.1.0 refactoring  
-**Rationale**: The SELECT overlay in Uninstall screen replaced the entire list draw, causing context loss. Footer became too crowded with all button hints.
-
-**Proposed solution**:
-- **Universal help system**: pressing SELECT on any screen displays a context-aware help overlay
-- **Per-screen help content**: each screen (Main Menu, Install, Backup, Uninstall, SysInfo, Settings) has its own controls reminder and tips
-- **Simplified footer**: main footer shows only `B: Back  START: Exit  SELECT: Help` on most screens
-- **Overlay design**: semi-transparent box (like current dialogs) with:
-  - Screen title at top
-  - List of available controls with descriptions
-  - Context hints (e.g., "Selected titles shown on bottom screen")
-  - Footer: "Release SELECT to return"
-
-**Implementation notes**:
-- Add `showingHelpOverlay` global flag
-- In main loop, if `hidKeysHeld() & KEY_SELECT`, set flag and call `drawHelpOverlay(appState)` instead of normal draw
-- Each screen gets a help content array in `draw.c`
-- No frame management in `drawHelpOverlay` — called from within existing `C3D_FrameBegin/End`
-
-**Benefits**:
-- Cleaner UI (less cluttered footers)
-- Better discoverability for new users
-- Consistent help access across all screens
-- No context loss (overlay instead of replacement)
+**Status**: ✅ Implemented in v2.3.0  
+**Summary**: Universal per-screen help overlay triggered by holding SELECT. Semi-transparent box drawn at z=0.7 on the already-active top scene — no `C2D_SceneBegin` duplication, no flicker. Each screen (Main Menu, Install, Backup, Uninstall, SysInfo, Settings) has distinct controls + context hint. All screen footers simplified to `B: Back  START: Exit  SELECT: Help`.
 
 ---
 

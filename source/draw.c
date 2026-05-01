@@ -186,7 +186,7 @@ void drawMainMenu(void) {
         if (i == menuCursor) dt(12, y, 0.5f, 0.54f, CLR_WHITE, ">");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "START: Exit");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "START: Exit  SELECT: Help");
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     static const char *descLine1[] = {
         "Install .CIA files from the SD card.",
@@ -294,7 +294,7 @@ void drawUI(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Sel  X: Delete  L/R: Sort  Y: Filt  B: Menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
     drawTouchControls();
 }
 
@@ -341,7 +341,7 @@ void drawFileBrowserScreen(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Enter/Install  Y: All  B: Up  DX/SX: Page");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "File Info");
@@ -373,7 +373,7 @@ void drawFileBrowserScreen(void) {
         dt(8, 50, 0.5f, 0.52f, CLR_GRAY, "Empty folder");
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "All installs go to SD card");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
 }
 
 /* ============================================================
@@ -421,7 +421,7 @@ void drawBackupScreen(void) {
         dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Sel  X: Backup Sel  Y: Backup All  L/R: Sort  B: Menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Details");
@@ -444,7 +444,7 @@ void drawBackupScreen(void) {
         }
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "X: Backup sel   Y: Backup all");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
 }
 
 /* ============================================================
@@ -488,7 +488,7 @@ void drawSysInfoScreen(void) {
         char sdLine[64]; snprintf(sdLine, sizeof(sdLine), "  SD Free: %s / %s", szFree, szTot);
         dt(8, 170, 0.5f, 0.52f, CLR_CYAN, sdLine);
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Enter category   B: Menu");
+        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
         dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Overview");
@@ -496,7 +496,7 @@ void drawSysInfoScreen(void) {
         dt(8, 44, 0.5f, 0.52f, CLR_GRAY, "UP/DOWN: Select category.");
         dt(8, 62, 0.5f, 0.52f, CLR_GRAY, "B: Back to main menu.");
         C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: Open  Up/Down: Select  B: Menu");
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
     } else {
         static const char *siSortNames[] = { "Name", "Size", "ID" };
         const char *hdrLabel =
@@ -533,7 +533,7 @@ void drawSysInfoScreen(void) {
             dt(340, 225, 0.5f, 0.52f, CLR_GRAY, sc);
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A: Details  L/R: Sort  B: Back");
+        dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
         C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
         dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Title Details");
@@ -557,7 +557,7 @@ void drawSysInfoScreen(void) {
             dt(4, 98, 0.5f, 0.52f, CLR_CYAN, "A: Details & actions");
         }
         C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "A: Open  L/R: Sort  B: Back");
+        dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
     }
 }
 
@@ -589,7 +589,7 @@ void drawSettingsScreen(void) {
         if (i < 4) dt(260, y + 2, 0.5f, 0.50f, CLR_CYAN, values[i]);
     }
     C2D_DrawRectSolid(0, 222, 0.5f, 400, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "A/R/L: Change  DX/SX: Change  B/START: Save & Back");
+    dt(4, 224, 0.5f, 0.52f, CLR_WHITE, "B: Back  START: Exit  SELECT: Help");
     C2D_TargetClear(bottom, CLR_BG); C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 2, 0.5f, 0.54f, CLR_WHITE, "Description");
@@ -613,7 +613,7 @@ void drawSettingsScreen(void) {
     C2D_DrawRectSolid(0, 204, 0.5f, 320, 18, CLR_HEADER);
     dt(4, 206, 0.5f, 0.54f, CLR_GREEN, "Changes saved in real time.");
     C2D_DrawRectSolid(0, 222, 0.5f, 320, 18, CLR_HEADER);
-    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B/START: save & back to menu");
+    dt(4, 224, 0.5f, 0.52f, CLR_GRAY, "B: Back  START: Exit  SELECT: Help");
 }
 
 /* ============================================================
@@ -745,6 +745,18 @@ void drawHelpOverlay(AppState state) {
         uninstallHelp, sysInfoHelp, settingsHelp
     };
 
+    /* indexed by AppState: MAIN_MENU=0 INSTALL=1 BACKUP=2 UNINSTALL=3 SYSINFO=4 SETTINGS=5 */
+    static const char *screenHints[] = {
+        "A: Confirm selection",
+        "Title details shown on bottom screen",
+        "Title details + backup status below",
+        "Selected titles shown on bottom screen",
+        "Title details and actions on bottom screen",
+        "Setting descriptions shown on bottom screen"
+    };
+    _Static_assert(sizeof(screenHints)/sizeof(screenHints[0]) == 6,
+                   "screenHints must have one entry per AppState");
+
     int si = (int)state;
     if (si < 0 || si >= 6) si = 0;
     const HelpEntry *entries = helpTables[si];
@@ -767,4 +779,9 @@ void drawHelpOverlay(AppState state) {
     }
     C2D_DrawRectSolid(bx, by + bh - 20.0f, 0.7f, bw, 1, CLR_GRAY);
     dt(bx + 8.0f, by + bh - 16.0f, 0.7f, 0.44f, CLR_GRAY, "Release SELECT to return.");
+    const char *hint = screenHints[si];
+    if (hint[0]) {
+        C2D_DrawRectSolid(bx, by + bh - 40.0f, 0.7f, bw, 1, C2D_Color32(80,80,120,200));
+        dt(bx + 8.0f, by + bh - 36.0f, 0.7f, 0.40f, CLR_CYAN, hint);
+    }
 }
