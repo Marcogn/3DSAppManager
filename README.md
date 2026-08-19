@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="icon.png" alt="3DS Fast Uninstall Icon" width="200"/>
+  <img src="icon.png" alt="3DS App Manager Icon" width="200"/>
 </p>
 
-# 3DS Fast Uninstall
+# 3DS App Manager
 
-[![Latest release](https://img.shields.io/github/v/release/Marcogn/3ds-fast-uninstall?label=release)](https://github.com/Marcogn/3ds-fast-uninstall/releases/latest)
-[![Build](https://github.com/Marcogn/3ds-fast-uninstall/actions/workflows/build.yml/badge.svg)](https://github.com/Marcogn/3ds-fast-uninstall/actions/workflows/build.yml)
-[![Host-side Unit Tests](https://github.com/Marcogn/3ds-fast-uninstall/actions/workflows/tests.yml/badge.svg)](https://github.com/Marcogn/3ds-fast-uninstall/actions/workflows/tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/Marcogn/3DSAppManager?label=release)](https://github.com/Marcogn/3DSAppManager/releases/latest)
+[![Build](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml)
+[![Host-side Unit Tests](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A Nintendo 3DS homebrew application for managing installed titles: install
@@ -22,7 +22,7 @@ the HOME menu one title at a time.
 ## Why
 
 The HOME menu only deletes one title at a time and has no built-in way to
-back up a save before the title disappears with it. 3ds-fast-uninstall
+back up a save before the title disappears with it. 3DS App Manager
 turns that into a batch operation with the backup step made explicit and
 automatic — optional per run, or forced on always from Settings — so
 cleaning up storage never has to mean gambling with save data.
@@ -30,10 +30,10 @@ cleaning up storage never has to mean gambling with save data.
 ## Download
 
 Grab the latest build from the
-[**Releases**](https://github.com/Marcogn/3ds-fast-uninstall/releases/latest)
+[**Releases**](https://github.com/Marcogn/3DSAppManager/releases/latest)
 page.
 
-1. Download `3ds-fast-uninstall.3dsx` from the latest release.
+1. Download `3ds-app-manager.3dsx` from the latest release.
 2. Copy it to `/3ds/` on your SD card.
 3. Launch it from the **Homebrew Launcher**.
 4. Wait for the loading screen (a progress bar shows while titles are read).
@@ -90,7 +90,7 @@ no separate save step.
 | Skip Uninstall Confirm | OFF | Delete immediately on X without confirmation |
 | Force Restore | OFF | Auto-restore backup after every CIA install |
 | Skip Install Confirm | OFF | Install immediately on A without confirmation |
-| Backup Folder | `sdmc:/3ds/fast-uninstall/backups` | Cycle through 5 preset paths with left/right or L/R |
+| Backup Folder | `sdmc:/3ds/3ds-app-manager/backups` | Cycle through 5 preset paths with left/right or L/R |
 | Language | System language (EN/IT, else EN) | Cycle between English and Italian for all app UI text |
 
 Changes are saved in real time; press **B** or **START** to return to the menu.
@@ -363,7 +363,7 @@ You have over 300 titles. The HOME menu cap is 300. The app still shows all of t
 System Info -> navigate to the title -> **A** -> "Restore Save Data".
 
 **Where are my backups?**  
-`[backup_path]/[TitleID]/`. Default: `sdmc:/3ds/fast-uninstall/backups/`. Change in Settings.
+`[backup_path]/[TitleID]/`. Default: `sdmc:/3ds/3ds-app-manager/backups/`. Change in Settings.
 
 **Is it safe to delete updates or DLC?**  
 Yes. Each is an independent title. Deleting an update reverts the game to its base version.
@@ -410,11 +410,11 @@ Restart the HOME menu or the console. The 3DS system cache can take a moment to 
     |__ boss_extdata/     SpotPass / StreetPass data
 ```
 
-**Default `backup_path`:** `sdmc:/3ds/fast-uninstall/backups`  
+**Default `backup_path`:** `sdmc:/3ds/3ds-app-manager/backups`  
 The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by host tests).
 
 **Alternative paths** (cycle with d-pad left/right in Settings):
-1. `sdmc:/3ds/fast-uninstall/backups`
+1. `sdmc:/3ds/3ds-app-manager/backups`
 2. `sdmc:/backups/3ds-titles`
 3. `sdmc:/save-backups`
 4. `sdmc:/3ds-backups`
@@ -424,10 +424,10 @@ The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by ho
 
 ## Configuration
 
-Config file: `sdmc:/3ds/fast-uninstall/config.ini`
+Config file: `sdmc:/3ds/3ds-app-manager/config.ini`
 
 ```ini
-backup_path=sdmc:/3ds/fast-uninstall/backups
+backup_path=sdmc:/3ds/3ds-app-manager/backups
 force_backup=0
 skip_uninstall_confirm=0
 force_restore=0
@@ -473,12 +473,12 @@ and the real AM install/delete calls still need on-device verification.
 ### Build
 
 ```bash
-git clone https://github.com/Marcogn/3ds-fast-uninstall.git
-cd 3ds-fast-uninstall
+git clone https://github.com/Marcogn/3DSAppManager.git
+cd 3DSAppManager
 make clean && make
 ```
 
-Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall.smdh`
+Output: `3ds-app-manager.3dsx`, `3ds-app-manager.elf`, `3ds-app-manager.smdh`
 
 | Error | Fix |
 |---|---|
@@ -714,7 +714,7 @@ substantial to avoid wasted effort. Most changes should also come with a
 
 ## About this project
 
-3ds-fast-uninstall is an independent project, built by Marcogn in close
+3DS App Manager is an independent project, built by Marcogn in close
 collaboration with Claude, Anthropic's AI coding assistant — Claude wrote
 and reviewed most of the code, under direct human design and review at
 every step.

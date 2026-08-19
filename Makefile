@@ -36,7 +36,7 @@ endif
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		:=	3ds-fast-uninstall
+TARGET		:=	3ds-app-manager
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
@@ -44,7 +44,7 @@ INCLUDES	:=	include
 ROMFS		:=	romfs
 GFXBUILD	:=	$(BUILD)
 
-APP_TITLE       := 3DS Fast Uninstall
+APP_TITLE       := 3DS App Manager
 APP_DESCRIPTION := Quick uninstall multiple titles with save backup
 APP_AUTHOR      := Marcogn
 

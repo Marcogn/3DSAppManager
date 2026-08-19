@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to 3DS Fast Uninstall are documented in this file.
+All notable changes to 3DS App Manager are documented in this file.
 Headings use the app's own `VERSION_STRING` (`source/types.h`). Cutting a
 release is a manual, deliberate step: trigger the `Release` GitHub Actions
 workflow (`.github/workflows/release.yml`) with a version and title —
@@ -15,6 +15,34 @@ isn't there), not deferred until a release is cut. This keeps the log
 accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
+
+### Changed: project renamed to 3DS App Manager
+Renamed from "3ds-fast-uninstall" everywhere the old name appeared, following
+the GitHub repository itself being renamed to `Marcogn/3DSAppManager`:
+- In-app title (top-screen header, both languages) and the SMDH `APP_TITLE`
+  shown in the Homebrew Launcher: "3DS Fast Uninstall" → "3DS App Manager".
+- Build output (`Makefile`'s `TARGET`, the CI build artifact name):
+  `3ds-fast-uninstall.3dsx`/`.elf`/`.smdh` → `3ds-app-manager.*`.
+- On-SD-card app folder: `sdmc:/3ds/fast-uninstall/` →
+  `sdmc:/3ds/3ds-app-manager/` (`CONFIG_PATH`, `DEFAULT_BACKUP_PATH`,
+  `BACKUP_PATH_OPTIONS[0]`, `romfs/default_config.ini`). **This is a real
+  default-path change, not just cosmetic**: an existing installation
+  upgrading from an older version won't find its old `config.ini` or the
+  default backup folder at the new path on first launch — settings reset to
+  defaults, and old backups stay on the SD card untouched but need
+  reselecting via the Backup Folder setting (or a manual move) to be found
+  again. The other 4 preset backup-path options were already generic and
+  are unaffected.
+- `README.md`, `CHANGELOG.md` (this file's framing text only — historical
+  entries describing what a past release actually shipped are left as
+  written, not rewritten), GitHub Actions workflow files, and the tracked
+  `3ds-fast-uninstall.3dsx` binary in the repo root (renamed to
+  `3ds-app-manager.3dsx` — its *content* is unchanged/stale from before this
+  round of work, since builds require devkitARM which isn't available here;
+  a real rebuild is still needed via CI/the `Release` workflow before it
+  reflects current source).
+- The in-app "Uninstall" feature/screen/menu itself is unaffected — only the
+  project's own name changed, not what the app does.
 
 ### Added: Italian/English localization
 The app previously had no translation infrastructure at all despite

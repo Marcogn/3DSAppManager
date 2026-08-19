@@ -1,4 +1,4 @@
-# tests/Makefile — host-side unit tests for 3ds-fast-uninstall
+# tests/Makefile — host-side unit tests for 3ds-app-manager
 # Run with:  make -C tests
 # or from the repo root:  make test
 

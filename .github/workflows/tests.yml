@@ -27,6 +27,7 @@ jobs:
       run: |
         cd tests
         ./test_utils
+        ./test_lang
         ./test_config
         ./test_titles
         ./test_backup

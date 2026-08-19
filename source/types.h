@@ -41,10 +41,10 @@ typedef struct {
 /* ---- Constants ---- */
 #define MAX_TITLES          500
 #ifndef CONFIG_PATH
-#define CONFIG_PATH         "sdmc:/3ds/fast-uninstall/config.ini"
+#define CONFIG_PATH         "sdmc:/3ds/3ds-app-manager/config.ini"
 #endif
 #ifndef DEFAULT_BACKUP_PATH
-#define DEFAULT_BACKUP_PATH "sdmc:/3ds/fast-uninstall/backups"
+#define DEFAULT_BACKUP_PATH "sdmc:/3ds/3ds-app-manager/backups"
 #endif
 #define SMDH_LANG_COUNT     12   /* number of language slots in an SMDH title entry */
 #define LANGUAGE_ENGLISH    1

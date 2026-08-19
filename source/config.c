@@ -7,7 +7,7 @@
 #include "lang.h"
 
 const char *BACKUP_PATH_OPTIONS[] = {
-    "sdmc:/3ds/fast-uninstall/backups",
+    "sdmc:/3ds/3ds-app-manager/backups",
     "sdmc:/backups/3ds-titles",
     "sdmc:/save-backups",
     "sdmc:/3ds-backups",
@@ -55,10 +55,10 @@ void loadConfig(void) {
 }
 
 void saveConfig(void) {
-    createDirectory("sdmc:/3ds/fast-uninstall");
+    createDirectory("sdmc:/3ds/3ds-app-manager");
     FILE *f = fopen(CONFIG_PATH, "w");
     if (!f) return;
-    fprintf(f, "# 3DS Fast Uninstall Configuration\n");
+    fprintf(f, "# 3DS App Manager Configuration\n");
     fprintf(f, "backup_path=%s\n",           config.backupPath);
     fprintf(f, "force_backup=%d\n",          config.forceBackup ? 1 : 0);
     fprintf(f, "skip_uninstall_confirm=%d\n", config.skipUninstallConfirm ? 1 : 0);
@@ -69,10 +69,10 @@ void saveConfig(void) {
 }
 
 void saveDefaultConfig(void) {
-    createDirectory("sdmc:/3ds/fast-uninstall");
+    createDirectory("sdmc:/3ds/3ds-app-manager");
     FILE *f = fopen(CONFIG_PATH, "w");
     if (!f) return;
-    fprintf(f, "# 3DS Fast Uninstall Configuration\n");
+    fprintf(f, "# 3DS App Manager Configuration\n");
     fprintf(f, "backup_path=%s\n",           DEFAULT_BACKUP_PATH);
     fprintf(f, "force_backup=0\n");
     fprintf(f, "skip_uninstall_confirm=0\n");

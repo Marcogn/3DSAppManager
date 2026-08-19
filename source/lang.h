@@ -34,7 +34,7 @@ typedef enum {
     STR_DO_NOT_POWER_OFF,           /* "Do not power off the console." */
 
     /* ---- Main Menu ---- */
-    STR_APP_TITLE_FMT,              /* "3DS Fast Uninstall  %s" */
+    STR_APP_TITLE_FMT,              /* "3DS App Manager  %s" */
     STR_MENU_INSTALL,                /* "Install CIA" */
     STR_MENU_BACKUP,                 /* "Backup Saves" */
     STR_MENU_UNINSTALL,              /* "Uninstall Titles" */
