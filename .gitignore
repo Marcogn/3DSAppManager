@@ -25,3 +25,5 @@ build/
 tests/test_utils
 tests/test_config
 tests/test_titles
+tests/test_backup
+tests/test_install

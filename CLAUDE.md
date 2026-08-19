@@ -63,17 +63,46 @@ easy to regress if touched carelessly:
   filters (`titlePassesSafetyFilter` in `titles.c`): system title ranges
   `0x00040010`, `0x00040030`, `0x00040138` stay excluded.
 
+## Test coverage — what's real, what isn't
+
+`backup_restore.c`'s archive-copy logic (`copyDirectory`/`backupArchive`/
+`backupSaveDataToPath`/`restoreSaveData`/`restoreDirectory`) shipped a real,
+user-reported bug (backup running instantly and silently doing nothing —
+`CHANGELOG.md` v2.3.1) that green host tests never would have caught,
+because at the time the host suite didn't touch that file at all. It now
+does: `tests/shims/fake_fs.h` is a small in-memory fake `FS_Archive`
+backend (opt-in — unregistered archives/paths behave exactly like the old
+always-fail stubs, so existing tests are unaffected) that `tests/test_backup.c`
+uses to actually exercise archive traversal, copy failures, the
+open-succeeds-but-copy-fails distinction, and the no-clobber-on-reattempt
+invariant. `tests/test_install.c` covers `install.c`'s `getCIATitleID`
+(binary CIA header parsing) and `scanDirectory` — both pure host I/O, no
+fake archive needed.
+
+**Still genuinely untested**, and why:
+- `installCIA` (`install.c`): drives real `AM_StartCiaInstall`/
+  `AM_FinishCiaInstall` — stubbed to always fail in `tests/shims/3ds.h`,
+  never exercised. Verify CIA-install changes by reading the logic
+  carefully or on real hardware.
+- `deleteTitle`/`deleteTitleCompletely` (`backup_restore.c`): thin
+  wrappers around `AM_DeleteTitle`/`AM_GetTitleInfo` plus a blocking
+  `drawDialog` + `aptMainLoop` loop — correctness here is really an
+  AM-service question, not app logic; not host-testable in a way that
+  would add real signal.
+- `input.c`'s blocking flow functions (`runInstallFlow`, `runBackupFlow`,
+  `runUninstallDeleteFlow`, `runSysInfoDetailFlow`) and all of `draw.c`:
+  driven by `hidKeysDown()`/`aptMainLoop()` loops and C2D/C3D rendering —
+  UI/integration surface, not practical to assert on with host unit
+  tests. `input.c` and `draw.c` DO at least compile cleanly against
+  `tests/shims/` now (see below), which catches syntax/type errors even
+  without behavioral coverage.
+
+When touching any of the "still untested" code above, say explicitly in
+your summary that it wasn't exercised by `make test` — don't imply test
+coverage that doesn't exist.
+
 ## Known gotchas
 
-- **The host test suite does not cover backup/uninstall/install logic at
-  all.** `tests/` only builds `titles.c`'s pure helpers, `utils.c`, and
-  `config.c` against host shims (see `tests/Makefile` — only 3 `.c`
-  files are compiled). `backup_restore.c`, `input.c`, `draw.c`, and
-  `install.c` need real 3DS FS/AM calls and are never exercised by
-  `make test` / CI. This is exactly how the v2.3.1 backup bug shipped
-  undetected — green tests do not mean the backup or uninstall flow
-  works. Verify changes to those files by reading the logic carefully
-  (or on real hardware); don't trust `make -C tests` alone for them.
 - `fopen(path, "wb")` succeeding does **not** mean the write succeeded —
   check `fwrite()`'s return value against the expected byte count,
   especially here where "SD card full" is a realistic failure mode.
@@ -91,33 +120,46 @@ easy to regress if touched carelessly:
   allocate instead, as `_installFolderCIAs` now does.
 - No devkitARM toolchain is available in a plain sandboxed session — you
   cannot build the real `.3dsx` locally. `gcc -fsyntax-only`/`-c` against
-  `tests/shims/` (see `tests/shims/3ds.h` for what's stubbed) catches
-  compile errors in modules the test suite doesn't fully build; CI
-  (`.github/workflows/build.yml`, `devkitpro/devkitarm` container) is the
-  real build check. Runtime behavior on real hardware still can't be
-  verified from here — say so rather than claiming it was tested.
+  `tests/shims/` (see `tests/shims/3ds.h` for what's stubbed — every
+  `source/*.c` file compiles cleanly against it, not just the ones the
+  test suite links) catches compile errors in modules the test suite
+  doesn't fully build; CI (`.github/workflows/build.yml`,
+  `devkitpro/devkitarm` container) is the real build check. Runtime
+  behavior on real hardware still can't be verified from here — say so
+  rather than claiming it was tested.
+- A C block comment containing a literal `*/` substring inside its text
+  (e.g. writing out a glob like `FSUSER_*/FSFILE_*`) closes the comment
+  early and corrupts everything after it into code — happened once
+  writing `tests/shims/fake_fs.h`'s own file header. Avoid `*/` inside
+  comment prose entirely, not just as the closer.
 
 ## Build/test commands
 
 ```bash
 make clean && make        # real 3DS build — requires DEVKITARM/DEVKITPRO
-make test                 # host-side unit tests (see limits above)
+make test                 # host-side unit tests: test_utils, test_config,
+                           # test_titles, test_backup, test_install
+                           # (see "Test coverage" above for what each covers)
 ```
 
 CI runs both on every push/PR: `.github/workflows/build.yml` (real
 devkitARM build) and `.github/workflows/tests.yml` (host test suite).
-`.github/workflows/release.yml` builds and publishes a GitHub Release
-with the `.3dsx`/`.smdh` artifacts whenever a `vX.Y.Z` tag is pushed,
-using the matching `## vX.Y.Z` section of `CHANGELOG.md` verbatim as the
-release notes — that heading format must stay exact for the tag to match.
+`.github/workflows/release.yml` is manual-only (`workflow_dispatch`, a
+`version` + `title` input, never fires on push/PR) — trigger it from the
+Actions tab when the user actually asks to cut a release. It validates the
+inputs, renames `CHANGELOG.md`'s `## Unreleased` section to
+`## vX.Y.Z – <title> (date)`, bumps `VERSION_STRING` in `source/types.h`
+to match, commits and pushes that bump to `main`, builds, and publishes
+the `.3dsx`/`.smdh` as a GitHub Release using that section verbatim as the
+release notes.
 
 ## Changelog policy
 
 Every change gets a `CHANGELOG.md` entry under a `## Unreleased` section
 at the top of the file when it's made (create the section if missing),
-not deferred until a release is cut. Keep the `## vX.Y.Z – Title (date)`
-heading format (see `release.yml` above) when a version is actually cut.
-Also bump `VERSION_STRING` in `source/types.h` to match.
+not deferred until a release is cut. Don't rename it to a `## vX.Y.Z`
+heading or bump `VERSION_STRING` yourself — that rename/bump is what the
+`Release` workflow above does, on request, as one atomic step.
 
 ## Code conventions
 
@@ -139,8 +181,14 @@ Also bump `VERSION_STRING` in `source/types.h` to match.
 
 ## What NOT to do until explicitly requested
 
-Don't rename the repository, restructure `README.md`/`CLAUDE.md` into a
-different documentation layout, or build the automated tag-free release
-pipeline (version bump + changelog cut via `workflow_dispatch`) — these
-are planned but separate, explicitly-scoped tasks, not implied by a
-request to fix a bug or review code.
+Don't rename the repository or move deep technical/architecture content
+out of `README.md` into a separate `docs/` tree — a further documentation
+cleanup pass (README trimmed to a front door, `CLAUDE.md` kept minimal,
+everything else moved elsewhere) is planned but separate and
+explicitly-scoped, not implied by a request to fix a bug, review code, or
+touch a specific section. Don't add internationalization (Italian/English)
+either — also planned, also separate.
+
+Do trigger `Release` (`.github/workflows/release.yml`, `workflow_dispatch`)
+when the user actually asks to cut a release — it's built and safe to run,
+it just never fires on its own (push/PR never triggers it).

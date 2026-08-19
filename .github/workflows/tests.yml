@@ -29,3 +29,5 @@ jobs:
         ./test_utils
         ./test_config
         ./test_titles
+        ./test_backup
+        ./test_install

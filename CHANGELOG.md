@@ -1,15 +1,70 @@
 # Changelog
 
 All notable changes to 3DS Fast Uninstall are documented in this file.
-Headings use the app's own `VERSION_STRING` (`source/types.h`); the
-`Release` GitHub Actions workflow (`.github/workflows/release.yml`) reads
-the section matching a pushed `vX.Y.Z` tag verbatim as the GitHub Release
-notes, so keep the `## vX.Y.Z` heading format exact.
+Headings use the app's own `VERSION_STRING` (`source/types.h`). Cutting a
+release is a manual, deliberate step: trigger the `Release` GitHub Actions
+workflow (`.github/workflows/release.yml`) with a version and title —
+it renames this file's `## Unreleased` section to `## vX.Y.Z – <title>
+(date)`, bumps `VERSION_STRING` to match, builds, and publishes the result
+as a GitHub Release using that section verbatim as the release notes. Keep
+the `## vX.Y.Z` heading format exact.
 
 **Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
 section at the top of this file when it's made (create the section if it
 isn't there), not deferred until a release is cut. This keeps the log
 accurate at all times instead of being reconstructed from memory later.
+
+## Unreleased
+
+### Added: real host test coverage for backup/restore and CIA parsing
+`backup_restore.c` shipped the v2.3.1 bug without the host test suite ever
+touching it — it only linked `titles.c`'s pure helpers, `utils.c`, and
+`config.c`. That gap is now closed for the two modules that most needed it:
+- **`tests/shims/fake_fs.h`**: a new, opt-in, in-memory fake `FS_Archive`
+  backend (unregistered archives/paths behave exactly like the old
+  always-fail stubs, so every existing test is unaffected). Lets a test
+  register a small virtual directory tree — including per-node "fails to
+  open" / "fails to read" flags — and have `copyDirectory`/`backupArchive`/
+  `backupSaveDataToPath`/`restoreSaveData`/`restoreDirectory` actually walk
+  it for real.
+- **`tests/test_backup.c`** (13 tests): backup success with real files,
+  the "never launched, empty archive" success case, total-unreachable
+  failure + cleanup, the core v2.3.1 regression (archive opens but a file
+  fails to actually copy — must not be masked as success), a failed
+  re-backup attempt leaving a prior valid backup completely untouched, an
+  oversized file being skipped without failing the whole backup, a listed
+  subdirectory that fails to open propagating as a real failure,
+  extdata-only backups still succeeding, `restoreSaveData` writing the
+  right content into the archive, and the `titles.c` backup-dir helpers
+  (`getBackupDirName`/`findBackupDir`/`checkBackupExists`/
+  `getBackupLastDate`).
+- **`tests/test_install.c`** (6 tests): `getCIATitleID`'s binary CIA
+  header parsing (valid header, missing file, truncated TMD) and
+  `scanDirectory`'s folder-listing/classification — both pure host I/O,
+  no fake archive needed.
+- `tests/shims/3ds.h` also gained `DT_DIR`, `strcasecmp`, and
+  `AM_StartCiaInstall`/`AM_CancelCIAInstall`/`AM_FinishCiaInstall` stubs it
+  was missing — `input.c` and `install.c` now both compile cleanly
+  (`gcc -fsyntax-only`) against the test shims, which they didn't before.
+- `installCIA` (real `AM_*CiaInstall` calls), `deleteTitle`/
+  `deleteTitleCompletely` (thin `AM_DeleteTitle` wrappers), and all of
+  `draw.c`/`input.c`'s blocking UI flows remain untested by design — see
+  `CLAUDE.md`'s "Test coverage" section for why.
+
+### Changed: README revised, release process automated
+- `README.md`: added badges, a tighter intro + "Why", a "Download" section
+  pointing at GitHub Releases, topic sentences on each Features subsection,
+  and closing `Documentation`/`Contributing`/`About this project` sections
+  — restructured after `ThePatientGamerHelper`'s README, keeping this
+  project's own controls/screen-layout/FAQ reference content that a
+  button-driven homebrew app actually needs.
+- `.github/workflows/release.yml`: replaced the old tag-push-triggered
+  workflow with a manual `workflow_dispatch` one (version + title inputs)
+  that cuts `CHANGELOG.md`'s `## Unreleased` section and bumps
+  `VERSION_STRING` itself, commits that bump to `main`, builds, and
+  publishes the GitHub Release — the same process `ThePatientGamerHelper`
+  uses, adapted for a devkitARM `.3dsx`/`.smdh` build with no signing step
+  instead of a signed Android APK.
 
 ## v2.3.1 – Backup silently reporting success with no data copied (2026-08-19)
 
