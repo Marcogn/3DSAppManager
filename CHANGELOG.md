@@ -6,8 +6,10 @@ release is a manual, deliberate step: trigger the `Release` GitHub Actions
 workflow (`.github/workflows/release.yml`) with just a version number —
 it renames this file's `## Unreleased` section to `## vX.Y.Z (date)`,
 bumps `VERSION_STRING` to match, builds, and publishes the result as a
-GitHub Release using that section verbatim as the release notes. Keep
-the `## vX.Y.Z` heading format exact.
+GitHub Release using highlights extracted from that section (see
+`CLAUDE.md`'s "Changelog policy" for the entry convention this depends
+on — always just this section's `### ` headings plus a link back here,
+never the full write-up). Keep the `## vX.Y.Z` heading format exact.
 
 **Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
 section at the top of this file when it's made (create the section if it
@@ -16,19 +18,21 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
-### Changed: release notes stay short for a big changelog entry
-`v2.4.0`'s own GitHub Release ended up as a ~200-line wall of text, since
-`.github/workflows/release.yml` always dumped the full `## Unreleased`
-section verbatim into the Release body. Now: a short section (a quick
-fix, a handful of entries — 40 lines or fewer) still gets used in full,
-same as before; a long one is abridged to just its `### ` entry headings
-(each already written as a one-line summary by this file's own
-convention) as a bullet list. Either way, the Release body now always
-ends with a link back to this file's matching dated section for the full
-detail — computed to match GitHub's actual heading-anchor slug algorithm
-(verified against this repo's own real rendered anchors, e.g. `v2.4.0
-(2026-08-19)` → `#v240-2026-08-19` — GitHub drops the periods from the
-version number, it doesn't turn them into hyphens).
+### Changed: release notes always show only the changelog's headings, never the full section
+`.github/workflows/release.yml`'s "Extract changelog section for this
+version" step used to hand the whole cut section to
+`softprops/action-gh-release` verbatim for a short entry (40 lines or
+fewer) and only fell back to a headings-only highlight list past that
+size. It now always uses just the `### ` headings (each already a
+one-line summary by this file's convention) as the Release body, with no
+line-count judgment call — a version written with no headings at all
+falls back to the full section instead, a structural fallback rather
+than a size one. Either way a link back to this file's matching dated
+section is always appended. Same change applied to CoverDex's and
+ThePatientGamerHelper's `release.yml`, and each project's `CLAUDE.md`
+now documents the bullet/heading convention its own release notes depend
+on, so the highlights are always ready in this file rather than computed
+by trimming or reflowing prose at release time.
 
 ## v2.4.0 (2026-08-19)
 

@@ -190,9 +190,8 @@ Actions tab when the user actually asks to cut a release. It validates the
 input, renames `CHANGELOG.md`'s `## Unreleased` section to
 `## vX.Y.Z (date)`, bumps `VERSION_STRING` in `source/types.h` to match,
 commits and pushes that bump to `main`, builds, and publishes the
-`.3dsx`/`.smdh` as a GitHub Release using that section verbatim as the
-release notes — there's no separate title to type in; the Unreleased
-section's own content is the release notes.
+`.3dsx`/`.smdh` as a GitHub Release using highlights extracted from that
+section (see "Changelog policy" below).
 
 ## Changelog policy
 
@@ -201,6 +200,19 @@ at the top of the file when it's made (create the section if missing),
 not deferred until a release is cut. Don't rename it to a `## vX.Y.Z`
 heading or bump `VERSION_STRING` yourself — that rename/bump is what the
 `Release` workflow above does, on request, as one atomic step.
+
+**Entry convention:** every significant change is its own `### <Type>:
+<one-line summary>` heading (`Fix:`/`Added:`/`Changed:`/`Removed:` are
+this file's established types) — write the heading itself as a
+complete, skimmable summary, with any further detail in a paragraph (and
+optional sub-bullets) underneath. This isn't just for readability:
+`.github/workflows/release.yml`'s "Extract changelog highlights" step
+publishes exactly those `### ` heading lines as the GitHub Release
+body — always, for every release, never the full section text and never
+gated by a length cutoff — followed by a link back to this file's
+matching section for the full write-up. A sloppy or vague heading ships
+straight to the Release page as-is, so write it as if it were the only
+sentence a reader sees.
 
 ## Code conventions
 
