@@ -1,13 +1,16 @@
 # .github/workflows/release.yml
 #
 # Manual-only release: cuts source/types.h's VERSION_STRING and
-# CHANGELOG.md's "## Unreleased" section for the version/title given in the
+# CHANGELOG.md's "## Unreleased" section for the version given in the
 # dispatch form, commits and pushes that bump straight to main, then builds
 # the .3dsx/.smdh and publishes them as a GitHub Release. The version input
 # is always typed by hand (no auto-computed default — GitHub's dispatch
 # form can't pre-fill a value computed from repo state) and is only
-# validated to be greater than the current VERSION_STRING. The workflow
-# refuses to overwrite an existing release/tag.
+# validated to be greater than the current VERSION_STRING. The CHANGELOG
+# heading is just "## vX.Y.Z (date)" — no separate title to type in; the
+# Unreleased section's own content (used verbatim as the GitHub Release
+# body too) already says what the release is about. The workflow refuses
+# to overwrite an existing release/tag.
 name: Release
 
 on:
@@ -15,10 +18,6 @@ on:
     inputs:
       version:
         description: 'Version to release, e.g. 2.3.2 — no leading "v" (must be greater than the current VERSION_STRING in source/types.h)'
-        required: true
-        type: string
-      title:
-        description: 'Short title for the CHANGELOG heading, e.g. "Backup fix and test coverage" (becomes "## vX.Y.Z – <title> (date)")'
         required: true
         type: string
 
@@ -45,25 +44,20 @@ jobs:
           token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
 
       # Validates the typed-in version input, then cuts CHANGELOG.md's
-      # "## Unreleased" section into a dated "## vX.Y.Z – <title>" one
-      # (leaving a fresh empty "## Unreleased" above it) and bumps
-      # source/types.h's VERSION_STRING to match — the same two edits a
-      # human previously made by hand before tagging a release. Fails the
-      # whole run before touching any file if the input isn't a plain
-      # x.y.z, isn't greater than the current VERSION_STRING, or the
-      # changelog has nothing new to release, since a bad input at this
-      # point would otherwise commit garbage to main.
+      # "## Unreleased" section into a dated "## vX.Y.Z" one (leaving a
+      # fresh empty "## Unreleased" above it) and bumps source/types.h's
+      # VERSION_STRING to match — the same two edits a human previously
+      # made by hand before tagging a release. Fails the whole run before
+      # touching any file if the input isn't a plain x.y.z, isn't greater
+      # than the current VERSION_STRING, or the changelog has nothing new
+      # to release, since a bad input at this point would otherwise commit
+      # garbage to main.
       - name: Validate and apply version bump
         env:
           NEW_VERSION: ${{ inputs.version }}
-          TITLE: ${{ inputs.title }}
         run: |
           if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "version input must look like x.y.z with no leading 'v' (got: '$NEW_VERSION')" >&2
-            exit 1
-          fi
-          if [ -z "$TITLE" ]; then
-            echo "title input must not be empty" >&2
             exit 1
           fi
 
@@ -86,7 +80,7 @@ jobs:
           fi
 
           TODAY=$(date -u +%F)
-          NEWSEC="## v${NEW_VERSION} – ${TITLE} (${TODAY})"
+          NEWSEC="## v${NEW_VERSION} (${TODAY})"
 
           awk -v newsec="$NEWSEC" '
             /^## Unreleased$/ { print; print ""; print newsec; next }
