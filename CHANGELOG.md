@@ -6,8 +6,9 @@ release is a manual, deliberate step: trigger the `Release` GitHub Actions
 workflow (`.github/workflows/release.yml`) with just a version number —
 it renames this file's `## Unreleased` section to `## vX.Y.Z (date)`,
 bumps `VERSION_STRING` to match, builds, and publishes the result as a
-GitHub Release using that section verbatim as the release notes. Keep
-the `## vX.Y.Z` heading format exact.
+GitHub Release using that section as the release notes — verbatim when
+it's short, or trimmed to just its `### ` headings plus a link back here
+when it's long. Keep the `## vX.Y.Z` heading format exact.
 
 **Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
 section at the top of this file when it's made (create the section if it
@@ -15,6 +16,21 @@ isn't there), not deferred until a release is cut. This keeps the log
 accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
+
+### Changed: release notes now trim to highlights when the changelog section is huge
+`.github/workflows/release.yml`'s "Extract changelog section for this
+version" step used to hand the entire cut `## vX.Y.Z` section to
+`softprops/action-gh-release` verbatim, no matter its length — fine for a
+short entry, but this project's changelog entries routinely run to
+several thousand characters across many `### ` subsections (see `v2.4.0`
+below), which makes for an unreadable wall of text on the GitHub Releases
+page. Now: sections at or under 1500 characters are still used verbatim,
+unchanged. Past that, the release body is reduced to just the section's
+`### ` subsection headings (or its top-level `- **bold**` bullets, for a
+version written without subsections) as a bullet list, followed by a
+link back to `CHANGELOG.md` for the full write-up. Same change applied
+to CoverDex's `release.yml` for consistency between the two projects'
+pipelines.
 
 ## v2.4.0 (2026-08-19)
 

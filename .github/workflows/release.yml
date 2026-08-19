@@ -8,9 +8,15 @@
 # form can't pre-fill a value computed from repo state) and is only
 # validated to be greater than the current VERSION_STRING. The CHANGELOG
 # heading is just "## vX.Y.Z (date)" — no separate title to type in; the
-# Unreleased section's own content (used verbatim as the GitHub Release
-# body too) already says what the release is about. The workflow refuses
-# to overwrite an existing release/tag.
+# Unreleased section's own content already says what the release is about.
+# That content becomes the GitHub Release body verbatim only when it's
+# short — past a size threshold (see "Extract changelog section for this
+# version" below) the release body is trimmed down to just its "### "
+# subsection headings (or top-level "- **bold**" bullets, for a version
+# with no subsections) plus a link back to CHANGELOG.md, since a huge
+# release body is unreadable on the GitHub Releases page and the full
+# write-up is already versioned in the repo. The workflow refuses to
+# overwrite an existing release/tag.
 name: Release
 
 on:
@@ -144,9 +150,13 @@ jobs:
       - name: Build
         run: make
 
-      # Release notes come straight from CHANGELOG.md: the section for the
-      # version just cut above (from its "## vX.Y.Z ..." heading up to the
-      # next one).
+      # Release notes come from CHANGELOG.md: the section for the version
+      # just cut above (from its "## vX.Y.Z ..." heading up to the next
+      # one), used verbatim when short. Past 1500 characters that full
+      # text is unwieldy as a release body, so only the "### " subsection
+      # headings (or top-level "- **bold**" bullets, for a version with no
+      # subsections) are kept, followed by a link back to CHANGELOG.md for
+      # the rest.
       - name: Extract changelog section for this version
         id: changelog
         env:
@@ -162,7 +172,23 @@ jobs:
             echo "::error::No CHANGELOG.md section found for ${RELEASE_TAG} right after cutting it — this should not happen."
             exit 1
           fi
-          printf '%s\n' "$BODY" > /tmp/release_notes.md
+
+          CHANGELOG_URL="https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md"
+          BODY_SIZE=$(printf '%s' "$BODY" | wc -c)
+
+          if [ "$BODY_SIZE" -le 1500 ]; then
+            printf '%s\n' "$BODY" > /tmp/release_notes.md
+          else
+            HIGHLIGHTS=$(printf '%s\n' "$BODY" | grep -E '^(### |- \*\*)' | sed -E 's/^### (.*)$/- \1/')
+            if [ -z "$HIGHLIGHTS" ]; then
+              HIGHLIGHTS=$(printf '%s\n' "$BODY" | awk 'BEGIN{p=0} /^[[:space:]]*$/{if(p)exit; next} {print; p=1}')
+            fi
+            {
+              printf '%s\n\n' "$HIGHLIGHTS"
+              printf 'See [CHANGELOG.md](%s) for the full write-up.\n' "$CHANGELOG_URL"
+            } > /tmp/release_notes.md
+          fi
+
           echo "notes_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
