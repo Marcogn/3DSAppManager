@@ -16,6 +16,8 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
+## v2.4.0 (2026-08-19)
+
 ### Fix: release workflow failing on every run, unrelated to the PAT
 The first real trigger of `.github/workflows/release.yml` (after adding a
 `RELEASE_PUSH_TOKEN` secret) failed at the "Commit and push version bump"
