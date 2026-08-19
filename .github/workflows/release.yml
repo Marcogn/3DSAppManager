@@ -8,9 +8,12 @@
 # form can't pre-fill a value computed from repo state) and is only
 # validated to be greater than the current VERSION_STRING. The CHANGELOG
 # heading is just "## vX.Y.Z (date)" — no separate title to type in; the
-# Unreleased section's own content (used verbatim as the GitHub Release
-# body too) already says what the release is about. The workflow refuses
-# to overwrite an existing release/tag.
+# Unreleased section's own content already says what the release is about.
+# The GitHub Release body is never that content verbatim, though — see the
+# "Extract changelog section for this version" step below for what
+# actually gets published, and CLAUDE.md's "Changelog policy" for the
+# entry convention it depends on. The workflow refuses to overwrite an
+# existing release/tag.
 name: Release
 
 on:
@@ -144,23 +147,25 @@ jobs:
       - name: Build
         run: make
 
-      # Release notes come from CHANGELOG.md: the section for the version
-      # just cut above (from its "## vX.Y.Z ..." heading up to the next
-      # one). A short section (a quick fix, a handful of entries) is used
-      # in full, same as always. A long one (a big batch of work, like
-      # this repo's own v2.4.0) is abridged to just its "### " entry
-      # headings — each one is already written as a one-line summary by
-      # this file's own convention — plus a link to the matching
-      # CHANGELOG.md section for the full detail, rather than dumping
-      # hundreds of lines into the Release page. Either way, a link back
-      # to CHANGELOG.md is always included.
+      # Release notes are always just the significant-change highlights for
+      # this version, never the full changelog section. This project's
+      # CHANGELOG.md convention (see CLAUDE.md's "Changelog policy") is
+      # that every significant change is its own "### <Type>: <one-line
+      # summary>" heading, with any elaboration living in the paragraph/
+      # bullets underneath — so extraction is a straight pull of those
+      # heading lines, with no length-based judgment call, ever. A section
+      # written with no "### " headings at all falls back to publishing the
+      # whole section as-is instead — a structural fallback for a section
+      # with nothing to extract, not a size cutoff.
       #
-      # The link's #fragment reproduces GitHub's own heading-anchor slug
-      # algorithm (lowercase; drop every character that isn't a-z, 0-9,
-      # space, underscore, or hyphen — this is what removes the periods
-      # inside a version number; then turn spaces into hyphens) — verified
-      # against this repo's actual rendered CHANGELOG.md anchors.
-      - name: Extract changelog section for this version
+      # Either way a link back to this file's matching section is always
+      # appended. The link's #fragment reproduces GitHub's own
+      # heading-anchor slug algorithm (lowercase; drop every character
+      # that isn't a-z, 0-9, space, underscore, or hyphen — this is what
+      # removes the periods inside a version number, not replaces them;
+      # then turn spaces into hyphens) — verified against this repo's
+      # actual rendered CHANGELOG.md anchors.
+      - name: Extract changelog highlights
         id: changelog
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
@@ -181,21 +186,16 @@ jobs:
           SLUG=$(printf '%s' "$HEADING_TEXT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9 _-]//g' | tr ' ' '-')
           CHANGELOG_LINK="https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md#${SLUG}"
 
-          LINE_COUNT=$(printf '%s\n' "$BODY" | wc -l)
           HIGHLIGHTS=$(printf '%s\n' "$BODY" | grep '^### ' | sed -E 's/^###[[:space:]]*/- /')
 
           {
-            if [ "$LINE_COUNT" -gt 40 ] && [ -n "$HIGHLIGHTS" ]; then
-              printf '%s\n' "$HEADING_LINE"
-              echo
+            if [ -n "$HIGHLIGHTS" ]; then
               printf '%s\n' "$HIGHLIGHTS"
-              echo
-              echo "**Full changelog:** see [CHANGELOG.md]($CHANGELOG_LINK) for the complete details."
             else
               printf '%s\n' "$BODY"
-              echo
-              echo "**Full changelog:** [CHANGELOG.md]($CHANGELOG_LINK)"
             fi
+            echo
+            echo "See [CHANGELOG.md]($CHANGELOG_LINK) for the full write-up."
           } > /tmp/release_notes.md
 
           echo "notes_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
