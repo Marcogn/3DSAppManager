@@ -10,6 +10,7 @@
  * utils.c is included transitively through titles.c includes.
  */
 #include "../../source/utils.c"
+#include "../../source/lang.c"
 #include "../../source/titles.c"
 /* config.c needed for BACKUP_PATH_OPTIONS (used by titles.c indirectly via globals) */
 #include "../../source/config.c"

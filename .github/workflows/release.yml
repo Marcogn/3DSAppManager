@@ -1,66 +1,163 @@
-name: Release 3DS Homebrew
+# .github/workflows/release.yml
+#
+# Manual-only release: cuts source/types.h's VERSION_STRING and
+# CHANGELOG.md's "## Unreleased" section for the version/title given in the
+# dispatch form, commits and pushes that bump straight to main, then builds
+# the .3dsx/.smdh and publishes them as a GitHub Release. The version input
+# is always typed by hand (no auto-computed default — GitHub's dispatch
+# form can't pre-fill a value computed from repo state) and is only
+# validated to be greater than the current VERSION_STRING. The workflow
+# refuses to overwrite an existing release/tag.
+name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 2.3.2 — no leading "v" (must be greater than the current VERSION_STRING in source/types.h)'
+        required: true
+        type: string
+      title:
+        description: 'Short title for the CHANGELOG heading, e.g. "Backup fix and test coverage" (becomes "## vX.Y.Z – <title> (date)")'
+        required: true
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     container:
       image: devkitpro/devkitarm:latest
-
     steps:
-      - name: Checkout code
+      # Uses a PAT if one is configured (falls back to the default token
+      # otherwise) so the version-bump commit below can authenticate as an
+      # actual repo admin and bypass main's branch protection if it's
+      # enabled — the default GITHUB_TOKEN pushes as the github-actions[bot]
+      # identity, which an "admins bypass required pull requests" exception
+      # does not cover. To use one, add a repo secret named
+      # RELEASE_PUSH_TOKEN (a fine-grained PAT scoped to this repo's
+      # Contents: read/write).
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
+
+      # Validates the typed-in version input, then cuts CHANGELOG.md's
+      # "## Unreleased" section into a dated "## vX.Y.Z – <title>" one
+      # (leaving a fresh empty "## Unreleased" above it) and bumps
+      # source/types.h's VERSION_STRING to match — the same two edits a
+      # human previously made by hand before tagging a release. Fails the
+      # whole run before touching any file if the input isn't a plain
+      # x.y.z, isn't greater than the current VERSION_STRING, or the
+      # changelog has nothing new to release, since a bad input at this
+      # point would otherwise commit garbage to main.
+      - name: Validate and apply version bump
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+          TITLE: ${{ inputs.title }}
+        run: |
+          if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version input must look like x.y.z with no leading 'v' (got: '$NEW_VERSION')" >&2
+            exit 1
+          fi
+          if [ -z "$TITLE" ]; then
+            echo "title input must not be empty" >&2
+            exit 1
+          fi
+
+          CURRENT_VERSION=$(grep -m1 'define VERSION_STRING' source/types.h | sed -E 's/.*"v([^"]*)".*/\1/')
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "Could not read VERSION_STRING from source/types.h" >&2
+            exit 1
+          fi
+
+          HIGHEST=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | tail -1)
+          if [ "$NEW_VERSION" = "$CURRENT_VERSION" ] || [ "$HIGHEST" != "$NEW_VERSION" ]; then
+            echo "version input ($NEW_VERSION) must be greater than the current VERSION_STRING ($CURRENT_VERSION)" >&2
+            exit 1
+          fi
+
+          UNRELEASED_BODY=$(awk '/^## Unreleased$/{flag=1; next} /^## /{flag=0} flag' CHANGELOG.md | sed '/^[[:space:]]*$/d')
+          if [ -z "$UNRELEASED_BODY" ]; then
+            echo "CHANGELOG.md's 'Unreleased' section is empty - nothing to release. Add entries first." >&2
+            exit 1
+          fi
+
+          TODAY=$(date -u +%F)
+          NEWSEC="## v${NEW_VERSION} – ${TITLE} (${TODAY})"
+
+          awk -v newsec="$NEWSEC" '
+            /^## Unreleased$/ { print; print ""; print newsec; next }
+            { print }
+          ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+
+          sed -i -E "s/(#define VERSION_STRING[[:space:]]+)\"v[^\"]*\"/\1\"v${NEW_VERSION}\"/" source/types.h
+
+      - name: Commit and push version bump
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md source/types.h
+          git commit -m "Cut release v$NEW_VERSION"
+          git push origin HEAD:main
+
+      - name: Compute release tag
+        id: version
+        env:
+          NEW_VERSION: ${{ inputs.version }}
+        run: echo "tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Uses the REST API directly via curl (not the gh CLI, which isn't
+      # guaranteed to be present in this devkitARM build container) to
+      # check whether the tag/release already exists before spending time
+      # building.
+      - name: Refuse to overwrite an existing release
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          if [ "$STATUS" = "200" ]; then
+            echo "Release $RELEASE_TAG already exists. Bump VERSION_STRING in source/types.h and add a matching CHANGELOG.md entry before running this workflow again." >&2
+            exit 1
+          fi
 
       - name: Build
         run: make
 
-      - name: Extract changelog for this tag
+      # Release notes come straight from CHANGELOG.md: the section for the
+      # version just cut above (from its "## vX.Y.Z ..." heading up to the
+      # next one).
+      - name: Extract changelog section for this version
         id: changelog
-        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"   # strip leading 'v'
-
-          # 1. Try exact match: heading must start with "## v<VERSION>" followed by
-          #    a space or end-of-line (e.g. tag v2.2.0 -> "## v2.2.0 – ...").
+          VERSION="${RELEASE_TAG#v}"
           BODY=$(awk -v ver="## v${VERSION}" '
             found && /^## / { exit }
             found { print }
             $0 ~ ("^" ver "([[:space:]]|$)") { found=1; print }
           ' CHANGELOG.md)
-
-          # 2. If not found, try prefix match: heading starts with "## v<VERSION>."
-          #    (e.g. tag v2 matches "## v2.2.0 – ...").
           if [ -z "$BODY" ]; then
-            BODY=$(awk -v ver="## v${VERSION}." '
-              found && /^## / { exit }
-              found { print }
-              index($0, ver) == 1 { found=1; print }
-            ' CHANGELOG.md)
-          fi
-
-          # Fail loudly if no section was found so a bad tag doesn't produce
-          # release notes from the wrong version.
-          if [ -z "$BODY" ]; then
-            echo "::error::No CHANGELOG.md section found for tag '${TAG}'. Add a '## v${VERSION}' heading before releasing."
+            echo "::error::No CHANGELOG.md section found for ${RELEASE_TAG} right after cutting it — this should not happen."
             exit 1
           fi
-
-          # Write to a file to preserve multi-line content
           printf '%s\n' "$BODY" > /tmp/release_notes.md
           echo "notes_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "${{ github.ref_name }}"
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "${{ steps.version.outputs.tag }}"
+          target_commitish: main
           body_path: ${{ steps.changelog.outputs.notes_file }}
           files: |
             *.3dsx

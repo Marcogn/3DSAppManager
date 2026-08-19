@@ -1,22 +1,43 @@
 <p align="center">
-  <img src="icon.png" alt="3DS Fast Uninstall Icon" width="200"/>
+  <img src="icon.png" alt="3DS App Manager Icon" width="200"/>
 </p>
 
-# 3DS Fast Uninstall
+# 3DS App Manager
 
-A Nintendo 3DS homebrew application for managing installed titles: install CIA files, back up save data, uninstall titles in batch, and view system information — all from a single clean multi-screen interface.
+[![Latest release](https://img.shields.io/github/v/release/Marcogn/3DSAppManager?label=release)](https://github.com/Marcogn/3DSAppManager/releases/latest)
+[![Build](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml)
+[![Host-side Unit Tests](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The complete toolkit for managing your 3DS storage.**
+A Nintendo 3DS homebrew application for managing installed titles: install
+CIA files, back up save data, uninstall titles in batch, and view system
+information — all from a single clean multi-screen interface, built for
+consoles with a large, cluttered library.
 
----
+Select as many titles as you want on one screen, get an automatic offer to
+back up (and later restore) their save data, and let the app confirm each
+deletion actually happened before moving on — instead of picking through
+the HOME menu one title at a time.
 
-## Quick Start
+## Why
 
-1. Download `3ds-fast-uninstall.3dsx`
-2. Copy it to `/3ds/` on your SD card
-3. Launch from the **Homebrew Launcher**
-4. Wait for the loading screen (progress bar shown while reading titles)
-5. You land on the **Main Menu** — pick a feature and get started
+The HOME menu only deletes one title at a time and has no built-in way to
+back up a save before the title disappears with it. 3DS App Manager
+turns that into a batch operation with the backup step made explicit and
+automatic — optional per run, or forced on always from Settings — so
+cleaning up storage never has to mean gambling with save data.
+
+## Download
+
+Grab the latest build from the
+[**Releases**](https://github.com/Marcogn/3DSAppManager/releases/latest)
+page.
+
+1. Download `3ds-app-manager.3dsx` from the latest release.
+2. Copy it to `/3ds/` on your SD card.
+3. Launch it from the **Homebrew Launcher**.
+4. Wait for the loading screen (a progress bar shows while titles are read).
+5. You land on the **Main Menu** — pick a feature and get started.
 
 > **Requirements**: Nintendo 3DS / 2DS / New 3DS running Custom Firmware (e.g. Luma3DS) or a homebrew entrypoint with sufficient AM access.
 
@@ -25,6 +46,8 @@ A Nintendo 3DS homebrew application for managing installed titles: install CIA f
 ## Features
 
 ### Install
+Browse the SD card for `.CIA` files and install them one at a time or an
+entire folder in a single pass.
 - Browse the SD card file system to find `.CIA` files
 - Install single files or batch-install an entire folder in one step (**Y**)
 - Detects Update (`^`) and DLC (`+`) types at scan time — no extra file reads
@@ -32,6 +55,8 @@ A Nintendo 3DS homebrew application for managing installed titles: install CIA f
 - All installs always target the SD card
 
 ### Backup Saves
+Back up any title's save data on demand, independent of uninstalling it —
+so a backup can be refreshed anytime, not just right before deletion.
 - List all installed titles with backup status at a glance (`[ ]` none · `[*]` exists · `[X]` selected)
 - Select individual titles or back up the entire library at once (**Y**)
 - Three save archive types per title: User Save, ExtData, Boss ExtData
@@ -39,6 +64,8 @@ A Nintendo 3DS homebrew application for managing installed titles: install CIA f
 - Backups stored under `[backup_path]/[TitleID]/`
 
 ### Uninstall
+The core flow: select as many titles as you want and delete them in one
+batch, with an automatic offer to back up save data first.
 - Multi-selection with **A**; batch uninstall with **X**
 - Optional pre-uninstall backup (prompted automatically, or forced via Settings)
 - Selected titles list visible on the bottom screen throughout the confirmation flow
@@ -46,12 +73,16 @@ A Nintendo 3DS homebrew application for managing installed titles: install CIA f
 - Post-delete verification: slot is cleared only after AM confirms deletion
 
 ### System Info
+A per-category browser for everything installed, with backup/restore/delete
+actions available straight from a title's detail page.
 - Overview: Games / Updates / DLC counts + total sizes + SD free space
 - Navigate into each category (**A**) to browse the full title list
 - Per-title detail page with full name, Title ID, version, size, storage location, backup date
 - Actions per title: **Backup Save Data**, **Restore Save Data**, **Delete Title**
 
 ### Settings
+Six toggles/options, all applied and saved as soon as you change them —
+no separate save step.
 
 | Setting | Default | Description |
 |---|---|---|
@@ -59,15 +90,17 @@ A Nintendo 3DS homebrew application for managing installed titles: install CIA f
 | Skip Uninstall Confirm | OFF | Delete immediately on X without confirmation |
 | Force Restore | OFF | Auto-restore backup after every CIA install |
 | Skip Install Confirm | OFF | Install immediately on A without confirmation |
-| Backup Folder | `sdmc:/3ds/fast-uninstall/backups` | Cycle through 5 preset paths with left/right or L/R |
+| Backup Folder | `sdmc:/3ds/3ds-app-manager/backups` | Cycle through 5 preset paths with left/right or L/R |
+| Language | System language (EN/IT, else EN) | Cycle between English and Italian for all app UI text |
 
 Changes are saved in real time; press **B** or **START** to return to the menu.
 
 ### General
+Shared behavior across every screen:
 - Sort by **Name**, **Size** (largest first), or **Title ID**
 - Filter by **All**, **Updates only**, or **DLC only**
 - Supports up to **500 titles** (HOME menu cap is 300; counter turns red above it)
-- Multi-language title names: system language -> English -> Japanese -> any available
+- Multi-language title names: system language → English → Japanese → any available
 - Hold **SELECT** for a full controls overlay (flicker-free rendering)
 - Sleep mode compatible — close and re-open the console freely
 - Progress bar during title loading
@@ -330,7 +363,7 @@ You have over 300 titles. The HOME menu cap is 300. The app still shows all of t
 System Info -> navigate to the title -> **A** -> "Restore Save Data".
 
 **Where are my backups?**  
-`[backup_path]/[TitleID]/`. Default: `sdmc:/3ds/fast-uninstall/backups/`. Change in Settings.
+`[backup_path]/[TitleID]/`. Default: `sdmc:/3ds/3ds-app-manager/backups/`. Change in Settings.
 
 **Is it safe to delete updates or DLC?**  
 Yes. Each is an independent title. Deleting an update reverts the game to its base version.
@@ -377,11 +410,11 @@ Restart the HOME menu or the console. The 3DS system cache can take a moment to 
     |__ boss_extdata/     SpotPass / StreetPass data
 ```
 
-**Default `backup_path`:** `sdmc:/3ds/fast-uninstall/backups`  
+**Default `backup_path`:** `sdmc:/3ds/3ds-app-manager/backups`  
 The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by host tests).
 
 **Alternative paths** (cycle with d-pad left/right in Settings):
-1. `sdmc:/3ds/fast-uninstall/backups`
+1. `sdmc:/3ds/3ds-app-manager/backups`
 2. `sdmc:/backups/3ds-titles`
 3. `sdmc:/save-backups`
 4. `sdmc:/3ds-backups`
@@ -391,10 +424,10 @@ The path is overridable at build time: `-DDEFAULT_BACKUP_PATH="..."` (used by ho
 
 ## Configuration
 
-Config file: `sdmc:/3ds/fast-uninstall/config.ini`
+Config file: `sdmc:/3ds/3ds-app-manager/config.ini`
 
 ```ini
-backup_path=sdmc:/3ds/fast-uninstall/backups
+backup_path=sdmc:/3ds/3ds-app-manager/backups
 force_backup=0
 skip_uninstall_confirm=0
 force_restore=0
@@ -427,17 +460,25 @@ Unit tests compile and run on the development host without a 3DS or devkitARM:
 make -C tests
 ```
 
-Tests cover: `formatSize`, `sanitizeName`, config round-trip, comparators, safety filter, `smdhSelectName`, and filter logic. No 3DS hardware required.
+Five binaries, no 3DS hardware required: `formatSize`/`sanitizeName`
+(`test_utils`), config round-trip (`test_config`), comparators/safety
+filter/`smdhSelectName`/filter logic (`test_titles`), the backup/restore
+archive-copy logic (`test_backup`, via a small in-memory fake `FS_Archive`
+in `tests/shims/fake_fs.h` that actually exercises copy/failure/cleanup
+behavior) and CIA header parsing/folder scanning (`test_install`). See
+`CLAUDE.md`'s "Test coverage" section for exactly what is and isn't
+exercised this way — UI-driven code (`draw.c`, `input.c`'s blocking flows)
+and the real AM install/delete calls still need on-device verification.
 
 ### Build
 
 ```bash
-git clone https://github.com/Marcogn/3ds-fast-uninstall.git
-cd 3ds-fast-uninstall
+git clone https://github.com/Marcogn/3DSAppManager.git
+cd 3DSAppManager
 make clean && make
 ```
 
-Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall.smdh`
+Output: `3ds-app-manager.3dsx`, `3ds-app-manager.elf`, `3ds-app-manager.smdh`
 
 | Error | Fix |
 |---|---|
@@ -457,7 +498,7 @@ Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall
 
 ### Architecture
 
-The application is structured into **8 modules** for maintainability and testability:
+The application is structured into **9 modules** for maintainability and testability:
 
 ```
 source/
@@ -468,9 +509,10 @@ source/
 ├── titles.h/c         — Title loading (optimized), sort/filter, backup-dir helpers
 ├── backup_restore.h/c — Save backup, restore, title deletion
 ├── install.h/c        — CIA scanning and installation
-├── draw.h/c           — All rendering functions (~750 lines)
-├── input.h/c          — Input handlers and blocking flows (~560 lines)
-└── main.c             — Entry point + main loop (125 lines)
+├── draw.h/c           — All rendering functions (~790 lines)
+├── input.h/c          — Input handlers and blocking flows (~580 lines)
+├── lang.h/c           — UI string translation (English / Italian)
+└── main.c             — Entry point + main loop (135 lines)
 ```
 
 **No Makefile changes required**: the devkitPro template's `$(wildcard $(dir)/*.c)` includes all `.c` files automatically.
@@ -489,6 +531,8 @@ main.c
   │     └── install.h/c         (CIA scan, install — calls draw for progress)
   └── utils.h/c          (pure helpers — no globals, no 3DS services; host-testable)
 
+lang.h/c  ─── T(id) string lookup, called from draw.c/input.c/backup_restore.c
+              (reads globals.config.language; no other module dependencies)
 types.h   ─── included by all modules (type definitions shared everywhere)
 ```
 
@@ -652,14 +696,35 @@ The 3DS homebrew heap is typically 32-64 MB — well within budget.
 
 ---
 
-## License
+## Documentation
 
-Open source. See [LICENSE](LICENSE).
+- [`CHANGELOG.md`](CHANGELOG.md) — what shipped in each release
+- [`CLAUDE.md`](CLAUDE.md) — contributor/architecture guide: conventions,
+  test coverage, backup/deletion invariants to preserve, build notes
+- [`TODO.md`](TODO.md) — known technical debt and potential optimizations
 
-## Credits
+## Contributing
 
-Created by Marcogn.
+This is a personal project built primarily for single-user use, so there's
+no public feature roadmap open to proposals. Bug reports and small,
+focused fix PRs are welcome — open an issue before working on anything
+substantial to avoid wasted effort. Most changes should also come with a
+`CHANGELOG.md` entry and, where it's testable on host (see `CLAUDE.md`'s
+"Test coverage" section), a test under `tests/`.
+
+## About this project
+
+3DS App Manager is an independent project, built by Marcogn in close
+collaboration with Claude, Anthropic's AI coding assistant — Claude wrote
+and reviewed most of the code, under direct human design and review at
+every step.
 
 ## Disclaimer
 
-Use at your own risk. Always keep additional backups of important save data before uninstalling titles. The authors are not responsible for any data loss.
+Use at your own risk. Always keep additional backups of important save
+data before uninstalling titles. The authors are not responsible for any
+data loss.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

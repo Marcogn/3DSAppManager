@@ -1,5 +1,223 @@
 # Changelog
 
+All notable changes to 3DS App Manager are documented in this file.
+Headings use the app's own `VERSION_STRING` (`source/types.h`). Cutting a
+release is a manual, deliberate step: trigger the `Release` GitHub Actions
+workflow (`.github/workflows/release.yml`) with a version and title —
+it renames this file's `## Unreleased` section to `## vX.Y.Z – <title>
+(date)`, bumps `VERSION_STRING` to match, builds, and publishes the result
+as a GitHub Release using that section verbatim as the release notes. Keep
+the `## vX.Y.Z` heading format exact.
+
+**Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
+section at the top of this file when it's made (create the section if it
+isn't there), not deferred until a release is cut. This keeps the log
+accurate at all times instead of being reconstructed from memory later.
+
+## Unreleased
+
+### Changed: project renamed to 3DS App Manager
+Renamed from "3ds-fast-uninstall" everywhere the old name appeared, following
+the GitHub repository itself being renamed to `Marcogn/3DSAppManager`:
+- In-app title (top-screen header, both languages) and the SMDH `APP_TITLE`
+  shown in the Homebrew Launcher: "3DS Fast Uninstall" → "3DS App Manager".
+- Build output (`Makefile`'s `TARGET`, the CI build artifact name):
+  `3ds-fast-uninstall.3dsx`/`.elf`/`.smdh` → `3ds-app-manager.*`.
+- On-SD-card app folder: `sdmc:/3ds/fast-uninstall/` →
+  `sdmc:/3ds/3ds-app-manager/` (`CONFIG_PATH`, `DEFAULT_BACKUP_PATH`,
+  `BACKUP_PATH_OPTIONS[0]`, `romfs/default_config.ini`). **This is a real
+  default-path change, not just cosmetic**: an existing installation
+  upgrading from an older version won't find its old `config.ini` or the
+  default backup folder at the new path on first launch — settings reset to
+  defaults, and old backups stay on the SD card untouched but need
+  reselecting via the Backup Folder setting (or a manual move) to be found
+  again. The other 4 preset backup-path options were already generic and
+  are unaffected.
+- `README.md`, `CHANGELOG.md` (this file's framing text only — historical
+  entries describing what a past release actually shipped are left as
+  written, not rewritten), GitHub Actions workflow files, and the tracked
+  `3ds-fast-uninstall.3dsx` binary in the repo root (renamed to
+  `3ds-app-manager.3dsx` — its *content* is unchanged/stale from before this
+  round of work, since builds require devkitARM which isn't available here;
+  a real rebuild is still needed via CI/the `Release` workflow before it
+  reflects current source).
+- The in-app "Uninstall" feature/screen/menu itself is unaffected — only the
+  project's own name changed, not what the app does.
+
+### Added: Italian/English localization
+The app previously had no translation infrastructure at all despite
+`CFGU_GetSystemLanguage()` already being used elsewhere (only to pick which
+language slot to read a *game's own* title from — not to translate this
+app's UI). Every on-screen string is now looked up through a small
+hand-rolled table rather than hardcoded, since this embedded C target has
+no gettext/.po toolchain available:
+- **`source/lang.h`/`source/lang.c`** (new): a `StringID` enum plus two
+  parallel `const char *` tables (English, Italian) indexed by it, and
+  `T(id)` to look up the current language's string. `config.language`
+  (new `Language` field, `types.h`) defaults to
+  `detectSystemLanguage()` (`CFGU_GetSystemLanguage()`, EN/IT — any other
+  console language falls back to English) on first run, is persisted in
+  `config.ini` (`language=en`/`language=it`), and can be changed at any
+  time from a new Settings screen row (Up/Down/A/L/R cycles it,
+  `handleSettingsInput()` in `input.c`).
+- Every natural-language string in `draw.c` and the dialog strings in
+  `input.c`/`backup_restore.c` now goes through `T()`. Technical/numeric
+  literals (hex title IDs, `"v%u"`, `"SD"`/`"NAND"`, checkbox glyphs,
+  `sdmc:/` paths, archive folder names) are deliberately left as literals
+  — identical in both languages, translating them would just be noise.
+  `backup_info.txt`'s on-disk metadata keys (`Title ID:`, `Backup Date:`,
+  etc.) are also left in English, treated as a technical record format
+  rather than UI.
+- Settings screen redesigned for the new Language row: 6 rows instead of
+  5, tighter row spacing (`34 + i*30` instead of `38 + i*32`) to fit.
+- `drawSysInfoScreen`'s per-row layout changed from one padded
+  `%-9s%3d    %s`-style string to three independently positioned draws
+  (label/count/size) — the padded version relied on English label widths
+  and would have misaligned the count/size columns under longer Italian
+  labels (e.g. "Aggiornamenti" vs "Updates").
+- A follow-up pass measured every Italian string against the fixed pixel
+  budget of the *static*-position text it's drawn into (dialog box,
+  main-menu bottom-screen description lines, help-overlay key/desc/hint
+  columns — anywhere not using this codebase's existing
+  `strlen()`-based dynamic-x pattern) and shortened the handful that were
+  at or past the edge of their column: the Install-help "Left/Right" key
+  label (`"Sinistra/Destra"` → `"Sin/Des"`, was overflowing into the
+  description column), the main-menu Backup/Uninstall/Install/SysInfo
+  description lines, and two dialog strings
+  (`STR_DLG_TITLE_MAY_REMAIN`, `STR_DLG_FOUND_RELATED_FMT`). No English
+  string was affected. This is a static analysis against the app's own
+  established `~7px/char` positioning convention, not a hardware
+  verification — see `CLAUDE.md`'s "Known gotchas" for why the real
+  citro2d/hardware rendering still can't be checked from this
+  environment.
+
+### Added: lang.c test coverage
+`tests/test_lang.c` (8 tests): `T()` returns the right string per
+language, switches at runtime when `config.language` changes, returns
+`""` for an out-of-range `StringID` instead of reading out of bounds,
+falls back to English for an invalid `config.language` value, and —
+the main regression this guards against — every `StringID` from `0` to
+`STR_COUNT-1` has a non-empty entry in *both* language tables, so a
+string added to the enum but forgotten in one table's initializer list
+fails the build's test suite instead of shipping as a silent blank/
+English-only string on one language setting.
+
+### Added: real host test coverage for backup/restore and CIA parsing
+`backup_restore.c` shipped the v2.3.1 bug without the host test suite ever
+touching it — it only linked `titles.c`'s pure helpers, `utils.c`, and
+`config.c`. That gap is now closed for the two modules that most needed it:
+- **`tests/shims/fake_fs.h`**: a new, opt-in, in-memory fake `FS_Archive`
+  backend (unregistered archives/paths behave exactly like the old
+  always-fail stubs, so every existing test is unaffected). Lets a test
+  register a small virtual directory tree — including per-node "fails to
+  open" / "fails to read" flags — and have `copyDirectory`/`backupArchive`/
+  `backupSaveDataToPath`/`restoreSaveData`/`restoreDirectory` actually walk
+  it for real.
+- `test_backup.c`/`test_install.c` originally used `/test/...` as their
+  scratch root on the real host filesystem (matching this repo's existing
+  `DEFAULT_BACKUP_PATH="/test/backups"` build override) — that passed in a
+  root-run sandbox but failed CI's actual (non-root) GitHub Actions runner,
+  which cannot create directories at the filesystem root. Both now use
+  `/tmp/3dsfu_*` roots instead, verified locally by running the whole
+  suite as an unprivileged user (not just root) to catch this class of
+  issue before pushing.
+- **`tests/test_backup.c`** (13 tests): backup success with real files,
+  the "never launched, empty archive" success case, total-unreachable
+  failure + cleanup, the core v2.3.1 regression (archive opens but a file
+  fails to actually copy — must not be masked as success), a failed
+  re-backup attempt leaving a prior valid backup completely untouched, an
+  oversized file being skipped without failing the whole backup, a listed
+  subdirectory that fails to open propagating as a real failure,
+  extdata-only backups still succeeding, `restoreSaveData` writing the
+  right content into the archive, and the `titles.c` backup-dir helpers
+  (`getBackupDirName`/`findBackupDir`/`checkBackupExists`/
+  `getBackupLastDate`).
+- **`tests/test_install.c`** (6 tests): `getCIATitleID`'s binary CIA
+  header parsing (valid header, missing file, truncated TMD) and
+  `scanDirectory`'s folder-listing/classification — both pure host I/O,
+  no fake archive needed.
+- `tests/shims/3ds.h` also gained `DT_DIR`, `strcasecmp`, and
+  `AM_StartCiaInstall`/`AM_CancelCIAInstall`/`AM_FinishCiaInstall` stubs it
+  was missing — `input.c` and `install.c` now both compile cleanly
+  (`gcc -fsyntax-only`) against the test shims, which they didn't before.
+- `installCIA` (real `AM_*CiaInstall` calls), `deleteTitle`/
+  `deleteTitleCompletely` (thin `AM_DeleteTitle` wrappers), and all of
+  `draw.c`/`input.c`'s blocking UI flows remain untested by design — see
+  `CLAUDE.md`'s "Test coverage" section for why.
+
+### Changed: README revised, release process automated
+- `README.md`: added badges, a tighter intro + "Why", a "Download" section
+  pointing at GitHub Releases, topic sentences on each Features subsection,
+  and closing `Documentation`/`Contributing`/`About this project` sections
+  — restructured after `ThePatientGamerHelper`'s README, keeping this
+  project's own controls/screen-layout/FAQ reference content that a
+  button-driven homebrew app actually needs.
+- `.github/workflows/release.yml`: replaced the old tag-push-triggered
+  workflow with a manual `workflow_dispatch` one (version + title inputs)
+  that cuts `CHANGELOG.md`'s `## Unreleased` section and bumps
+  `VERSION_STRING` itself, commits that bump to `main`, builds, and
+  publishes the GitHub Release — the same process `ThePatientGamerHelper`
+  uses, adapted for a devkitARM `.3dsx`/`.smdh` build with no signing step
+  instead of a signed Android APK.
+
+## v2.3.1 – Backup silently reporting success with no data copied (2026-08-19)
+
+### Fix: backup silently succeeding without actually copying anything
+This was the root cause of "uninstall runs, but the save-data backup runs
+instantly and does nothing": `backupSaveDataToPath` returned `true` as
+soon as the local backup folder was created on the SD card, regardless of
+whether the savedata archive ever opened or a single byte was copied out
+of it.
+- **`copyDirectory` / `backupArchive`** (`backup_restore.h/c`): were
+  `void`, so a failed/empty archive copy was indistinguishable from a real
+  one. Now return `bool` — `false` if any entry that existed could not
+  actually be read from the archive or written to the SD card (SD full, a
+  corrupt archive read, a listed subdirectory that fails to open), `true`
+  otherwise, including the trivial case of an archive that opens but is
+  empty (a title that was never launched has no save yet). A file at or
+  above the 100MB cap is deliberately skipped and does not count as a
+  failure — it's a policy limit on this app's side, not an I/O error.
+- **`backupSaveDataToPath`** (`backup_restore.c`): now tracks, per archive
+  (savedata/extdata/boss_extdata), both whether it was reachable *and*
+  whether everything in it actually got copied — opening an archive and
+  then failing mid-copy (e.g. the SD card fills up partway through) no
+  longer counts as success just because the open succeeded. Reports
+  failure and cleans up the stub folder it created when nothing could be
+  backed up at all, or when something was reachable but failed to copy.
+  A re-backup attempt over an existing valid backup is never deleted on
+  failure (only a brand-new, empty attempt is cleaned up), and
+  `backup_info.txt` is only (re)written once the attempt is confirmed
+  fully successful, so a failed re-backup can no longer make an old, still
+  valid backup's date look freshly updated.
+- **Uninstall flow** (`input.c`): a title whose requested backup actually
+  fails is now skipped instead of deleted anyway — the summary dialog
+  reports both failed backups and titles left un-deleted.
+- **SysInfo detail "Backup Save Data"** (`input.c`): previously always
+  showed "Backup completed." and forced `hasBackup = true` regardless of
+  the real result; now shows "Backup failed." when it is.
+
+### Further review fixes
+- **`restoreDirectory`** (`backup_restore.c`): now checks `stat()`'s return
+  value before branching on `S_ISDIR(st.st_mode)` — previously a failed
+  `stat()` (e.g. a race, or a broken entry) left `st` uninitialized and was
+  read as if it had succeeded.
+- **`_installFolderCIAs`** (`input.c`, batch "Install all CIA files in
+  folder"): the file list was a fixed `char[64][512]` stack buffer, so a
+  folder with more than 64 `.cia` files silently installed only the first
+  64 with no warning. Now heap-allocated at `MAX_FILES` (256, matching the
+  folder-scan limit used everywhere else in the app) instead of enlarging
+  the stack array, which would have risked overflowing the 3DS's small
+  default thread stack.
+
+### Known limitation (not fixed here, documented for later)
+Backing up a title again on top of an existing valid backup overwrites its
+files in place as it goes (same behavior this app has always had). If that
+re-backup attempt fails partway through, the files it already reached keep
+their new content — the fix above only guarantees the backup folder and
+its `backup_info.txt` aren't deleted, not that the attempt is atomic.
+Making re-backups atomic (write to a staging folder, swap in only on full
+success) is a larger change left for a future pass.
+
 ## v2.3.0 – Help overlay, pure helpers, bool backups, test suite (2026-04-27)
 
 ### SELECT help overlay (Tasks 1–3)

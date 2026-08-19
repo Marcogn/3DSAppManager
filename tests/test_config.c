@@ -13,6 +13,7 @@
  * config.c uses utils.c (createDirectory calls mkdir — OK on host for test paths).
  */
 #include "../../source/utils.c"
+#include "../../source/lang.c"
 #include "../../source/config.c"
 
 /* CONFIG_PATH and DEFAULT_BACKUP_PATH are overridden via -D flags in the Makefile */

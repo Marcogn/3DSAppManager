@@ -1,6 +1,6 @@
 /*
  * greatest.h — minimal single-header test framework (subset).
- * Adapted for 3ds-fast-uninstall host tests.
+ * Adapted for 3ds-app-manager host tests.
  */
 #ifndef GREATEST_H
 #define GREATEST_H

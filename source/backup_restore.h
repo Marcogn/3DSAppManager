@@ -4,8 +4,8 @@
    ============================================================ */
 #include "types.h"
 
-void copyDirectory      (FS_Archive archive, const char *srcPath, const char *dstPath);
-void backupArchive      (FS_Archive archive, const char *basePath, const char *archiveName);
+bool copyDirectory      (FS_Archive archive, const char *srcPath, const char *dstPath);
+bool backupArchive      (FS_Archive archive, const char *basePath, const char *archiveName);
 bool backupSaveDataToPath(TitleInfo *title, const char *backupPath);
 bool backupSaveData     (TitleInfo *title);
 void restoreDirectory   (FS_Archive archive, const char *srcPath, const char *dstPath);
