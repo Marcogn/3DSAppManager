@@ -3,10 +3,10 @@
 All notable changes to 3DS App Manager are documented in this file.
 Headings use the app's own `VERSION_STRING` (`source/types.h`). Cutting a
 release is a manual, deliberate step: trigger the `Release` GitHub Actions
-workflow (`.github/workflows/release.yml`) with a version and title —
-it renames this file's `## Unreleased` section to `## vX.Y.Z – <title>
-(date)`, bumps `VERSION_STRING` to match, builds, and publishes the result
-as a GitHub Release using that section verbatim as the release notes. Keep
+workflow (`.github/workflows/release.yml`) with just a version number —
+it renames this file's `## Unreleased` section to `## vX.Y.Z (date)`,
+bumps `VERSION_STRING` to match, builds, and publishes the result as a
+GitHub Release using that section verbatim as the release notes. Keep
 the `## vX.Y.Z` heading format exact.
 
 **Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
@@ -15,6 +15,18 @@ isn't there), not deferred until a release is cut. This keeps the log
 accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
+
+### Changed: release workflow no longer asks for a title
+`.github/workflows/release.yml`'s `workflow_dispatch` form used to require
+typing in both a `version` and a `title` (the latter only ever used to
+build the CHANGELOG heading, `## vX.Y.Z – <title> (date)`) — one manual
+field too many for something meant to be a quick, low-friction trigger.
+Dropped `title` entirely: the heading is now just `## vX.Y.Z (date)`, and
+the release's actual notes still come verbatim from the `## Unreleased`
+section's own content (unchanged — that's the part that actually says
+what the release is about). Only `version` is still typed by hand, since
+choosing a semver bump is a real judgment call the workflow can't safely
+guess at.
 
 ### Removed: host-test CI workflow
 `.github/workflows/tests.yml` (the automatic `make -C tests` run on every

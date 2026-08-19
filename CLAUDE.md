@@ -185,13 +185,14 @@ workflow for the host test suite (removed to keep Actions to just the PR
 build check + the manual release), so run `make test` yourself before
 pushing and say explicitly in your summary that it wasn't re-verified by
 CI. `.github/workflows/release.yml` is manual-only (`workflow_dispatch`, a
-`version` + `title` input, never fires on push/PR) — trigger it from the
+single `version` input, never fires on push/PR) — trigger it from the
 Actions tab when the user actually asks to cut a release. It validates the
-inputs, renames `CHANGELOG.md`'s `## Unreleased` section to
-`## vX.Y.Z – <title> (date)`, bumps `VERSION_STRING` in `source/types.h`
-to match, commits and pushes that bump to `main`, builds, and publishes
-the `.3dsx`/`.smdh` as a GitHub Release using that section verbatim as the
-release notes.
+input, renames `CHANGELOG.md`'s `## Unreleased` section to
+`## vX.Y.Z (date)`, bumps `VERSION_STRING` in `source/types.h` to match,
+commits and pushes that bump to `main`, builds, and publishes the
+`.3dsx`/`.smdh` as a GitHub Release using that section verbatim as the
+release notes — there's no separate title to type in; the Unreleased
+section's own content is the release notes.
 
 ## Changelog policy
 
