@@ -10,6 +10,25 @@
 /* Forward declaration — defined in draw.c */
 void drawDialog(const char **lines, int lineCount);
 
+/* Recursively removes a directory tree this module just created for a
+   failed backup attempt. Only ever called on a backupDir that did not
+   exist before this attempt, so it can never contain real save data. */
+static void removeCreatedTree(const char *path) {
+    DIR *d = opendir(path);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+            char sub[600]; snprintf(sub, sizeof(sub), "%s/%s", path, ent->d_name);
+            struct stat st;
+            if (stat(sub, &st) == 0 && S_ISDIR(st.st_mode)) removeCreatedTree(sub);
+            else remove(sub);
+        }
+        closedir(d);
+    }
+    rmdir(path);
+}
+
 /* Returns true if at least one file/subdirectory was actually copied out of
    the archive. A directory that opens but is empty (fresh/never-run title)
    correctly returns false without being treated as an error by the caller. */
@@ -67,6 +86,9 @@ bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     getBackupDirName(title->titleID, cleanName, dirName, sizeof(dirName));
     char backupDir[512];
     snprintf(backupDir, sizeof(backupDir), "%s/%s", backupPath, dirName);
+    /* Remember whether this is a fresh backup or a re-attempt over an
+       existing one, so a failed re-attempt never wipes prior real data. */
+    struct stat preStat; bool backupDirPreexisted = (stat(backupDir, &preStat) == 0 && S_ISDIR(preStat.st_mode));
     createDirectory(backupDir);
     /* createDirectory wraps mkdir which may fail silently (e.g. SD full);
        stat confirms the directory was actually created on the SD card. */
@@ -121,19 +143,17 @@ bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
     }
 
     if (!savedataArchiveOk && !anyContentCopied) {
-        /* Nothing could be backed up at all — remove the stub folder (and
-           any empty per-archive subfolders createDirectory may have made
-           along the way) so it doesn't linger and get mistaken for a real
-           backup later (the [*] indicator and restore flow only check for
-           folder existence). Best-effort: missing entries just fail ENOENT. */
-        char sdDir[560], exDir[560], bxDir[560];
-        snprintf(sdDir, sizeof(sdDir), "%s/savedata", backupDir);
-        snprintf(exDir, sizeof(exDir), "%s/extdata", backupDir);
-        snprintf(bxDir, sizeof(bxDir), "%s/boss_extdata", backupDir);
-        rmdir(sdDir); rmdir(exDir); rmdir(bxDir);
-        remove(infoPath);
-        rmdir(backupDir);
-        title->hasBackup = false;
+        /* Nothing could be backed up at all this attempt. If this was a
+           brand-new backupDir, remove the whole stub tree we just created
+           (info file + any empty per-archive subfolders, however deeply
+           nested) so it doesn't linger and get mistaken for a real backup
+           later (the [*] indicator and restore flow only check for folder
+           existence). If backupDir already existed — this was a re-backup
+           attempt on top of a prior successful one — leave it completely
+           untouched: a transient failure here must never destroy an
+           earlier, still-valid backup. */
+        if (!backupDirPreexisted) removeCreatedTree(backupDir);
+        title->hasBackup = backupDirPreexisted;
         return false;
     }
 
@@ -153,7 +173,8 @@ void restoreDirectory(FS_Archive archive, const char *srcPath, const char *dstPa
         char sf[512], df[512];
         snprintf(sf, sizeof(sf), "%s/%s", srcPath, ent->d_name);
         snprintf(df, sizeof(df), "%s/%s", dstPath, ent->d_name);
-        struct stat st; stat(sf, &st);
+        struct stat st;
+        if (stat(sf, &st) != 0) continue;
         if (S_ISDIR(st.st_mode)) {
             FS_Path fp2 = fsMakePath(PATH_ASCII, df);
             FSUSER_CreateDirectory(archive, fp2, 0);

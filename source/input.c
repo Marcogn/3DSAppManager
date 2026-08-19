@@ -234,11 +234,18 @@ static void _goUpDir(void) {
 
 /* ---- Internal: install all .cia files in a folder ---- */
 static int _installFolderCIAs(const char *folderPath) {
-    char ciaPaths[64][512]; int ciaCount = 0;
+    /* Heap-allocated (not a stack array): capped at MAX_FILES to match the
+       folder scan limit used everywhere else, which at 512 bytes/entry
+       would be 128KB on the stack — too large for the 3DS's small default
+       thread stack. The previous fixed cap of 64 silently dropped every
+       CIA past the 64th in a larger folder with no warning to the user. */
+    char (*ciaPaths)[512] = malloc(MAX_FILES * sizeof(*ciaPaths));
+    if (!ciaPaths) return 0;
+    int ciaCount = 0;
     DIR *d = opendir(folderPath);
     if (d) {
         struct dirent *ent;
-        while ((ent = readdir(d)) != NULL && ciaCount < 64) {
+        while ((ent = readdir(d)) != NULL && ciaCount < MAX_FILES) {
             if (ent->d_type == DT_DIR) continue;
             const char *ext = strrchr(ent->d_name, '.');
             if (!ext || strcasecmp(ext, ".cia") != 0) continue;
@@ -246,7 +253,7 @@ static int _installFolderCIAs(const char *folderPath) {
         }
         closedir(d);
     }
-    if (ciaCount == 0) return 0;
+    if (ciaCount == 0) { free(ciaPaths); return 0; }
     FS_MediaType dest = MEDIATYPE_SD;
     int installed = 0, failed = 0;
     for (int i = 0; i < ciaCount; i++) {
@@ -288,6 +295,7 @@ static int _installFolderCIAs(const char *folderPath) {
     drawDialog(resDl, 5);
     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     if (installed > 0) titlesNeedRefresh = true;
+    free(ciaPaths);
     return installed;
 }
 
@@ -517,18 +525,18 @@ void runUninstallDeleteFlow(void) {
     /* Execute backup + delete. If a backup was requested for a title and it
        actually fails, that title is skipped instead of being deleted anyway
        — losing unbacked-up save data defeats the purpose of asking. */
-    int bkFailed = 0, skipped = 0;
+    int bkFailed = 0;
     for (int i = 0; i < titleCount; i++) {
         if (!titles[i].selected || !titles[i].isValid) continue;
         if (doBackup && !backupSaveDataToPath(&titles[i], chosenPath)) {
-            bkFailed++; skipped++;
+            bkFailed++;
             continue;
         }
         deleteTitle(&titles[i]);
     }
     if (doBackup && bkFailed > 0) {
         char bkErrMsg[64]; snprintf(bkErrMsg, sizeof(bkErrMsg), "  %d backup(s) failed.", bkFailed);
-        char skipMsg[64]; snprintf(skipMsg, sizeof(skipMsg), "  %d title(s) NOT deleted.", skipped);
+        char skipMsg[64]; snprintf(skipMsg, sizeof(skipMsg), "  %d title(s) NOT deleted.", bkFailed);
         const char *bkErrDl[] = { "", bkErrMsg, skipMsg, "", "  A=Continue" };
         drawDialog(bkErrDl, 5); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     }
