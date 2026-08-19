@@ -1,17 +1,73 @@
 # Changelog
 
-## Unreleased
+All notable changes to 3DS Fast Uninstall are documented in this file.
+Headings use the app's own `VERSION_STRING` (`source/types.h`); the
+`Release` GitHub Actions workflow (`.github/workflows/release.yml`) reads
+the section matching a pushed `vX.Y.Z` tag verbatim as the GitHub Release
+notes, so keep the `## vX.Y.Z` heading format exact.
 
-### Fix: backup silently reporting success with no data copied
-- **`copyDirectory` / `backupArchive` now return `bool`** (`backup_restore.h/c`): previously `void`, so a failed/empty archive copy was indistinguishable from a real one. Now they report whether any file was actually written.
-- **`backupSaveDataToPath`** (`backup_restore.c`): previously returned `true` as soon as the local backup folder was created on SD, even if the savedata archive never opened and `copyDirectory` copied nothing — this is why a backup could run instantly and produce an empty folder while still being reported as successful. It now tracks whether the savedata archive was reachable and whether any content was copied from savedata/extdata/boss_extdata, and returns `false` (cleaning up the empty stub folder it created) when nothing could be backed up at all.
-- **Uninstall flow** (`input.c`): a title whose requested backup actually fails is now skipped instead of being deleted anyway — the summary dialog reports both failed backups and titles left un-deleted.
-- **SysInfo detail "Backup Save Data"** (`input.c`): previously always showed "Backup completed." and forced `hasBackup = true` regardless of the real result; now shows "Backup failed." when it is, and relies on `backupSaveData`'s own accurate `hasBackup` update.
-- **`backupSaveDataToPath` no longer destroys a prior successful backup** (`backup_restore.c`): the cleanup added above now only removes the stub folder when this was a brand-new backup attempt (tracked via a pre-existence check on `backupDir`); a transient failure while re-backing up a title that already had a valid backup on disk now leaves that earlier backup and its `backup_info.txt` completely untouched instead of deleting it. The cleanup itself also now removes arbitrarily-nested empty subfolders (previously only the three top-level `savedata`/`extdata`/`boss_extdata` names were attempted, so a nested empty tree could leave the stub un-removed).
+**Policy:** every change gets a `CHANGELOG.md` entry under a `## Unreleased`
+section at the top of this file when it's made (create the section if it
+isn't there), not deferred until a release is cut. This keeps the log
+accurate at all times instead of being reconstructed from memory later.
+
+## v2.3.1 – Backup silently reporting success with no data copied (2026-08-19)
+
+### Fix: backup silently succeeding without actually copying anything
+This was the root cause of "uninstall runs, but the save-data backup runs
+instantly and does nothing": `backupSaveDataToPath` returned `true` as
+soon as the local backup folder was created on the SD card, regardless of
+whether the savedata archive ever opened or a single byte was copied out
+of it.
+- **`copyDirectory` / `backupArchive`** (`backup_restore.h/c`): were
+  `void`, so a failed/empty archive copy was indistinguishable from a real
+  one. Now return `bool` — `false` if any entry that existed could not
+  actually be read from the archive or written to the SD card (SD full, a
+  corrupt archive read, a listed subdirectory that fails to open), `true`
+  otherwise, including the trivial case of an archive that opens but is
+  empty (a title that was never launched has no save yet). A file at or
+  above the 100MB cap is deliberately skipped and does not count as a
+  failure — it's a policy limit on this app's side, not an I/O error.
+- **`backupSaveDataToPath`** (`backup_restore.c`): now tracks, per archive
+  (savedata/extdata/boss_extdata), both whether it was reachable *and*
+  whether everything in it actually got copied — opening an archive and
+  then failing mid-copy (e.g. the SD card fills up partway through) no
+  longer counts as success just because the open succeeded. Reports
+  failure and cleans up the stub folder it created when nothing could be
+  backed up at all, or when something was reachable but failed to copy.
+  A re-backup attempt over an existing valid backup is never deleted on
+  failure (only a brand-new, empty attempt is cleaned up), and
+  `backup_info.txt` is only (re)written once the attempt is confirmed
+  fully successful, so a failed re-backup can no longer make an old, still
+  valid backup's date look freshly updated.
+- **Uninstall flow** (`input.c`): a title whose requested backup actually
+  fails is now skipped instead of deleted anyway — the summary dialog
+  reports both failed backups and titles left un-deleted.
+- **SysInfo detail "Backup Save Data"** (`input.c`): previously always
+  showed "Backup completed." and forced `hasBackup = true` regardless of
+  the real result; now shows "Backup failed." when it is.
 
 ### Further review fixes
-- **`restoreDirectory`** (`backup_restore.c`): now checks `stat()`'s return value before branching on `S_ISDIR(st.st_mode)` — previously a failed `stat()` (e.g. a race, or a broken entry) left `st` uninitialized and read as if it had succeeded.
-- **`_installFolderCIAs`** (`input.c`, batch "Install all CIA files in folder"): the file list was a fixed `char[64][512]` stack buffer, so a folder with more than 64 `.cia` files silently installed only the first 64 with no warning. Now heap-allocated at `MAX_FILES` (256, matching the folder-scan limit used everywhere else in the app) instead of enlarging the stack array, which would have risked overflowing the 3DS's small default thread stack.
+- **`restoreDirectory`** (`backup_restore.c`): now checks `stat()`'s return
+  value before branching on `S_ISDIR(st.st_mode)` — previously a failed
+  `stat()` (e.g. a race, or a broken entry) left `st` uninitialized and was
+  read as if it had succeeded.
+- **`_installFolderCIAs`** (`input.c`, batch "Install all CIA files in
+  folder"): the file list was a fixed `char[64][512]` stack buffer, so a
+  folder with more than 64 `.cia` files silently installed only the first
+  64 with no warning. Now heap-allocated at `MAX_FILES` (256, matching the
+  folder-scan limit used everywhere else in the app) instead of enlarging
+  the stack array, which would have risked overflowing the 3DS's small
+  default thread stack.
+
+### Known limitation (not fixed here, documented for later)
+Backing up a title again on top of an existing valid backup overwrites its
+files in place as it goes (same behavior this app has always had). If that
+re-backup attempt fails partway through, the files it already reached keep
+their new content — the fix above only guarantees the backup folder and
+its `backup_info.txt` aren't deleted, not that the attempt is atomic.
+Making re-backups atomic (write to a staging folder, swap in only on full
+success) is a larger change left for a future pass.
 
 ## v2.3.0 – Help overlay, pure helpers, bool backups, test suite (2026-04-27)
 

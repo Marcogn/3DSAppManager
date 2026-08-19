@@ -57,7 +57,7 @@ typedef struct {
 #define MAX_FILES           256
 #define CHUNK_SIZE          0x10000
 #define ALIGN64(x)          (((u32)(x) + 63) & ~63U)
-#define VERSION_STRING      "v2.3.0"
+#define VERSION_STRING      "v2.3.1"
 
 /* ---- Color palette ---- */
 #define CLR_BG        C2D_Color32(20,20,30,255)
