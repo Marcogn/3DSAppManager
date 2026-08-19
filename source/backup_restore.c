@@ -5,14 +5,19 @@
 #include "globals.h"
 #include "utils.h"
 #include "titles.h"
+#include <unistd.h>
 
 /* Forward declaration — defined in draw.c */
 void drawDialog(const char **lines, int lineCount);
 
-void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
+/* Returns true if at least one file/subdirectory was actually copied out of
+   the archive. A directory that opens but is empty (fresh/never-run title)
+   correctly returns false without being treated as an error by the caller. */
+bool copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath) {
     Handle dh; FS_Path fsp = fsMakePath(PATH_ASCII, srcPath);
-    if (R_FAILED(FSUSER_OpenDirectory(&dh, archive, fsp))) return;
+    if (R_FAILED(FSUSER_OpenDirectory(&dh, archive, fsp))) return false;
     createDirectory(dstPath);
+    bool copiedAny = false;
     FS_DirectoryEntry ent[32]; u32 er = 0;
     while (true) {
         if (R_FAILED(FSDIR_Read(dh, &er, 32, ent)) || er == 0) break;
@@ -22,7 +27,7 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
             snprintf(sf, sizeof(sf), "%s/%s", srcPath, nm);
             snprintf(df, sizeof(df), "%s/%s", dstPath, nm);
             if (ent[i].attributes & FS_ATTRIBUTE_DIRECTORY) {
-                copyDirectory(archive, sf, df);
+                if (copyDirectory(archive, sf, df)) copiedAny = true;
             } else {
                 Handle fh; FS_Path fp2 = fsMakePath(PATH_ASCII, sf);
                 if (R_SUCCEEDED(FSUSER_OpenFile(&fh, archive, fp2, FS_OPEN_READ, 0))) {
@@ -33,7 +38,7 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
                             u32 br = 0;
                             if (R_SUCCEEDED(FSFILE_Read(fh, &br, 0, buf, fsz)) && br == fsz) {
                                 FILE *out = fopen(df, "wb");
-                                if (out) { fwrite(buf, 1, br, out); fclose(out); }
+                                if (out) { fwrite(buf, 1, br, out); fclose(out); copiedAny = true; }
                             }
                             free(buf);
                         }
@@ -44,11 +49,13 @@ void copyDirectory(FS_Archive archive, const char *srcPath, const char *dstPath)
         }
     }
     FSDIR_Close(dh);
+    return copiedAny;
 }
 
-void backupArchive(FS_Archive archive, const char *basePath, const char *archiveName) {
+bool backupArchive(FS_Archive archive, const char *basePath, const char *archiveName) {
     char p[512]; snprintf(p, sizeof(p), "%s/%s", basePath, archiveName);
-    createDirectory(p); copyDirectory(archive, "/", p);
+    createDirectory(p);
+    return copyDirectory(archive, "/", p);
 }
 
 bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
@@ -81,11 +88,22 @@ bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
         fclose(info);
     }
 
+    /* Track whether the primary savedata archive was reachable at all, and
+       whether anything was actually written to the SD card. A title whose
+       savedata archive opens but is empty (never launched yet) is a valid,
+       successful backup of "nothing"; a title whose archive can't be opened
+       (and that also yields no extdata/boss_extdata) is a real failure and
+       must be reported instead of silently claiming success. */
+    bool savedataArchiveOk = false;
+    bool anyContentCopied = false;
+
     u32 ap[] = {(u32)(title->titleID & 0xFFFFFFFF), (u32)((title->titleID >> 32) & 0xFFFFFFFF), title->mediaType, 0};
     FS_Path bap = {PATH_BINARY, 16, ap};
     FS_Archive sa;
     if (R_SUCCEEDED(FSUSER_OpenArchive(&sa, ARCHIVE_USER_SAVEDATA, bap))) {
-        backupArchive(sa, backupDir, "savedata"); FSUSER_CloseArchive(sa);
+        savedataArchiveOk = true;
+        if (backupArchive(sa, backupDir, "savedata")) anyContentCopied = true;
+        FSUSER_CloseArchive(sa);
     }
     u64 extID = 0;
     if (R_SUCCEEDED(AM_GetTitleExtDataId(&extID, title->mediaType, title->titleID)) && extID != 0) {
@@ -93,12 +111,32 @@ bool backupSaveDataToPath(TitleInfo *title, const char *backupPath) {
         FS_Path ep = {PATH_BINARY, sizeof(FS_ExtSaveDataInfo), &ei};
         FS_Archive ea;
         if (R_SUCCEEDED(FSUSER_OpenArchive(&ea, ARCHIVE_EXTDATA, ep))) {
-            backupArchive(ea, backupDir, "extdata"); FSUSER_CloseArchive(ea);
+            if (backupArchive(ea, backupDir, "extdata")) anyContentCopied = true;
+            FSUSER_CloseArchive(ea);
         }
         if (R_SUCCEEDED(FSUSER_OpenArchive(&ea, ARCHIVE_BOSS_EXTDATA, ep))) {
-            backupArchive(ea, backupDir, "boss_extdata"); FSUSER_CloseArchive(ea);
+            if (backupArchive(ea, backupDir, "boss_extdata")) anyContentCopied = true;
+            FSUSER_CloseArchive(ea);
         }
     }
+
+    if (!savedataArchiveOk && !anyContentCopied) {
+        /* Nothing could be backed up at all — remove the stub folder (and
+           any empty per-archive subfolders createDirectory may have made
+           along the way) so it doesn't linger and get mistaken for a real
+           backup later (the [*] indicator and restore flow only check for
+           folder existence). Best-effort: missing entries just fail ENOENT. */
+        char sdDir[560], exDir[560], bxDir[560];
+        snprintf(sdDir, sizeof(sdDir), "%s/savedata", backupDir);
+        snprintf(exDir, sizeof(exDir), "%s/extdata", backupDir);
+        snprintf(bxDir, sizeof(bxDir), "%s/boss_extdata", backupDir);
+        rmdir(sdDir); rmdir(exDir); rmdir(bxDir);
+        remove(infoPath);
+        rmdir(backupDir);
+        title->hasBackup = false;
+        return false;
+    }
+
     title->hasBackup = true;
     return true;
 }

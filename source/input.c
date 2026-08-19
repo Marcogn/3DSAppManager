@@ -514,17 +514,23 @@ void runUninstallDeleteFlow(void) {
         while (aptMainLoop()) { drawDialogWithSelectedList(cfDl, 5); hidScanInput(); u32 k = hidKeysDown(); if (k & KEY_A) { confirmed = true; break; } if (k & KEY_B) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; } }
         if (!confirmed) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; }
     }
-    /* Execute backup + delete */
-    int bkFailed = 0;
+    /* Execute backup + delete. If a backup was requested for a title and it
+       actually fails, that title is skipped instead of being deleted anyway
+       — losing unbacked-up save data defeats the purpose of asking. */
+    int bkFailed = 0, skipped = 0;
     for (int i = 0; i < titleCount; i++) {
         if (!titles[i].selected || !titles[i].isValid) continue;
-        if (doBackup && !backupSaveDataToPath(&titles[i], chosenPath)) bkFailed++;
+        if (doBackup && !backupSaveDataToPath(&titles[i], chosenPath)) {
+            bkFailed++; skipped++;
+            continue;
+        }
         deleteTitle(&titles[i]);
     }
     if (doBackup && bkFailed > 0) {
         char bkErrMsg[64]; snprintf(bkErrMsg, sizeof(bkErrMsg), "  %d backup(s) failed.", bkFailed);
-        const char *bkErrDl[] = { "", bkErrMsg, "", "  A=Continue" };
-        drawDialog(bkErrDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
+        char skipMsg[64]; snprintf(skipMsg, sizeof(skipMsg), "  %d title(s) NOT deleted.", skipped);
+        const char *bkErrDl[] = { "", bkErrMsg, skipMsg, "", "  A=Continue" };
+        drawDialog(bkErrDl, 5); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     }
     titleCount = 0; cursor = 0; scrollOffset = 0;
     for (int i = 0; i < MAX_TITLES; i++) titles[i].selected = false;
@@ -545,8 +551,8 @@ void runSysInfoDetailFlow(void) {
         if (k & KEY_B)    break;
         if (k & KEY_A) {
             if (sysInfoDetail.cursor == 0) {
-                backupSaveData(&titles[idx]); titles[idx].hasBackup = true;
-                const char *msg[] = { "", "  Backup completed.", "", "  A=OK" };
+                bool bkOk = backupSaveData(&titles[idx]);
+                const char *msg[] = { "", bkOk ? "  Backup completed." : "  Backup failed.", "", "  A=OK" };
                 drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             } else if (sysInfoDetail.cursor == 1) {
                 if (!titles[idx].hasBackup) { const char *msg[] = { "", "  No backup available.", "", "  A=OK" }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }

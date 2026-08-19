@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fix: backup silently reporting success with no data copied
+- **`copyDirectory` / `backupArchive` now return `bool`** (`backup_restore.h/c`): previously `void`, so a failed/empty archive copy was indistinguishable from a real one. Now they report whether any file was actually written.
+- **`backupSaveDataToPath`** (`backup_restore.c`): previously returned `true` as soon as the local backup folder was created on SD, even if the savedata archive never opened and `copyDirectory` copied nothing — this is why a backup could run instantly and produce an empty folder while still being reported as successful. It now tracks whether the savedata archive was reachable and whether any content was copied from savedata/extdata/boss_extdata, and returns `false` (cleaning up the empty stub folder it created) when nothing could be backed up at all.
+- **Uninstall flow** (`input.c`): a title whose requested backup actually fails is now skipped instead of being deleted anyway — the summary dialog reports both failed backups and titles left un-deleted.
+- **SysInfo detail "Backup Save Data"** (`input.c`): previously always showed "Backup completed." and forced `hasBackup = true` regardless of the real result; now shows "Backup failed." when it is, and relies on `backupSaveData`'s own accurate `hasBackup` update.
+
 ## v2.3.0 – Help overlay, pure helpers, bool backups, test suite (2026-04-27)
 
 ### SELECT help overlay (Tasks 1–3)
