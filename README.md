@@ -81,7 +81,7 @@ actions available straight from a title's detail page.
 - Actions per title: **Backup Save Data**, **Restore Save Data**, **Delete Title**
 
 ### Settings
-Five toggles/options, all applied and saved as soon as you change them —
+Six toggles/options, all applied and saved as soon as you change them —
 no separate save step.
 
 | Setting | Default | Description |
@@ -91,6 +91,7 @@ no separate save step.
 | Force Restore | OFF | Auto-restore backup after every CIA install |
 | Skip Install Confirm | OFF | Install immediately on A without confirmation |
 | Backup Folder | `sdmc:/3ds/fast-uninstall/backups` | Cycle through 5 preset paths with left/right or L/R |
+| Language | System language (EN/IT, else EN) | Cycle between English and Italian for all app UI text |
 
 Changes are saved in real time; press **B** or **START** to return to the menu.
 
@@ -497,7 +498,7 @@ Output: `3ds-fast-uninstall.3dsx`, `3ds-fast-uninstall.elf`, `3ds-fast-uninstall
 
 ### Architecture
 
-The application is structured into **8 modules** for maintainability and testability:
+The application is structured into **9 modules** for maintainability and testability:
 
 ```
 source/
@@ -510,6 +511,7 @@ source/
 ├── install.h/c        — CIA scanning and installation
 ├── draw.h/c           — All rendering functions (~790 lines)
 ├── input.h/c          — Input handlers and blocking flows (~580 lines)
+├── lang.h/c           — UI string translation (English / Italian)
 └── main.c             — Entry point + main loop (135 lines)
 ```
 
@@ -529,6 +531,8 @@ main.c
   │     └── install.h/c         (CIA scan, install — calls draw for progress)
   └── utils.h/c          (pure helpers — no globals, no 3DS services; host-testable)
 
+lang.h/c  ─── T(id) string lookup, called from draw.c/input.c/backup_restore.c
+              (reads globals.config.language; no other module dependencies)
 types.h   ─── included by all modules (type definitions shared everywhere)
 ```
 

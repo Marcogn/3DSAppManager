@@ -65,6 +65,7 @@ typedef struct { u64 size; u64 titleID; u16 version; u16 flags; u32 tid_high; } 
 
 /* ---- CFG ---- */
 #define CFG_LANGUAGE_EN 1
+#define CFG_LANGUAGE_IT 4
 typedef u8 CFG_Language;
 
 /* ---- HID ---- */

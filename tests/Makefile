@@ -12,13 +12,15 @@ CFLAGS  := -std=c11 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter \
 
 STUBS   := stubs/globals_stub.c stubs/host_stubs.c
 
-BINS    := test_utils test_config test_titles test_backup test_install
+BINS    := test_utils test_lang test_config test_titles test_backup test_install
 
 .PHONY: all clean
 
 all: $(BINS)
 	@echo "--- Running test_utils ---"
 	@./test_utils
+	@echo "--- Running test_lang ---"
+	@./test_lang
 	@echo "--- Running test_config ---"
 	@./test_config
 	@echo "--- Running test_titles ---"
@@ -30,6 +32,9 @@ all: $(BINS)
 	@echo "=== All test suites completed ==="
 
 test_utils: test_utils.c $(STUBS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test_lang: test_lang.c $(STUBS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 test_config: test_config.c $(STUBS)

@@ -16,6 +16,49 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
+### Added: Italian/English localization
+The app previously had no translation infrastructure at all despite
+`CFGU_GetSystemLanguage()` already being used elsewhere (only to pick which
+language slot to read a *game's own* title from — not to translate this
+app's UI). Every on-screen string is now looked up through a small
+hand-rolled table rather than hardcoded, since this embedded C target has
+no gettext/.po toolchain available:
+- **`source/lang.h`/`source/lang.c`** (new): a `StringID` enum plus two
+  parallel `const char *` tables (English, Italian) indexed by it, and
+  `T(id)` to look up the current language's string. `config.language`
+  (new `Language` field, `types.h`) defaults to
+  `detectSystemLanguage()` (`CFGU_GetSystemLanguage()`, EN/IT — any other
+  console language falls back to English) on first run, is persisted in
+  `config.ini` (`language=en`/`language=it`), and can be changed at any
+  time from a new Settings screen row (Up/Down/A/L/R cycles it,
+  `handleSettingsInput()` in `input.c`).
+- Every natural-language string in `draw.c` and the dialog strings in
+  `input.c`/`backup_restore.c` now goes through `T()`. Technical/numeric
+  literals (hex title IDs, `"v%u"`, `"SD"`/`"NAND"`, checkbox glyphs,
+  `sdmc:/` paths, archive folder names) are deliberately left as literals
+  — identical in both languages, translating them would just be noise.
+  `backup_info.txt`'s on-disk metadata keys (`Title ID:`, `Backup Date:`,
+  etc.) are also left in English, treated as a technical record format
+  rather than UI.
+- Settings screen redesigned for the new Language row: 6 rows instead of
+  5, tighter row spacing (`34 + i*30` instead of `38 + i*32`) to fit.
+- `drawSysInfoScreen`'s per-row layout changed from one padded
+  `%-9s%3d    %s`-style string to three independently positioned draws
+  (label/count/size) — the padded version relied on English label widths
+  and would have misaligned the count/size columns under longer Italian
+  labels (e.g. "Aggiornamenti" vs "Updates").
+
+### Added: lang.c test coverage
+`tests/test_lang.c` (8 tests): `T()` returns the right string per
+language, switches at runtime when `config.language` changes, returns
+`""` for an out-of-range `StringID` instead of reading out of bounds,
+falls back to English for an invalid `config.language` value, and —
+the main regression this guards against — every `StringID` from `0` to
+`STR_COUNT-1` has a non-empty entry in *both* language tables, so a
+string added to the enum but forgotten in one table's initializer list
+fails the build's test suite instead of shipping as a silent blank/
+English-only string on one language setting.
+
 ### Added: real host test coverage for backup/restore and CIA parsing
 `backup_restore.c` shipped the v2.3.1 bug without the host test suite ever
 touching it — it only linked `titles.c`'s pure helpers, `utils.c`, and

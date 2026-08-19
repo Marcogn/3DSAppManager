@@ -23,6 +23,7 @@ build/
 
 # Host test binaries
 tests/test_utils
+tests/test_lang
 tests/test_config
 tests/test_titles
 tests/test_backup

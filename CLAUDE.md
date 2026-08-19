@@ -14,14 +14,38 @@ recommended) via the Homebrew Launcher.
 
 ## Architecture
 
-Modular, 8 modules under `source/` (see README's "Technical Reference" →
+Modular, 9 modules under `source/` (see README's "Technical Reference" →
 "Architecture" for the full breakdown and rendering-pipeline notes):
 `types.h` (shared types/constants), `globals.h/c`, `utils.h/c`,
 `config.h/c`, `titles.h/c`, `backup_restore.h/c`, `install.h/c`,
-`draw.h/c`, `input.h/c`, `main.c`. State (title list, cursors, sort/filter
-mode, config) is global, declared in `globals.h` and defined in
-`globals.c` — most functions read/write it directly rather than passing
-it around.
+`draw.h/c`, `input.h/c`, `lang.h/c`, `main.c`. State (title list, cursors,
+sort/filter mode, config — including the current UI `Language`) is
+global, declared in `globals.h` and defined in `globals.c` — most
+functions read/write it directly rather than passing it around.
+
+## Localization (EN/IT)
+
+All on-screen UI text goes through `T(StringID)` (`source/lang.h/c`) —
+never hardcode a natural-language string directly in `draw.c`/`input.c`/
+`backup_restore.c`. `config.language` selects the active table row
+(`LANG_EN`/`LANG_IT`), defaults to `detectSystemLanguage()` on first run,
+and is user-changeable from the Settings screen.
+- Adding UI text: add a `StringID` to `lang.h` **and** an entry in *both*
+  `stringsEN`/`stringsIT` tables in `lang.c` — `test_lang.c` asserts every
+  ID has a non-empty entry in both languages, so a forgotten entry fails
+  `make test` rather than shipping as a blank string.
+- Technical/numeric literals stay as plain literals, not `T()` lookups:
+  hex title IDs, `"v%u"`, `"SD"`/`"NAND"`, checkbox/sort glyphs (`^`/`+`),
+  `sdmc:/` paths, archive folder names, and `backup_info.txt`'s on-disk
+  metadata keys. These are identical in both languages by nature —
+  translating them would be noise, not localization.
+- Format strings keep their printf conversion specifiers in both
+  languages' entries; only the surrounding words are translated.
+- Screen layouts that assumed English string widths are a real rendering
+  risk with a second language in the mix (Italian labels run longer) —
+  see `drawSysInfoScreen`'s independently-positioned-column layout
+  (rather than one padded `%-9s` format) as the pattern to follow for any
+  new fixed-column display.
 
 ## Backup and deletion: invariants to preserve
 
@@ -77,7 +101,11 @@ uses to actually exercise archive traversal, copy failures, the
 open-succeeds-but-copy-fails distinction, and the no-clobber-on-reattempt
 invariant. `tests/test_install.c` covers `install.c`'s `getCIATitleID`
 (binary CIA header parsing) and `scanDirectory` — both pure host I/O, no
-fake archive needed.
+fake archive needed. `tests/test_lang.c` covers `lang.c`'s `T()` lookup
+(per-language string, runtime language switch, out-of-range `StringID`,
+invalid-language fallback) and, most importantly, asserts every
+`StringID` has a non-empty entry in *both* language tables — the failure
+mode that would otherwise ship a blank or wrong-language string silently.
 
 **Still genuinely untested**, and why:
 - `installCIA` (`install.c`): drives real `AM_StartCiaInstall`/
@@ -145,8 +173,9 @@ coverage that doesn't exist.
 
 ```bash
 make clean && make        # real 3DS build — requires DEVKITARM/DEVKITPRO
-make test                 # host-side unit tests: test_utils, test_config,
-                           # test_titles, test_backup, test_install
+make test                 # host-side unit tests: test_utils, test_lang,
+                           # test_config, test_titles, test_backup,
+                           # test_install
                            # (see "Test coverage" above for what each covers)
 ```
 

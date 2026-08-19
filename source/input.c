@@ -8,6 +8,7 @@
 #include "backup_restore.h"
 #include "install.h"
 #include "config.h"
+#include "lang.h"
 
 /* ---- SysInfo sublist independent sort ---- */
 static int sysInfoCmpName(const void *a, const void *b) {
@@ -185,8 +186,8 @@ void handleSysInfoInput(void) {
 
 void handleSettingsInput(void) {
     u32 keys = hidKeysDown();
-    if (keys & KEY_DOWN) settingsCursor = (settingsCursor + 1) % 5;
-    if (keys & KEY_UP)   settingsCursor = (settingsCursor + 4) % 5;
+    if (keys & KEY_DOWN) settingsCursor = (settingsCursor + 1) % 6;
+    if (keys & KEY_UP)   settingsCursor = (settingsCursor + 5) % 6;
     bool *boolPtrs[4] = {
         &config.forceBackup, &config.skipUninstallConfirm,
         &config.forceRestore, &config.skipInstallConfirm
@@ -198,10 +199,12 @@ void handleSettingsInput(void) {
     if ((keys & KEY_A) || (keys & KEY_RIGHT) || (keys & KEY_R)) {
         if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
         else if (settingsCursor == 4) { pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS; snprintf(config.backupPath, sizeof(config.backupPath), "%s", BACKUP_PATH_OPTIONS[pidx]); changed = true; }
+        else if (settingsCursor == 5) { config.language = (config.language == LANG_IT) ? LANG_EN : LANG_IT; changed = true; }
     }
     if ((keys & KEY_LEFT) || (keys & KEY_L)) {
         if      (settingsCursor <= 3) { *boolPtrs[settingsCursor] ^= true; changed = true; }
         else if (settingsCursor == 4) { pidx = (pidx + (int)NUM_BACKUP_PATHS - 1) % (int)NUM_BACKUP_PATHS; snprintf(config.backupPath, sizeof(config.backupPath), "%s", BACKUP_PATH_OPTIONS[pidx]); changed = true; }
+        else if (settingsCursor == 5) { config.language = (config.language == LANG_IT) ? LANG_EN : LANG_IT; changed = true; }
     }
     if (changed) saveConfig();
     if ((keys & KEY_B) || (keys & KEY_START)) { saveConfig(); appState = APP_MAIN_MENU; }
@@ -269,19 +272,19 @@ static int _installFolderCIAs(const char *folderPath) {
                     getTitleName(tid, dest, tmp.name, sizeof(tmp.name));
                     if (config.forceRestore) {
                         restoreSaveData(&tmp);
-                        const char *rDl[] = { "", "  Save data restored", "  automatically.", "", "  A=OK" };
+                        const char *rDl[] = { "", T(STR_DLG_SAVE_RESTORED_AUTO_1), T(STR_DLG_SAVE_RESTORED_AUTO_2), "", T(STR_A_OK) };
                         drawDialog(rDl, 5);
                         while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                     } else {
                         const char *fname = strrchr(ciaPaths[i], '/'); fname = fname ? fname + 1 : ciaPaths[i];
                         char fn2[42]; strncpy(fn2, fname, 40); fn2[40] = '\0';
                         char fnMsg[48]; snprintf(fnMsg, sizeof(fnMsg), "  %.40s", fn2);
-                        const char *askDl[] = { fnMsg, "  Found backup for this title.", "  Restore save data?", "", "  A=Yes   B=No" };
+                        const char *askDl[] = { fnMsg, T(STR_DLG_FOUND_BACKUP_TITLE), T(STR_DLG_RESTORE_QUESTION), "", T(STR_A_YES_B_NO) };
                         bool doRestore = false;
                         while (aptMainLoop()) { drawDialog(askDl, 5); hidScanInput(); u32 rk = hidKeysDown(); if (rk & KEY_A) { doRestore = true; break; } if (rk & KEY_B) break; }
                         if (doRestore) {
                             restoreSaveData(&tmp);
-                            const char *rDl[] = { "", "  Save data restored.", "", "  A=OK" };
+                            const char *rDl[] = { "", T(STR_DLG_SAVE_RESTORED), "", T(STR_A_OK) };
                             drawDialog(rDl, 4);
                             while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                         }
@@ -290,8 +293,8 @@ static int _installFolderCIAs(const char *folderPath) {
             }
         } else { failed++; }
     }
-    char resMsg[64]; snprintf(resMsg, sizeof(resMsg), "  Installed: %d   Failed: %d", installed, failed);
-    const char *resDl[] = { "", "  Batch install completed.", resMsg, "", "  A=Continue" };
+    char resMsg[64]; snprintf(resMsg, sizeof(resMsg), T(STR_DLG_INSTALLED_FAILED_FMT), installed, failed);
+    const char *resDl[] = { "", T(STR_DLG_BATCH_INSTALL_DONE), resMsg, "", T(STR_A_CONTINUE) };
     drawDialog(resDl, 5);
     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     if (installed > 0) titlesNeedRefresh = true;
@@ -317,10 +320,10 @@ void runInstallFlow(void) {
         if (k & KEY_Y) {
             int ciaInDir = 0;
             for (int i = 0; i < fileCount; i++) if (!fileEntries[i].isDir && fileEntries[i].isCIA) ciaInDir++;
-            if (ciaInDir == 0) { const char *msg[] = { "", "  No CIA files in this folder.", "", "  A=Continue" }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
+            if (ciaInDir == 0) { const char *msg[] = { "", T(STR_DLG_NO_CIA_IN_FOLDER), "", T(STR_A_CONTINUE) }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
             if (!config.skipInstallConfirm) {
-                char cntMsg[52]; snprintf(cntMsg, sizeof(cntMsg), "  Install %d CIA files?", ciaInDir);
-                const char *cfDl[] = { "", cntMsg, "  Destination: SD card", "", "  A=Yes   B=No" };
+                char cntMsg[52]; snprintf(cntMsg, sizeof(cntMsg), T(STR_DLG_INSTALL_N_CIA_FMT), ciaInDir);
+                const char *cfDl[] = { "", cntMsg, T(STR_DLG_DEST_SD), "", T(STR_A_YES_B_NO) };
                 bool confirmed = false;
                 while (aptMainLoop()) { drawDialog(cfDl, 5); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
                 if (!confirmed) continue;
@@ -348,10 +351,10 @@ void runInstallFlow(void) {
                 u64 tid = getCIATitleID(ciaPath);
                 FS_MediaType dest = MEDIATYPE_SD;
                 if (!config.skipInstallConfirm) {
-                    char tidStr[36]; if (tid) snprintf(tidStr, sizeof(tidStr), "  ID: %016llX", (unsigned long long)tid); else snprintf(tidStr, sizeof(tidStr), "  ID: N/A");
+                    char tidStr[36]; if (tid) snprintf(tidStr, sizeof(tidStr), T(STR_DLG_ID_FMT), (unsigned long long)tid); else snprintf(tidStr, sizeof(tidStr), "%s", T(STR_DLG_ID_NA));
                     char fnShort[40]; strncpy(fnShort, fe->name, 38); fnShort[38] = '\0';
                     char fileMsg[44]; snprintf(fileMsg, sizeof(fileMsg), "  %.38s", fnShort);
-                    const char *cfDl[] = { "  Install?", fileMsg, tidStr, "  Destination: SD card", "", "  A=Yes   B=No" };
+                    const char *cfDl[] = { T(STR_DLG_INSTALL_QUESTION), fileMsg, tidStr, T(STR_DLG_DEST_SD), "", T(STR_A_YES_B_NO) };
                     bool confirmed = false;
                     while (aptMainLoop()) { drawDialog(cfDl, 6); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
                     if (!confirmed) continue;
@@ -361,7 +364,7 @@ void runInstallFlow(void) {
                     titlesNeedRefresh = true;
                     char fn2[42]; strncpy(fn2, fe->name, 40); fn2[40] = '\0';
                     char okMsg[48]; snprintf(okMsg, sizeof(okMsg), "  %.40s", fn2);
-                    const char *okDl[] = { "  Installation complete!", okMsg, "", "  A=Continue" };
+                    const char *okDl[] = { T(STR_DLG_INSTALLATION_COMPLETE), okMsg, "", T(STR_A_CONTINUE) };
                     drawDialog(okDl, 4);
                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                     if (tid != 0) {
@@ -372,19 +375,19 @@ void runInstallFlow(void) {
                             getTitleName(tid, dest, tmp.name, sizeof(tmp.name));
                             if (config.forceRestore) {
                                 restoreSaveData(&tmp);
-                                const char *rDl[] = { "", "  Save data restored", "  automatically.", "", "  A=OK" };
+                                const char *rDl[] = { "", T(STR_DLG_SAVE_RESTORED_AUTO_1), T(STR_DLG_SAVE_RESTORED_AUTO_2), "", T(STR_A_OK) };
                                 drawDialog(rDl, 5);
                                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                             } else {
-                                const char *askDl[] = { "", "  Found backup for this title.", "  Restore save data?", "", "  A=Yes   B=No" };
+                                const char *askDl[] = { "", T(STR_DLG_FOUND_BACKUP_TITLE), T(STR_DLG_RESTORE_QUESTION), "", T(STR_A_YES_B_NO) };
                                 bool doRestore = false;
                                 while (aptMainLoop()) { drawDialog(askDl, 5); hidScanInput(); u32 rk = hidKeysDown(); if (rk & KEY_A) { doRestore = true; break; } if (rk & KEY_B) break; }
-                                if (doRestore) { restoreSaveData(&tmp); const char *rDl[] = { "", "  Save data restored.", "", "  A=OK" }; drawDialog(rDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } }
+                                if (doRestore) { restoreSaveData(&tmp); const char *rDl[] = { "", T(STR_DLG_SAVE_RESTORED), "", T(STR_A_OK) }; drawDialog(rDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } }
                             }
                         }
                     }
                 } else {
-                    const char *errDl[] = { "", "  Error during installation.", "  Check that the CIA file is valid.", "", "  A=Continue" };
+                    const char *errDl[] = { "", T(STR_DLG_ERROR_INSTALLING), T(STR_DLG_CHECK_CIA_VALID), "", T(STR_A_CONTINUE) };
                     drawDialog(errDl, 5);
                     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
                 }
@@ -413,9 +416,9 @@ void runBackupFlow(void) {
         if (k & KEY_X) {
             int selCount = 0;
             for (int i = 0; i < backupTitleCount; i++) if (titles[backupIndices[i]].selected && titles[backupIndices[i]].isValid) selCount++;
-            if (selCount == 0) { const char *msg[] = { "", "  No title selected.", "  Select titles with A.", "", "  Press A to continue." }; drawDialog(msg, 5); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
-            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup %d selected titles?", selCount);
-            const char *cfDl[] = { "", cntMsg, "", "  A=Yes   B=No" };
+            if (selCount == 0) { const char *msg[] = { "", T(STR_DLG_NO_TITLE_SELECTED_SHORT), T(STR_DLG_SELECT_WITH_A), "", T(STR_DLG_PRESS_A_CONTINUE) }; drawDialog(msg, 5); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), T(STR_DLG_BACKUP_N_SELECTED_FMT), selCount);
+            const char *cfDl[] = { "", cntMsg, "", T(STR_A_YES_B_NO) };
             bool confirmed = false;
             while (aptMainLoop()) { drawDialog(cfDl, 4); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
             if (!confirmed) continue;
@@ -425,15 +428,15 @@ void runBackupFlow(void) {
                 drawLoadingScreen(done, selCount, ti->name);
                 if (backupSaveData(ti)) { ti->hasBackup = true; done++; } else { failed++; }
             }
-            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed: %d ok, %d failed.", done, failed);
-            const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
+            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), T(STR_DLG_BACKUP_COMPLETED_FMT), done, failed);
+            const char *doneDl[] = { "", doneMsg, "", T(STR_A_CONTINUE) };
             drawDialog(doneDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
         }
         if (k & KEY_Y) {
             int validCount = backupTitleCount;
-            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), "  Backup ALL titles (%d)?", validCount);
-            const char *cfDl[] = { "", cntMsg, "  This may take a while.", "", "  A=Yes   B=No" };
+            char cntMsg[56]; snprintf(cntMsg, sizeof(cntMsg), T(STR_DLG_BACKUP_ALL_N_FMT), validCount);
+            const char *cfDl[] = { "", cntMsg, T(STR_DLG_MAY_TAKE_A_WHILE), "", T(STR_A_YES_B_NO) };
             bool confirmed = false;
             while (aptMainLoop()) { drawDialog(cfDl, 5); hidScanInput(); u32 ck = hidKeysDown(); if (ck & KEY_A) { confirmed = true; break; } if (ck & KEY_B) break; }
             if (!confirmed) continue;
@@ -443,8 +446,8 @@ void runBackupFlow(void) {
                 drawLoadingScreen(done, validCount, ti->name);
                 if (backupSaveData(ti)) { ti->hasBackup = true; done++; } else { failed++; }
             }
-            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), "  Backup completed: %d ok, %d failed.", done, failed);
-            const char *doneDl[] = { "", doneMsg, "", "  A=Continue" };
+            char doneMsg[64]; snprintf(doneMsg, sizeof(doneMsg), T(STR_DLG_BACKUP_COMPLETED_FMT), done, failed);
+            const char *doneDl[] = { "", doneMsg, "", T(STR_A_CONTINUE) };
             drawDialog(doneDl, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             return;
         }
@@ -455,7 +458,7 @@ void runUninstallDeleteFlow(void) {
     int selectedCount = 0;
     for (int i = 0; i < titleCount; i++) if (titles[i].selected && titles[i].isValid) selectedCount++;
     if (selectedCount == 0) {
-        const char *msg[] = { "", "  No title selected.", "", "  Select at least one title with A.", "", "  Press A to continue." };
+        const char *msg[] = { "", T(STR_DLG_NO_TITLE_SELECTED_LONG), "", T(STR_DLG_SELECT_AT_LEAST_ONE), "", T(STR_DLG_PRESS_A_CONTINUE) };
         drawDialog(msg, 6); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
         return;
     }
@@ -476,8 +479,8 @@ void runUninstallDeleteFlow(void) {
         }
     }
     if (pendingCount > 0) {
-        char relMsg[64]; snprintf(relMsg, sizeof(relMsg), "  Found %d related titles (DLC/Update).", pendingCount);
-        const char *dl[] = { "", relMsg, "", "  A=Include  B=Skip  START=Cancel" };
+        char relMsg[64]; snprintf(relMsg, sizeof(relMsg), T(STR_DLG_FOUND_RELATED_FMT), pendingCount);
+        const char *dl[] = { "", relMsg, "", T(STR_DLG_INCLUDE_SKIP_CANCEL) };
         bool addRelated = false, cancelAll = false;
         while (aptMainLoop()) { drawDialogWithSelectedList(dl, 4); hidScanInput(); u32 k = hidKeysDown(); if (k & KEY_A) { addRelated = true; break; } if (k & KEY_B) break; if (k & KEY_START) { cancelAll = true; break; } }
         if (cancelAll) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; }
@@ -489,13 +492,13 @@ void runUninstallDeleteFlow(void) {
     if (config.forceBackup) {
         doBackup = true;
     } else {
-        const char *bkDl[] = { "", "  Backup save data?", "", "  A=Yes   B=No   START=Cancel" };
+        const char *bkDl[] = { "", T(STR_DLG_BACKUP_SAVE_DATA_Q), "", T(STR_DLG_YES_NO_CANCEL) };
         while (aptMainLoop()) { drawDialogWithSelectedList(bkDl, 4); hidScanInput(); u32 k = hidKeysDown(); if (k & KEY_A) { doBackup = true; break; } if (k & KEY_B) break; if (k & KEY_START) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; } }
     }
     /* Choose backup path */
     if (doBackup) {
         char pathLine[80]; snprintf(pathLine, sizeof(pathLine), "  %.46s", config.backupPath);
-        const char *pd[] = { "", pathLine, "", "  A=Use default   Y=Choose other" };
+        const char *pd[] = { "", pathLine, "", T(STR_DLG_USE_DEFAULT_CHOOSE) };
         bool choosePath = false;
         while (aptMainLoop()) { drawDialogWithSelectedList(pd, 4); hidScanInput(); u32 k = hidKeysDown(); if (k & KEY_A) break; if (k & KEY_Y) { choosePath = true; break; } }
         if (choosePath) {
@@ -503,7 +506,7 @@ void runUninstallDeleteFlow(void) {
             for (int i = 0; i < (int)NUM_BACKUP_PATHS; i++) if (strcmp(config.backupPath, BACKUP_PATH_OPTIONS[i]) == 0) { pidx = i; break; }
             while (aptMainLoop()) {
                 char pl[64]; snprintf(pl, sizeof(pl), "  %.52s", BACKUP_PATH_OPTIONS[pidx]);
-                const char *ppd[] = { "  Select backup folder:", pl, "", "  Up/Down=Change   A=Confirm   B=Cancel" };
+                const char *ppd[] = { T(STR_DLG_SELECT_BACKUP_FOLDER), pl, "", T(STR_DLG_UPDOWN_CONFIRM_CANCEL) };
                 drawDialogWithSelectedList(ppd, 4);
                 hidScanInput(); u32 k = hidKeysDown();
                 if (k & KEY_DOWN) pidx = (pidx + 1) % (int)NUM_BACKUP_PATHS;
@@ -515,9 +518,9 @@ void runUninstallDeleteFlow(void) {
     }
     /* Confirm */
     if (!config.skipUninstallConfirm) {
-        char cntMsg[64]; snprintf(cntMsg, sizeof(cntMsg), "  Delete %d titles?", selectedCount);
-        char bkMsg[64]; if (doBackup) snprintf(bkMsg, sizeof(bkMsg), "  Backup to: %.36s", chosenPath); else snprintf(bkMsg, sizeof(bkMsg), "  No backup.");
-        const char *cfDl[] = { "", cntMsg, bkMsg, "", "  A=Confirm   B=Cancel" };
+        char cntMsg[64]; snprintf(cntMsg, sizeof(cntMsg), T(STR_DLG_DELETE_N_TITLES_FMT), selectedCount);
+        char bkMsg[64]; if (doBackup) snprintf(bkMsg, sizeof(bkMsg), T(STR_DLG_BACKUP_TO_FMT), chosenPath); else snprintf(bkMsg, sizeof(bkMsg), "%s", T(STR_DLG_NO_BACKUP_PERIOD));
+        const char *cfDl[] = { "", cntMsg, bkMsg, "", T(STR_DLG_CONFIRM_CANCEL) };
         bool confirmed = false;
         while (aptMainLoop()) { drawDialogWithSelectedList(cfDl, 5); hidScanInput(); u32 k = hidKeysDown(); if (k & KEY_A) { confirmed = true; break; } if (k & KEY_B) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; } }
         if (!confirmed) { for (int i = 0; i < titleCount; i++) titles[i].selected = false; return; }
@@ -535,9 +538,9 @@ void runUninstallDeleteFlow(void) {
         deleteTitle(&titles[i]);
     }
     if (doBackup && bkFailed > 0) {
-        char bkErrMsg[64]; snprintf(bkErrMsg, sizeof(bkErrMsg), "  %d backup(s) failed.", bkFailed);
-        char skipMsg[64]; snprintf(skipMsg, sizeof(skipMsg), "  %d title(s) NOT deleted.", bkFailed);
-        const char *bkErrDl[] = { "", bkErrMsg, skipMsg, "", "  A=Continue" };
+        char bkErrMsg[64]; snprintf(bkErrMsg, sizeof(bkErrMsg), T(STR_DLG_N_BACKUPS_FAILED_FMT), bkFailed);
+        char skipMsg[64]; snprintf(skipMsg, sizeof(skipMsg), T(STR_DLG_N_TITLES_NOT_DELETED_FMT), bkFailed);
+        const char *bkErrDl[] = { "", bkErrMsg, skipMsg, "", T(STR_A_CONTINUE) };
         drawDialog(bkErrDl, 5); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
     }
     titleCount = 0; cursor = 0; scrollOffset = 0;
@@ -560,13 +563,13 @@ void runSysInfoDetailFlow(void) {
         if (k & KEY_A) {
             if (sysInfoDetail.cursor == 0) {
                 bool bkOk = backupSaveData(&titles[idx]);
-                const char *msg[] = { "", bkOk ? "  Backup completed." : "  Backup failed.", "", "  A=OK" };
+                const char *msg[] = { "", bkOk ? T(STR_DLG_BACKUP_COMPLETED_SIMPLE) : T(STR_DLG_BACKUP_FAILED_SIMPLE), "", T(STR_A_OK) };
                 drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             } else if (sysInfoDetail.cursor == 1) {
-                if (!titles[idx].hasBackup) { const char *msg[] = { "", "  No backup available.", "", "  A=OK" }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
+                if (!titles[idx].hasBackup) { const char *msg[] = { "", T(STR_DLG_NO_BACKUP_AVAILABLE), "", T(STR_A_OK) }; drawDialog(msg, 4); while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; } continue; }
                 bool ok = restoreSaveData(&titles[idx]);
-                if (ok) { const char *msg[] = { "", "  Save data restored.", "", "  A=OK" }; drawDialog(msg, 4); }
-                else    { const char *msg[] = { "", "  Restore error.", "", "  A=OK" };       drawDialog(msg, 4); }
+                if (ok) { const char *msg[] = { "", T(STR_DLG_SAVE_RESTORED), "", T(STR_A_OK) }; drawDialog(msg, 4); }
+                else    { const char *msg[] = { "", T(STR_DLG_RESTORE_ERROR), "", T(STR_A_OK) };       drawDialog(msg, 4); }
                 while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }
             } else {
                 titles[idx].selected = true;

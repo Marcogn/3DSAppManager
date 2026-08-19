@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include "../../source/utils.c"
+#include "../../source/lang.c"
 #include "../../source/titles.c"
 #include "../../source/config.c"
 #include "../../source/backup_restore.c"

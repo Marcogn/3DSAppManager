@@ -5,6 +5,7 @@
 #include "globals.h"
 #include "utils.h"
 #include "titles.h"
+#include "lang.h"
 #include <unistd.h>
 
 /* Forward declaration — defined in draw.c */
@@ -264,10 +265,10 @@ void deleteTitle(TitleInfo *title) {
     Result res = AM_GetTitleInfo(title->mediaType, 1, &title->titleID, &te);
     if (R_FAILED(res) || res == 0xC8A04478) {
         title->isValid = false;
-        const char *sl[] = {"", " Successfully deleted:", title->name, "", "All data removed.", "", "Press A to continue..."};
+        const char *sl[] = {"", T(STR_DLG_SUCCESSFULLY_DELETED), title->name, "", T(STR_DLG_ALL_DATA_REMOVED), "", T(STR_DLG_PRESS_A_CONTINUE_CAP)};
         drawDialog(sl, 7);
     } else {
-        const char *fl[] = {"", " Failed to delete:", title->name, "", "Title may still be present.", "", "Press A to continue..."};
+        const char *fl[] = {"", T(STR_DLG_FAILED_TO_DELETE), title->name, "", T(STR_DLG_TITLE_MAY_REMAIN), "", T(STR_DLG_PRESS_A_CONTINUE_CAP)};
         drawDialog(fl, 7);
     }
     while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_A) break; }

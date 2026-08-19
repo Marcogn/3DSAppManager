@@ -4,6 +4,7 @@
 #include "config.h"
 #include "globals.h"
 #include "utils.h"
+#include "lang.h"
 
 const char *BACKUP_PATH_OPTIONS[] = {
     "sdmc:/3ds/fast-uninstall/backups",
@@ -20,6 +21,11 @@ void loadConfig(void) {
     config.skipUninstallConfirm = false;
     config.forceRestore         = false;
     config.skipInstallConfirm   = false;
+    /* Default for a fresh install and the fallback when an existing
+       config.ini predates this setting (no language= line yet) — in
+       both cases, follow the console's own system language rather than
+       silently defaulting to English. */
+    config.language             = detectSystemLanguage();
     FILE *f = fopen(CONFIG_PATH, "r");
     if (!f) { saveDefaultConfig(); return; }
     char line[512];
@@ -42,6 +48,8 @@ void loadConfig(void) {
             config.forceRestore = (strcmp(val, "1") == 0 || strcmp(val, "true") == 0);
         else if (strcmp(key, "skip_install_confirm") == 0)
             config.skipInstallConfirm = (strcmp(val, "1") == 0 || strcmp(val, "true") == 0);
+        else if (strcmp(key, "language") == 0)
+            config.language = (strcmp(val, "it") == 0) ? LANG_IT : LANG_EN;
     }
     fclose(f);
 }
@@ -56,6 +64,7 @@ void saveConfig(void) {
     fprintf(f, "skip_uninstall_confirm=%d\n", config.skipUninstallConfirm ? 1 : 0);
     fprintf(f, "force_restore=%d\n",         config.forceRestore ? 1 : 0);
     fprintf(f, "skip_install_confirm=%d\n",  config.skipInstallConfirm ? 1 : 0);
+    fprintf(f, "language=%s\n",              config.language == LANG_IT ? "it" : "en");
     fclose(f);
 }
 
@@ -69,6 +78,7 @@ void saveDefaultConfig(void) {
     fprintf(f, "skip_uninstall_confirm=0\n");
     fprintf(f, "force_restore=0\n");
     fprintf(f, "skip_install_confirm=0\n");
+    fprintf(f, "language=%s\n",              config.language == LANG_IT ? "it" : "en");
     fclose(f);
 }
 

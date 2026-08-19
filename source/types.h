@@ -100,6 +100,13 @@ typedef enum {
     SYSINFO_DLC
 } SysInfoMode;
 
+/* ---- Language (UI string translation — see lang.h/lang.c) ---- */
+typedef enum {
+    LANG_EN,
+    LANG_IT,
+    LANG_COUNT
+} Language;
+
 /* ---- Structs ---- */
 typedef struct {
     u64          titleID;
@@ -121,6 +128,7 @@ typedef struct {
     bool skipUninstallConfirm;
     bool forceRestore;
     bool skipInstallConfirm;
+    Language language;
 } Config;
 
 typedef struct {
