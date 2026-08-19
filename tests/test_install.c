@@ -15,7 +15,9 @@
 #include "../../source/utils.c"
 #include "../../source/install.c"
 
-#define INSTALL_TEST_ROOT "/test/install_test"
+/* Must be under /tmp, not a root-level path like /test/... — CI runs as a
+   non-root user that cannot create directories at the filesystem root. */
+#define INSTALL_TEST_ROOT "/tmp/3dsfu_install_test"
 
 /* ---- helpers ---- */
 
@@ -87,7 +89,7 @@ TEST test_getCIATitleID_parses_valid_header(void) {
 }
 
 TEST test_getCIATitleID_missing_file_returns_zero(void) {
-    ASSERT_EQ(getCIATitleID("/test/install_test/does_not_exist.cia"), (u64)0);
+    ASSERT_EQ(getCIATitleID(INSTALL_TEST_ROOT "/does_not_exist.cia"), (u64)0);
     GREATEST_PASS();
 }
 

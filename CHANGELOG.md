@@ -27,6 +27,14 @@ touching it — it only linked `titles.c`'s pure helpers, `utils.c`, and
   open" / "fails to read" flags — and have `copyDirectory`/`backupArchive`/
   `backupSaveDataToPath`/`restoreSaveData`/`restoreDirectory` actually walk
   it for real.
+- `test_backup.c`/`test_install.c` originally used `/test/...` as their
+  scratch root on the real host filesystem (matching this repo's existing
+  `DEFAULT_BACKUP_PATH="/test/backups"` build override) — that passed in a
+  root-run sandbox but failed CI's actual (non-root) GitHub Actions runner,
+  which cannot create directories at the filesystem root. Both now use
+  `/tmp/3dsfu_*` roots instead, verified locally by running the whole
+  suite as an unprivileged user (not just root) to catch this class of
+  issue before pushing.
 - **`tests/test_backup.c`** (13 tests): backup success with real files,
   the "never launched, empty archive" success case, total-unreachable
   failure + cleanup, the core v2.3.1 regression (archive opens but a file

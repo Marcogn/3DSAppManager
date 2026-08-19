@@ -46,4 +46,4 @@ test_install: test_install.c $(STUBS)
 
 clean:
 	rm -f $(BINS) test_config.ini
-	rm -rf /test/br_test /test/br_restore /test/install_test
+	rm -rf /tmp/3dsfu_br_test /tmp/3dsfu_br_restore /tmp/3dsfu_install_test

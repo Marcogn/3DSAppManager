@@ -7,8 +7,10 @@
  * CLAUDE.md's "Backup and deletion: invariants to preserve".
  *
  * Uses -DCONFIG_PATH and -DDEFAULT_BACKUP_PATH overrides (see Makefile),
- * plus its own /test/br_test and /test/br_restore roots on the real host
- * filesystem for backup/restore destination and source content.
+ * plus its own roots under /tmp on the real host filesystem for
+ * backup/restore destination and source content — must be under /tmp
+ * (not a root-level path like /test/...), since CI runs as a non-root
+ * user that cannot create directories at the filesystem root.
  */
 #include "../vendor/greatest.h"
 #include <string.h>
@@ -21,8 +23,8 @@
 #include "../../source/config.c"
 #include "../../source/backup_restore.c"
 
-#define BR_TEST_ROOT    "/test/br_test"
-#define BR_RESTORE_ROOT "/test/br_restore"
+#define BR_TEST_ROOT    "/tmp/3dsfu_br_test"
+#define BR_RESTORE_ROOT "/tmp/3dsfu_br_restore"
 
 /* ---- helpers ---- */
 

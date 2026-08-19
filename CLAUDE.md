@@ -103,6 +103,14 @@ coverage that doesn't exist.
 
 ## Known gotchas
 
+- **A sandboxed dev session commonly runs as root; the real GitHub Actions
+  runner does not.** A host test that writes to a root-level scratch path
+  (e.g. `/test/...`) passes locally and fails in CI with no local repro,
+  because only root can create directories at the filesystem root. Use
+  `/tmp/...` for any test scratch directory, and when in doubt, verify by
+  actually running the suite as an unprivileged user before pushing (e.g.
+  `su -s /bin/bash nobody -c 'make -C tests'` after `chmod -R a+rwx` on a
+  throwaway checkout) rather than trusting a root-run pass.
 - `fopen(path, "wb")` succeeding does **not** mean the write succeeded —
   check `fwrite()`'s return value against the expected byte count,
   especially here where "SD card full" is a realistic failure mode.
