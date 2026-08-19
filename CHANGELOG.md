@@ -47,6 +47,21 @@ no gettext/.po toolchain available:
   (label/count/size) — the padded version relied on English label widths
   and would have misaligned the count/size columns under longer Italian
   labels (e.g. "Aggiornamenti" vs "Updates").
+- A follow-up pass measured every Italian string against the fixed pixel
+  budget of the *static*-position text it's drawn into (dialog box,
+  main-menu bottom-screen description lines, help-overlay key/desc/hint
+  columns — anywhere not using this codebase's existing
+  `strlen()`-based dynamic-x pattern) and shortened the handful that were
+  at or past the edge of their column: the Install-help "Left/Right" key
+  label (`"Sinistra/Destra"` → `"Sin/Des"`, was overflowing into the
+  description column), the main-menu Backup/Uninstall/Install/SysInfo
+  description lines, and two dialog strings
+  (`STR_DLG_TITLE_MAY_REMAIN`, `STR_DLG_FOUND_RELATED_FMT`). No English
+  string was affected. This is a static analysis against the app's own
+  established `~7px/char` positioning convention, not a hardware
+  verification — see `CLAUDE.md`'s "Known gotchas" for why the real
+  citro2d/hardware rendering still can't be checked from this
+  environment.
 
 ### Added: lang.c test coverage
 `tests/test_lang.c` (8 tests): `T()` returns the right string per
