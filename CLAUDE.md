@@ -179,9 +179,12 @@ make test                 # host-side unit tests: test_utils, test_lang,
                            # (see "Test coverage" above for what each covers)
 ```
 
-CI runs both on every push/PR: `.github/workflows/build.yml` (real
-devkitARM build) and `.github/workflows/tests.yml` (host test suite).
-`.github/workflows/release.yml` is manual-only (`workflow_dispatch`, a
+CI runs `.github/workflows/build.yml` (real devkitARM build) on every
+push/PR — it's the only automatic gate; there is deliberately no CI
+workflow for the host test suite (removed to keep Actions to just the PR
+build check + the manual release), so run `make test` yourself before
+pushing and say explicitly in your summary that it wasn't re-verified by
+CI. `.github/workflows/release.yml` is manual-only (`workflow_dispatch`, a
 `version` + `title` input, never fires on push/PR) — trigger it from the
 Actions tab when the user actually asks to cut a release. It validates the
 inputs, renames `CHANGELOG.md`'s `## Unreleased` section to

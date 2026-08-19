@@ -6,7 +6,6 @@
 
 [![Latest release](https://img.shields.io/github/v/release/Marcogn/3DSAppManager?label=release)](https://github.com/Marcogn/3DSAppManager/releases/latest)
 [![Build](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/build.yml)
-[![Host-side Unit Tests](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml/badge.svg)](https://github.com/Marcogn/3DSAppManager/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A Nintendo 3DS homebrew application for managing installed titles: install

@@ -16,6 +16,23 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
+### Removed: host-test CI workflow
+`.github/workflows/tests.yml` (the automatic `make -C tests` run on every
+push/PR) is removed, trimming Actions down to just two workflows: `build`
+(the real devkitARM compile, still gating every push/PR) and `release`
+(manual-only). The host test suite itself is untouched — `tests/`, all
+`test_*.c` files, and `make test` still work exactly as before — this
+only removes the automatic CI trigger, so `make test` needs to be run
+locally before pushing (see `CLAUDE.md`'s updated "Build/test commands"
+section).
+
+Also note: the repository's GitHub Actions list shows two more entries —
+"Copilot code review" and "Copilot cloud agent" — that are **not**
+workflow files in this repo (no `.yml` for them exists or ever existed
+here); they're GitHub's built-in Copilot integrations, toggled from the
+repo's own Settings (Copilot code review / coding agent), not something
+a file change can remove.
+
 ### Changed: project renamed to 3DS App Manager
 Renamed from "3ds-fast-uninstall" everywhere the old name appeared, following
 the GitHub repository itself being renamed to `Marcogn/3DSAppManager`:
