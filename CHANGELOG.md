@@ -16,6 +16,20 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
+### Changed: release notes stay short for a big changelog entry
+`v2.4.0`'s own GitHub Release ended up as a ~200-line wall of text, since
+`.github/workflows/release.yml` always dumped the full `## Unreleased`
+section verbatim into the Release body. Now: a short section (a quick
+fix, a handful of entries — 40 lines or fewer) still gets used in full,
+same as before; a long one is abridged to just its `### ` entry headings
+(each already written as a one-line summary by this file's own
+convention) as a bullet list. Either way, the Release body now always
+ends with a link back to this file's matching dated section for the full
+detail — computed to match GitHub's actual heading-anchor slug algorithm
+(verified against this repo's own real rendered anchors, e.g. `v2.4.0
+(2026-08-19)` → `#v240-2026-08-19` — GitHub drops the periods from the
+version number, it doesn't turn them into hyphens).
+
 ## v2.4.0 (2026-08-19)
 
 ### Fix: release workflow failing on every run, unrelated to the PAT
