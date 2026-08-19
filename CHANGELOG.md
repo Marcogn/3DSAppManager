@@ -16,6 +16,30 @@ accurate at all times instead of being reconstructed from memory later.
 
 ## Unreleased
 
+### Fix: release workflow failing on every run, unrelated to the PAT
+The first real trigger of `.github/workflows/release.yml` (after adding a
+`RELEASE_PUSH_TOKEN` secret) failed at the "Commit and push version bump"
+step with `fatal: not in a git directory`, despite the checkout step
+completing without any git errors moments earlier — a red herring that
+looked like a token/auth problem but wasn't. Two real, unrelated bugs:
+- The container job's own `actions/checkout` step registers the checkout
+  path as a git `safe.directory`, but that registration doesn't reliably
+  carry over to later plain `run:` steps executing inside a job-level
+  `container:` (this workflow runs inside `devkitpro/devkitarm`) — they
+  can hit git errors on a directory checkout itself just used fine. Fixed
+  by explicitly re-adding `git config --global --add safe.directory '*'`
+  in a step right after checkout, in the same execution context the later
+  git commands run in.
+- Separately (masked until the above was fixed enough to reach it): the
+  version-format check used bash's `[[ ... =~ ... ]]`, but this step's
+  shell is POSIX `sh` (dash) in this container, not bash — `[[` doesn't
+  exist there, and since a failing `if` *condition* doesn't trigger `sh
+  -e`, the broken check was silently skipped rather than failing the
+  step, letting a malformed version like `2.4` (missing the patch
+  number) through instead of requiring `2.4.0`. Rewritten with
+  `grep -Eq`, which is portable POSIX and was already used elsewhere in
+  this same script. Verified against real `dash`, not just bash.
+
 ### Changed: release workflow no longer asks for a title
 `.github/workflows/release.yml`'s `workflow_dispatch` form used to require
 typing in both a `version` and a `title` (the latter only ever used to

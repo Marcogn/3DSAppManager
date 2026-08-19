@@ -43,6 +43,17 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
 
+      # actions/checkout's own `set-safe-directory: true` registers the
+      # checkout path as a git safe.directory, but for a job that runs in a
+      # custom `container:` (like this one), that registration doesn't
+      # reliably carry over to later plain `run:` steps executing inside
+      # that container — they can fail on git operations with errors like
+      # "fatal: not in a git directory" even though the checkout itself
+      # worked fine moments earlier. Re-registering it here, in the same
+      # execution context later steps use, is the standard fix.
+      - name: Configure git safe.directory for the container job
+        run: git config --global --add safe.directory '*'
+
       # Validates the typed-in version input, then cuts CHANGELOG.md's
       # "## Unreleased" section into a dated "## vX.Y.Z" one (leaving a
       # fresh empty "## Unreleased" above it) and bumps source/types.h's
@@ -52,11 +63,19 @@ jobs:
       # than the current VERSION_STRING, or the changelog has nothing new
       # to release, since a bad input at this point would otherwise commit
       # garbage to main.
+      #
+      # Uses `grep -E` rather than bash's `[[ =~ ]]` for the format check:
+      # this step's shell is POSIX `sh` (dash) in this container, not
+      # bash, and `[[` is a bash-only builtin — under `sh` it's silently
+      # treated as "command not found", which (since a failing `if`
+      # condition doesn't trigger `sh -e`) was *not* aborting the step, it
+      # was silently skipping the whole validation and letting malformed
+      # versions like "2.4" through instead of requiring "2.4.0".
       - name: Validate and apply version bump
         env:
           NEW_VERSION: ${{ inputs.version }}
         run: |
-          if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if ! printf '%s' "$NEW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "version input must look like x.y.z with no leading 'v' (got: '$NEW_VERSION')" >&2
             exit 1
           fi
